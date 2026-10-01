@@ -1,0 +1,36 @@
+<!--
+Projekt: Implementace překladače imperativního jazyka IFJ26
+Predmety: IFJ a IAL, FIT VUT v Brne, 2026/2027
+
+Súbor:   dokumentace.md
+Popis:   Zdroj dokumentácie
+
+Autori:  Patrik Bukovský  (xbukovp00)
+         Tomáš Szalay     (xszalat00)
+         Mikuláš Gärtner  (xgartnm00)
+         Daniel Malček    (xmalced00)
+
+Copyright (C) 2026  Patrik Bukovský, Tomáš Szalay, Mikuláš Gärtner,
+                    Daniel Malček
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
+# Dokumentácia — IFJ26
+
+Tím: **Patrik Bukovský (xbukovp00)**, Tomáš Szalay (xszalat00), Mikuláš Gärtner (xgartnm00), Daniel Malček (xmalced00)
+
+Varianta: vv-BVS
+Rozšírenia: TODO
+Repozitár: TODO

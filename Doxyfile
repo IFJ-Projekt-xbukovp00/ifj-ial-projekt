@@ -1,0 +1,13 @@
+# Doxygen konfigurácia projektu IFJ26 (vygeneruje sa príkazom `make docs`)
+PROJECT_NAME       = "IFJ26"
+PROJECT_BRIEF      = "Prekladač IFJ26 -> IFJcode26"
+OUTPUT_DIRECTORY   = docs/doxygen
+INPUT              = src README.md
+USE_MDFILE_AS_MAINPAGE = README.md
+FILE_PATTERNS      = *.c *.h
+OPTIMIZE_OUTPUT_FOR_C = YES
+EXTRACT_ALL        = YES
+EXTRACT_STATIC     = YES
+GENERATE_LATEX     = NO
+QUIET              = YES
+RECURSIVE          = YES
