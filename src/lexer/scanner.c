@@ -31,10 +31,14 @@
 
 #include "error.h"
 
+#define EOL '\n'
+
 static FILE *source = NULL;
 
 /** @copydoc scanner_init */
-void scanner_init(FILE *input) { source = input; }
+void scanner_init(FILE *input) { 
+    source = input; 
+}
 
 /* TODO: implementácia konečného automatu */
 /** @copydoc scanner_get_token */
@@ -43,3 +47,33 @@ int scanner_get_token(Token *token) {
     token->type = TOK_EOF;
     return ERR_OK;
 }
+
+bool getLine(FILE *f){
+    int c = fgetc(f);
+    while (c != EOL && c != EOF){
+        while (isspace(c)){
+            if (c == '\t'){
+                return false;
+            }
+            c = fgetc(f);
+        }
+        if (isdigit(c)){
+            /*TODO: stavový automat pre detekciu čísla*/
+        }
+        else if (isalpha(c) || c == '_'){
+            /*TODO: statový automat pre detekciu mena premennej*/
+        }
+        else if (c == '"' || c == '\''){
+            /*TODO: statový automat pre reťazce*/
+        }
+        else if (c == '/'){
+            /*TODO: stavový automat pre detenciu komentáru alebo operácie deleno*/
+        }
+        else if (c == '=' || c == '<' || c == '>' || c == '!' || c == '|'){
+            /*TODO: stavový automat pre logické operátory*/
+        }
+        else if (c == '+' || c == '-' || c == '*' || c == '%'){
+            /*TODO: stavový automat pre jednoduché matematické operácie*/
+        }
+    }
+} 
