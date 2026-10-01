@@ -1,0 +1,45 @@
+# Projekt: Implementace překladače imperativního jazyka IFJ26
+# Predmety: IFJ a IAL, FIT VUT v Brne, 2026/2027
+#
+# Súbor:   .gitattributes
+# Popis:   Atribúty súborov pre git (konce riadkov)
+#
+# Autori:  Patrik Bukovský  (xbukovp00)
+#          Tomáš Szalay     (xszalat00)
+#          Mikuláš Gärtner  (xgartnm00)
+#          Daniel Malček    (xmalced00)
+#
+# Copyright (C) 2026  Patrik Bukovský, Tomáš Szalay, Mikuláš Gärtner,
+#                     Daniel Malček
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+# Všetky textové súbory ukladať a checkoutovať s LF
+* text=auto eol=lf
+
+*.c        text eol=lf
+*.h        text eol=lf
+*.sh       text eol=lf
+*.md       text eol=lf
+*.scala    text eol=lf
+*.rc       text eol=lf
+Makefile   text eol=lf
+Doxyfile   text eol=lf
+
+# Binárne súbory
+*.pdf      binary
+*.png      binary
+*.jpg      binary
+*.zip      binary
+*.tgz      binary
