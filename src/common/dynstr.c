@@ -34,11 +34,8 @@
 
 #define DYNSTR_INIT_CAP 16 // Počiatočná kapacita dyn. reťazca
 
-/**
- * @brief Zabezpečí, aby sa do reťazca zmestilo ďalších @p extra znakov + '\0'.
- * @return true pri úspechu, false pri chybe alokácie (reťazec ostane nezmenený).
- */
-static bool dynstr_reserve(DynStr *s, size_t extra) {
+/** @copydoc dynstr_reserve */
+bool dynstr_reserve(DynStr *s, size_t extra) {
     size_t needed = s->len + extra + 1;
     if (needed <= s->cap) {
         return true;
@@ -64,6 +61,7 @@ static bool dynstr_reserve(DynStr *s, size_t extra) {
     return true;
 }
 
+/** @copydoc dynstr_init */
 bool dynstr_init(DynStr *s) {
     s->data = malloc(DYNSTR_INIT_CAP);
     if (s->data == NULL) {
@@ -77,6 +75,7 @@ bool dynstr_init(DynStr *s) {
     return true;
 }
 
+/** @copydoc dynstr_free */
 void dynstr_free(DynStr *s) {
     if (s == NULL) {
         return;
@@ -87,6 +86,7 @@ void dynstr_free(DynStr *s) {
     s->cap = 0;
 }
 
+/** @copydoc dynstr_clear */
 void dynstr_clear(DynStr *s) {
     s->len = 0;
     if (s->data != NULL) {
@@ -94,6 +94,7 @@ void dynstr_clear(DynStr *s) {
     }
 }
 
+/** @copydoc dynstr_append_char */
 bool dynstr_append_char(DynStr *s, char c) {
     if (!dynstr_reserve(s, 1)) {
         return false;
@@ -103,6 +104,7 @@ bool dynstr_append_char(DynStr *s, char c) {
     return true;
 }
 
+/** @copydoc dynstr_append */
 bool dynstr_append(DynStr *s, const char *str) {
     size_t n = strlen(str);
     if (!dynstr_reserve(s, n)) {
