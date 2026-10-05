@@ -29,6 +29,7 @@
 
 #pragma once
 
+#include "error.h"
 #include "token.h"
 
 #include <stdio.h>

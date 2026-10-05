@@ -33,16 +33,87 @@
 
 /** @brief Typ tokenu. */
 typedef enum {
-    TOK_EOF,
-    TOK_EOL,
-    TOK_INDENT,
-    TOK_DEDENT,
-    TOK_IDENTIFIER,
-    TOK_KEYWORD,
-    TOK_INT_LIT,
-    TOK_DOUBLE_LIT,
-    TOK_STRING_LIT,
-    /* TODO: operátory, zátvorky, interpunkcia */
+    /* Riadenie */
+    TOK_EOF,            /**< koniec vstupu */
+    TOK_EOL,            /**< koniec logického riadku */
+    TOK_INDENT,         /**< zvýšenie odsadenia */
+    TOK_DEDENT,         /**< zníženie odsadenia */
+
+    /* Identifikátory a literály */
+    TOK_IDENTIFIER,     /**< identifikátor (vrátane `to`, `until`, `by`) */
+    TOK_INT_LIT,        /**< celočíselný literál */
+    TOK_DOUBLE_LIT,     /**< desatinný literál */
+    TOK_STRING_LIT,     /**< reťazcový literál `"..."` alebo `"""..."""` */
+    TOK_INTERP_STRING,  /**< interpolovaný reťazec `s"..."` (INTERPOLATEDS) */
+    TOK_BOOL_LIT,       /**< `true` / `false` (BOOLTHEN) */
+    TOK_UNDERSCORE,     /**< `_` – zástupný vzor (ALGEBDT) */
+    TOK_AT_MAIN,        /**< `@main` – anotácia vstupnej funkcie */
+
+    /* Kľúčové slová – základ */
+    TOK_KW_DEF,         /**< `def` */
+    TOK_KW_DO,          /**< `do` */
+    TOK_KW_DOUBLE,      /**< `Double` */
+    TOK_KW_ELSE,        /**< `else` */
+    TOK_KW_IF,          /**< `if` */
+    TOK_KW_IMPORT,      /**< `import` */
+    TOK_KW_INT,         /**< `Int` */
+    TOK_KW_RETURN,      /**< `return` */
+    TOK_KW_STRING,      /**< `String` */
+    TOK_KW_THEN,        /**< `then` */
+    TOK_KW_UNIT,        /**< `Unit` */
+    TOK_KW_VAL,         /**< `val` */
+    TOK_KW_VAR,         /**< `var` */
+    TOK_KW_WHILE,       /**< `while` */
+
+    /* Kľúčové slová – rozšírenia */
+    TOK_KW_BOOLEAN,     /**< `Boolean` (BOOLTHEN) */
+    TOK_KW_CASE,        /**< `case` (ALGEBDT) */
+    TOK_KW_CLASS,       /**< `class` (ALGEBDT) */
+    TOK_KW_EXTENSION,   /**< `extension` (EXTKW) */
+    TOK_KW_FOR,         /**< `for` (CONTROL) */
+    TOK_KW_LIST,        /**< `List` (LISTS) */
+    TOK_KW_MATCH,       /**< `match` (ALGEBDT) */
+    TOK_KW_TYPE,        /**< `type` (ALGEBDT) */
+
+    /* Aritmetické operátory */
+    TOK_PLUS,           /**< `+` – sčítanie, konkatenácia, unárne plus */
+    TOK_MINUS,          /**< `-` – odčítanie, unárne mínus */
+    TOK_MULTIPLY,       /**< `*` – násobenie, hviezdička v prologu */
+    TOK_DIVIDE,         /**< `/` – delenie */
+    TOK_CONCAT,         /**< `++` – spojenie zoznamov (LISTS) */
+
+    /* Relačné operátory */
+    TOK_EQUAL,          /**< `==` */
+    TOK_NOT_EQUAL,      /**< `!=` */
+    TOK_LESS,           /**< `<` */
+    TOK_LESS_EQUAL,     /**< `<=` */
+    TOK_GREATER,        /**< `>` */
+    TOK_GREATER_EQUAL,  /**< `>=` */
+
+    /* Logické operátory */
+    TOK_NOT,            /**< `!` (BOOLTHEN) */
+    TOK_AND,            /**< `&&` (BOOLTHEN) */
+    TOK_OR,             /**< `||` (BOOLTHEN) */
+
+    /* Priradenie a šípky */
+    TOK_ASSIGN,         /**< `=` */
+    TOK_ARROW,          /**< `=>` (ALGEBDT, LAMBDAS) */
+    TOK_LARROW,         /**< `<-` (CONTROL) */
+
+    /* Zátvorky */
+    TOK_LPAREN,         /**< `(` */
+    TOK_RPAREN,         /**< `)` */
+    TOK_LBRACKET,       /**< `[` (LISTS) */
+    TOK_RBRACKET,       /**< `]` (LISTS) */
+
+    /* Interpunkcia */
+    TOK_COMMA,          /**< `,` */
+    TOK_COLON,          /**< `:` */
+    TOK_SEMICOLON,      /**< `;` */
+    TOK_DOT,            /**< `.` */
+    TOK_PIPE,           /**< `|` (ALGEBDT) */
+
+    TOK_COUNT           /**< počet typov tokenov, nie skutočný token */
 } TokenType;
 
 /** @brief Token vrátený lexikálnym analyzátorom. */
