@@ -131,14 +131,14 @@ Token *scanName(FILE *f, int firstChar, int line, ErrorCode *error){
     return newToken;
 }
 /**
- * @brief funkcia na načítanie stringov
+ * @brief funkcia na skenovanie stringov
  * @param f je skenovaný súbor
  * @param firstChar je prvý znak
  * @param line je číslo riadku
  * @param error je pointer, cez ktorý vrátim chybovú hlášku
  * @returns Token, kde sú získané informácie
  */
-Token *getString(FILE *f, int firstChar, int line, ErrorCode *error){
+Token *scanString(FILE *f, int firstChar, int line, ErrorCode *error){
     Token *newToken = malloc(sizeof(Token));
     if (newToken == NULL){
         *error = ERR_INTERNAL;
@@ -220,7 +220,99 @@ Token *getString(FILE *f, int firstChar, int line, ErrorCode *error){
     strcpy(newToken->lexeme, tmp);
     newToken->line = line; 
     *error = ERR_OK;
+    ungetc(c, f);
     return newToken;
+}
+/**
+ * @brief funkcia na detenovanie komentáru
+ * @param newToken je token na zachytenie komentáru
+ * @param f je skenovaný súbor
+ * @param firstChar je znak značiaci typ komentára
+ * @param line je číslo riadku začiatku komentáru
+ * @param error je pointer, cez ktorý si vrátim chybovú hlášku
+ * @return ..
+ */
+void scanComment(Token *newToken, FILE *f, int firstChar, int line, ErrorCode *error){
+    int c = firstChar;
+    char tmp[1000];
+    int i = 0;
+    int depth = 1;
+    tmp[i++] = '/';
+    if (c == '/'){ /*1-line comment*/
+        while (c != EOL && c != EOF){
+            tmp[i++] = c;
+            c = fgetc(f);
+        }
+        tmp[i] = '\0';
+        strcpy(newToken->lexeme, tmp);
+        newToken->line = line;
+        newToken->type = TOK_1LINE_COMMENT;
+        *error = ERR_OK;
+        return *newToken;
+    }
+    else{ /*multi-line koment*/
+        int CASE = 0;
+        const int CASE_DEFAULT = 0;
+        const int CASE_POSSIBLE_DEPTH_INC = 1;
+        const int CASE_POSSIBLE_DEPTH_DEC = 2;
+        while (depth > 0 && c != EOF){
+            tmp[i++] = c;
+            c = fgetc(f);
+            switch (CASE){
+                case CASE_DEFAULT:
+                    if (c == '/'){
+                        CASE = CASE_POSSIBLE_DEPTH_INC;
+                    }
+                    else if (c == '*'){
+                        CASE = CASE_POSSIBLE_DEPTH_DEC;
+                    }
+                    break;
+                case CASE_POSSIBLE_DEPTH_INC:
+                    if (c == '*'){
+                        depth++;
+                    }
+                    CASE = CASE_DEFAULT;
+                    break;
+                case CASE_POSSIBLE_DEPTH_DEC:
+                    if (c == '/'){
+                        depth--;
+                    }
+                    CASE = CASE_DEFAULT;
+                    break;
+            }
+        }
+    }
+}
+/**
+ * @brief funkcia na zistenie, či je / deleno alebo začiatok komentáru
+ * @param f je skenovaný súbor
+ * @param line je číslo riadku
+ * @param error je pointer, cez ktorý si vrátim chybovú hlášku
+ * @returns token s informáciami
+ */
+Token *scanCommentOrDiv(FILE *f, int line, ErrorCode *error){
+    Token *newToken = malloc(sizeof(Token));
+    if (newToken == NULL){
+        *error = ERR_INETRNAL;
+        return NULL;
+    }
+    int c = fgetc(f);
+    if (c == '*' || c == '/'){ /*začiatok komentáru*/
+        scanComment(newToken, f, c, newToken, line, error);
+    }
+    else if (isdigit(c) || isspace(c)){
+        strcpy(newToken->lexeme, "/");
+        newToken->line = line;
+        newToken->type = TOK_DIVIDE;
+    }
+    else{
+        *error = ERR_LEX;
+        return NULL;
+    }
+    *error = ERR_OK;
+    ungetc(c, f);
+    return newToken;
+
 }
 /**
  * @brief funkcia na načítanie riadku
@@ -249,9 +341,12 @@ bool getLine(FILE *f, int line){
             Token *new_token = scanName(f, c, line, &error);
         }
         else if (c == '"' || c == '\''){
-            /*TODO: statový automat pre reťazce*/
+            ErrorCode error;
+            Token *newToken = scanString(f, c, line, &error);
         }
         else if (c == '/'){
+            ErrorCode error;
+            Token *newToken = scanCommentOrDiv(f, c, line, &error);
             /*TODO: stavový automat pre detenciu komentáru alebo operácie deleno*/
         }
         else if (c == '=' || c == '<' || c == '>' || c == '!' || c == '|'){

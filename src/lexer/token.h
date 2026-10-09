@@ -113,6 +113,10 @@ typedef enum {
     TOK_DOT,            /**< `.` */
     TOK_PIPE,           /**< `|` (ALGEBDT) */
 
+    /* Komentáre*/
+    TOK_1LINE_COMMENT,      /*jednoriadkový koment*/
+    TOK_MULTI_LINE_COMMENT,     /*viacriadkový koment*/
+
     TOK_COUNT           /**< počet typov tokenov, nie skutočný token */
 } TokenType;
 
