@@ -43,6 +43,7 @@ typedef enum {
     TOK_IDENTIFIER,     /**< identifikátor (vrátane `to`, `until`, `by`) */
     TOK_INT_LIT,        /**< celočíselný literál */
     TOK_DOUBLE_LIT,     /**< desatinný literál */
+    TOK_CHAR_LIT,       /**< reťazcový literál `''` (jeden znak)*/ 
     TOK_STRING_LIT,     /**< reťazcový literál `"..."` alebo `"""..."""` */
     TOK_INTERP_STRING,  /**< interpolovaný reťazec `s"..."` (INTERPOLATEDS) */
     TOK_BOOL_LIT,       /**< `true` / `false` (BOOLTHEN) */
@@ -80,6 +81,13 @@ typedef enum {
     TOK_MINUS,          /**< `-` – odčítanie, unárne mínus */
     TOK_MULTIPLY,       /**< `*` – násobenie, hviezdička v prologu */
     TOK_DIVIDE,         /**< `/` – delenie */
+    TOK_MODULO,         /**< `%` – modulo */
+    TOK_CONCAT,         /**< `++` – spojenie zoznamov (LISTS) */
+    TOK_REMOVE,         /**< `--` – odstránenie zo zoznamu (LISTS) */
+    TOK_PLUS_EQUALS,    /**< `+=` – rýchle pričítanie */
+    TOK_MINUS_EQUALS,   /**< `-=` – rýchle odpočítanie */
+    TOK_MULTIPLY_EQUALS,    /**< `*=` – rýchle násobenie */
+    TOK_DIVIDE_EQUALS,      /**< `/=` – rýchle delenie */
     TOK_CONCAT,         /**< `++` – spojenie zoznamov (LISTS) */
 
     /* Relačné operátory */
@@ -99,6 +107,7 @@ typedef enum {
     TOK_ASSIGN,         /**< `=` */
     TOK_ARROW,          /**< `=>` (ALGEBDT, LAMBDAS) */
     TOK_LARROW,         /**< `<-` (CONTROL) */
+    TOK_RARROW,         /**< `->` (VYTVORENIE DVOJICE)*/
 
     /* Zátvorky */
     TOK_LPAREN,         /**< `(` */
@@ -112,6 +121,10 @@ typedef enum {
     TOK_SEMICOLON,      /**< `;` */
     TOK_DOT,            /**< `.` */
     TOK_PIPE,           /**< `|` (ALGEBDT) */
+
+    /* Komentáre*/
+    TOK_1LINE_COMMENT,      /*jednoriadkový koment*/
+    TOK_MULTI_LINE_COMMENT,     /*viacriadkový koment*/
 
     TOK_COUNT           /**< počet typov tokenov, nie skutočný token */
 } TokenType;
