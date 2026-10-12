@@ -88,6 +88,8 @@ typedef enum {
     TOK_MINUS_EQUALS,   /**< `-=` – rýchle odpočítanie */
     TOK_MULTIPLY_EQUALS,    /**< `*=` – rýchle násobenie */
     TOK_DIVIDE_EQUALS,      /**< `/=` – rýchle delenie */
+    TOK_CONCAT,         /**< `++` – spojenie zoznamov (LISTS) */
+
     /* Relačné operátory */
     TOK_EQUAL,          /**< `==` */
     TOK_NOT_EQUAL,      /**< `!=` */

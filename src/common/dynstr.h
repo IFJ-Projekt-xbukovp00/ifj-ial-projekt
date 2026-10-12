@@ -41,24 +41,38 @@ typedef struct {
 
 /**
  * @brief Inicializuje prázdny reťazec.
+ * @param s Reťazec na inicializáciu.
  * @return true pri úspechu, false pri chybe alokácie.
  */
 bool dynstr_init(DynStr *s);
 /**
  * @brief Uvoľní pamäť reťazca.
+ * @param s Reťazec na uvoľnenie (môže byť NULL).
  */
 void dynstr_free(DynStr *s);
 /**
  * @brief Vyprázdni reťazec bez uvoľnenia pamäte.
+ * @param s Reťazec na vyprázdnenie.
  */
 void dynstr_clear(DynStr *s);
 /**
+ * @brief Zabezpečí, aby sa do reťazca zmestilo ďalších @p extra znakov + '\\0'.
+ * @param s Reťazec, ktorého kapacita sa má zväčšiť.
+ * @param extra Počet znakov, ktoré sa majú dať pripojiť.
+ * @return true pri úspechu, false pri chybe alokácie (reťazec ostane nezmenený).
+ */
+bool dynstr_reserve(DynStr *s, size_t extra);
+/**
  * @brief Pripojí jeden znak.
+ * @param s Cieľový reťazec.
+ * @param c Znak na pripojenie.
  * @return true pri úspechu, false pri chybe alokácie.
  */
 bool dynstr_append_char(DynStr *s, char c);
 /**
  * @brief Pripojí reťazec.
+ * @param s Cieľový reťazec.
+ * @param str Reťazec ukončený '\\0' na pripojenie.
  * @return true pri úspechu, false pri chybe alokácie.
  */
 bool dynstr_append(DynStr *s, const char *str);
