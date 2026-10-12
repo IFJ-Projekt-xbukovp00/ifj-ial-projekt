@@ -76,7 +76,13 @@ Token *scanNumber(FILE *f, int firstChar, int line, ErrorCode *error){
         }
     }
     tmp[i] = '\0';
-    strcpy(newToken->lexeme, tmp);
+    int lexemeLen = strlen(tmp);
+    newToken->lexeme.data = malloc(lexemeLen+1);
+    if (newToken->lexeme.data == NULL){
+        *error = ERR_INTERNAL;
+        return NULL;
+    }
+    strcpy(newToken->lexeme.data, tmp);
     if (isDouble){
         newToken->type = TOK_DOUBLE_LIT;
     }
@@ -84,6 +90,7 @@ Token *scanNumber(FILE *f, int firstChar, int line, ErrorCode *error){
         newToken->type = TOK_INT_LIT;
     }
     newToken->line = line;
+    newToken->lexeme.len = lexemeLen;
     ungetc(c, f);
     *error = ERR_OK;
     return newToken;
@@ -91,13 +98,14 @@ Token *scanNumber(FILE *f, int firstChar, int line, ErrorCode *error){
 /**
  * @brief funkcia na zistenie, či je naskenované slovo medzi kľúčovými slovami
  * @param word je slovo na kontrolu
+ * @param type je pointer, cez ktorý si vrátim pri zhode typ tokenu
  * @returns true ak je medzi nimi, inak false
  */
-bool IskeyWord(char *word){
+bool IskeyWord(char *word, TokenType *type){
     return false;
 }
 /**
- * @brief funkcia na skenovanie identifikátora
+ * @brief funkcia na skenovanie mena premennej alebo identifikátora
  * @param f je skenovaný súbor
  * @param firstChar je prvé písmeno
  * @param line je číslo riadku
@@ -118,14 +126,19 @@ Token *scanName(FILE *f, int firstChar, int line, ErrorCode *error){
         c = fgetc(f);
     }
     tmp[i] = '\0';
-    strcpy(newToken->lexeme, tmp);
-    if (keyWord(tmp)){
-        newToken->type = TOK_KEYWORD;
+    int lexemeLen = strlen(tmp);
+    newToken->lexeme.data = malloc(lexemeLen+1);
+    if (newToken->lexeme.data == NULL){
+        *error = ERR_INTERNAL;
+        return NULL;
     }
-    else{
+    strcpy(newToken->lexeme.data, tmp);
+
+    if (!IskeyWord(tmp, &newToken->type)){
         newToken->type = TOK_IDENTIFIER;
     }
     newToken->line = line;
+    newToken->lexeme.len = lexemeLen;
     *error = ERR_OK;
     ungetc(c, f);
     return newToken;
@@ -217,8 +230,15 @@ Token *scanString(FILE *f, int firstChar, int line, ErrorCode *error){
         tmp[i] = '\0';
         newToken->type = TOK_STRING_LIT;
     }
-    strcpy(newToken->lexeme, tmp);
+    int lexemeLen = strlen(tmp);
+    newToken->lexeme.data = malloc(lexemeLen+1);
+    if (newToken->lexeme.data == NULL){
+        *error = ERR_INTERNAL;
+        return NULL;
+    }
+    strcpy(newToken->lexeme.data, tmp);
     newToken->line = line; 
+    newToken->lexeme.len = lexemeLen;
     *error = ERR_OK;
     ungetc(c, f);
     return newToken;
@@ -243,12 +263,7 @@ void scanComment(Token *newToken, FILE *f, int firstChar, int line, ErrorCode *e
             tmp[i++] = c;
             c = fgetc(f);
         }
-        tmp[i] = '\0';
-        strcpy(newToken->lexeme, tmp);
-        newToken->line = line;
         newToken->type = TOK_1LINE_COMMENT;
-        *error = ERR_OK;
-        return *newToken;
     }
     else{ /*multi-line koment*/
         int CASE = 0;
@@ -281,10 +296,23 @@ void scanComment(Token *newToken, FILE *f, int firstChar, int line, ErrorCode *e
                     break;
             }
         }
+        newToken->type = TOK_MULTI_LINE_COMMENT;
     }
+    tmp[i] = '\0';
+    int lexemeLen = strlen(tmp);
+    newToken->lexeme.data = malloc(lexemeLen+1);
+    if (newToken->lexeme.data == NULL){
+        *error = ERR_INTERNAL;
+        return NULL;
+    }
+    strcpy(newToken->lexeme.data, tmp);
+    newToken->line = line;
+    newToken->lexeme.len = lexemeLen;
+    *error = ERR_OK;
+    return *newToken;
 }
 /**
- * @brief funkcia na zistenie, či je / deleno alebo začiatok komentáru
+ * @brief funkcia na zistenie, či je '/' deleno alebo začiatok komentáru
  * @param f je skenovaný súbor
  * @param line je číslo riadku
  * @param error je pointer, cez ktorý si vrátim chybovú hlášku
@@ -300,19 +328,229 @@ Token *scanCommentOrDiv(FILE *f, int line, ErrorCode *error){
     if (c == '*' || c == '/'){ /*začiatok komentáru*/
         scanComment(newToken, f, c, newToken, line, error);
     }
+    else if (c == '='){
+        newToken->lexeme.data = malloc(3);
+        if (newToken->lexeme.data == NULL){
+            *error = ERR_INTERNAL;
+            return NULL;
+        }
+        strcpy(newToken->lexeme.data, "/=");
+        newToken->line = line;
+        newToken->type = TOK_DIVIDE_EQUALS;
+        newToken->lexeme.len = 2;
+    }
     else if (isdigit(c) || isspace(c)){
-        strcpy(newToken->lexeme, "/");
+        newToken->lexeme.data = malloc(2);
+            if (newToken->lexeme.data == NULL){
+            *error = ERR_INTERNAL;
+            return NULL;
+        }
+        strcpy(newToken->lexeme.data, '/');
         newToken->line = line;
         newToken->type = TOK_DIVIDE;
+        newToken->lexeme.len = 1;
     }
     else{
         *error = ERR_LEX;
         return NULL;
     }
     *error = ERR_OK;
-    ungetc(c, f);
     return newToken;
+}
+/**
+ * @brief funkcia na skenovanie logických operátorov
+ * @param f je skenovaný súbor
+ * @param firstChar je prvý znak
+ * @param line je číslo riadku 
+ * @param error je pointer, cez ktorý si vrátim chybovú hlášku
+ * @returns token s informáciami
+ */
+Token *scanLogicalExpression(FILE *f, int firstChar, int line, ErrorCode *error){
+    Token *newToken = malloc(sizeof(Token));
+    if (newToken == NULL){
+        *error = ERR_INETRNAL;
+        return NULL;
+    }
+    int c = firstChar;
+    char tmp[3];
+    int i = 0;
+    if (c == '='){
+        tmp[i++] = c;
+        c = fgetc(f);
+        if (c == '='){
+            tmp[i++] = c;
+            tmp[i] = '\0';
+            newToken->type = TOK_EQUAL;
+        }
+        else if (c == '>'){
+            tmp[i++] = c;
+            tmp[i] = '\0';
+            newToken->type = TOK_ARROW;
+        }
+        else{
+            tmp[i] = '\0';
+            newToken->type = TOK_ASSIGN;
+            ungetc(c, f);
+        }
+    }
+    else if (c == '<'){
+        tmp[i++] = c;
+        c = fgetc(f);
+        if (c == '='){
+            tmp[i++] = c;
+            tmp[i] = '\0';
+            newToken->type = TOK_LESS_EQUAL;
+        }
+        else if (c == '-'){
+            tmp[i++] = c;
+            tmp[i] = '\0';
+            newToken->type = TOK_LARROW;
+        }
+        else{
+            tmp[i] = '\0';
+            newToken->type = TOK_LESS;
+            ungetc(c, f);
+        }
+    }
+    else if (c == '>'){
+        tmp[i++] = c;
+        c = fgetc(f);
+        if (c == '='){
+            tmp[i++] = c;
+            tmp[i] = '\0';
+            newToken->type = TOK_GREATER_EQUAL;
+        }
+        else{
+            tmp[i] = '\0';
+            newToken->type = TOK_GREATER;
+            ungetc(c, f);
+        }
+    }
+    else if (c == '!'){
+        tmp[i++] = c;
+        c = fgetc(f);
+        if (c == '='){
+            tmp[i++] = c;
+            tmp[i] = '\0';
+            newToken->type = TOK_NOT_EQUAL;
+        }
+        else{
+            tmp[i] = '\0';
+            newToken->type = TOK_NOT;
+            ungetc(c, f);
+        }
+    }
+    else{
+        tmp[i++] = c;
+        c = fgetc(f);
+        if (c == '|'){
+            tmp[i++] = c;
+            tmp[i] = '\0';
+            newToken->type = TOK_OR;
+        }
+        else{
+            tmp[i] = '\0';
+            newToken->type = TOK_PIPE;
+            ungetc(c, f); 
+        }
+    }
+    int lexemeLen = strlen(tmp);
+    newToken->lexeme.data = malloc(lexemeLen+1);
+    if (newToken->lexeme.data == NULL){
+        *error = ERR_INTERNAL;
+        return NULL;
+    }
+    strcpy(newToken->lexeme.data, tmp);
+    newToken->line = line;
+    newToken->lexeme.len = lexemeLen;
+    *error = ERR_OK;
+    return newToken;
+}
 
+/**
+ * @brief funkcia na skenovanie matematických operátorov
+ * @param f je skenovaný súbor
+ * @param firstChar je prvý znak
+ * @param line je číslo riadku
+ * @param error je pointer, cez ktorý si vrátim chybovú hlášku
+ * @returns token s informáciami
+ */
+Token *scanMathExpression(FILE *f, int firstChar, int line, ErrorCode *error){
+    Token *newToken = malloc(sizeof(Token));
+    if (newToken == NULL){
+        *error = ERR_INTERNAL;
+        return NULL;
+    }
+    char tmp[3];
+    int i = 0;
+    int c = firstChar;
+    if (c == '+'){
+        tmp[i++] = c;
+        c = fgetc(f);
+        if (c == '+'){
+            tmp[i++] = c;
+            tmp[i] = '\0';
+            newToken->type = TOK_CONCAT;
+        }
+        else if (c == '='){
+            tmp[i++] = c;
+            tmp[i] = '\0';
+            newToken->type = TOK_PLUS_EQUALS;
+        }
+        else{
+            tmp[i] = '\0';
+            newToken->type = TOK_PLUS;
+            ungetc(c, f);
+        }
+    }
+    else if (c == '-'){
+        tmp[i++] = c;
+        c = fgetc(f);
+        if (c == '-'){
+            tmp[i++] = c;
+            tmp[i] = '\0';
+            newToken->type = TOK_REMOVE;
+        }
+        else if (c == '='){
+            tmp[i++] = c;
+            tmp[i] = '\0';
+            newToken->type = TOK_MINUS_EQUALS;
+        }
+        else{
+            tmp[i] = '\0';
+            newToken->type = TOK_MINUS;
+            ungetc(c, f);
+        }
+    }
+    else if (c == '*'){
+        tmp[i++] = c;
+        c = fgetc(f);
+        if (c == '='){
+            tmp[i++] = c;
+            tmp[i] = '\0';
+            newToken->type = TOK_MULTIPLY_EQUALS;
+        }
+        else{
+            tmp[i] = '\0';
+            newToken->type = TOK_MULTIPLY;
+            ungetc(c, f);
+        }
+    }
+    else{
+        tmp[i++] = c;
+        tmp[i] = '\0';
+        newToken->type = TOK_MODULO;
+    }
+    int lexemeLen = strlen(tmp);
+    newToken->lexeme.data = malloc(lexemeLen+1);
+    if (newToken->lexeme.data == NULL){
+        *error = ERR_INTERNAL;
+        return NULL;
+    }
+    strcpy(newToken->lexeme.data, tmp);
+    newToken->line = line;
+    newToken->lexeme.len = lexemeLen;
+    return newToken;
 }
 /**
  * @brief funkcia na načítanie riadku
@@ -346,14 +584,15 @@ bool getLine(FILE *f, int line){
         }
         else if (c == '/'){
             ErrorCode error;
-            Token *newToken = scanCommentOrDiv(f, c, line, &error);
-            /*TODO: stavový automat pre detenciu komentáru alebo operácie deleno*/
+            Token *newToken = scanCommentOrDiv(f, line, &error);
         }
         else if (c == '=' || c == '<' || c == '>' || c == '!' || c == '|'){
-            /*TODO: stavový automat pre logické operátory*/
+            ErrorCode error;
+            Token *newToken = scanLogicalExpression(f, c, line, &error);
         }
         else if (c == '+' || c == '-' || c == '*' || c == '%'){
-            /*TODO: stavový automat pre jednoduché matematické operácie*/
+            ErrorCode error;
+            Token *newToken = scanMathExpression(f, c, line, &error);
         }
     }
 } 
