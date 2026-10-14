@@ -26,7 +26,19 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+#include "token.h"
+#include "error.h"
 
 #pragma once
 
-/* TODO: vyvážený BVS (napr. AVL) */
+typedef struct Node{
+    char *name;
+    TokenType type;
+    struct Node *left;
+    struct Node *right;
+}Node;
+
+Node *insertNode(Node *root, const char *name, TokenType type, ErrorCode *error);
+Node *findNode(Node *root, const char *name, ErrorCode *error);
+void destroyTree(Node *root);
+
