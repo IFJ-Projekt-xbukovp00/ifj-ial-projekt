@@ -29,8 +29,10 @@ ifj26
 *.zip
 *.code
 *.out
+!tests/**/*.out
 /docs/*.pdf
-.vscode/
+.vscode/*
+!.vscode/c_cpp_properties.json
 /docs/doxygen/
 /pack/
 /tests/tmp/

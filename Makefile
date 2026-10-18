@@ -34,7 +34,7 @@ INC     := $(addprefix -I,$(sort $(dir $(SRC) $(HDR))))
 CFLAGS  ?= -std=c11 -Wall -Wextra -pedantic -g
 CFLAGS  += $(INC)
 
-IC26INT ?= ic26int
+IC26INT ?= tests/bin/ic26int-linux-$(shell uname -m)
 
 PACK_DIR := pack
 PACK_ZIP := xbukovp00.zip
