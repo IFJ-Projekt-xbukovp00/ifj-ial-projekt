@@ -1,0 +1,11 @@
+-std=c11
+-Wall
+-Wextra
+-pedantic
+-Isrc
+-Isrc/codegen
+-Isrc/common
+-Isrc/lexer
+-Isrc/parser
+-Isrc/semantic
+-Isrc/symtable
