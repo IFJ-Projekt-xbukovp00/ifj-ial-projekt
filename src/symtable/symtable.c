@@ -28,5 +28,57 @@
  */
 
 #include "symtable.h"
+#include <string.h>
 
-/* TODO: implementácia */
+KeyWordTree *initNode(char *word){
+    KeyWordTree *newNode = malloc(sizeof(KeyWordTree));
+    if (newNode == NULL){
+        return NULL;
+    }
+    newNode->word = malloc(strlen(word)+1);
+    if (newNode->word == NULL){
+        free(newNode);
+        return NULL;
+    }
+    strcpy(newNode->word, word);
+    newNode->left = NULL;
+    newNode->right = NULL;
+    return newNode;
+}
+KeyWordTree *addNode(KeyWordTree *root, char *word){
+    if (root == NULL){
+        return initNode(word);
+    }
+    int cmp = strcmp(word, root->word);
+    if (cmp < 0){
+        addNode(root->left, word);
+    }
+    else{
+        addNode(root->right, word);
+    }
+    return root;
+}
+bool findNode(KeyWordTree *root, char *word){
+    if (root == NULL){
+        return false;
+    }
+    int cmp = strcmp(word, root->word);
+    if (cmp == 0){
+        return true;
+    }
+    else if (cmp < 0){
+        return findNode(root->left, word);
+    }
+    else{
+        return findNode(root->right, word);
+    }
+}
+void clearTree(KeyWordTree *root){
+    if (root == NULL){
+        return;
+    }
+    clearTree(root->left);
+    clearTree(root->right);
+    free(root->word);
+    free(root);
+}
