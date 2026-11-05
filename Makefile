@@ -27,7 +27,8 @@
 
 CC      ?= gcc
 TARGET  := ifj26
-SRC     := $(wildcard src/*.c src/*/*.c)
+OLD     := src/lexer/old_scanner.c
+SRC     := $(filter-out $(OLD),$(wildcard src/*.c src/*/*.c))
 HDR     := $(wildcard src/*.h src/*/*.h)
 OBJ     := $(SRC:.c=.o)
 INC     := $(addprefix -I,$(sort $(dir $(SRC) $(HDR))))
@@ -51,7 +52,7 @@ src/%.o: src/%.c
 
 check:
 	clang-format --dry-run --Werror $(SRC) $(HDR)
-	cppcheck --enable=warning,style --error-exitcode=1 --quiet $(INC) src/
+	cppcheck --enable=warning,style --error-exitcode=1 --quiet $(INC) -i $(OLD) src/
 
 build-check: check build
 

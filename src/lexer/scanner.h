@@ -42,7 +42,24 @@ void scanner_init(FILE *input);
 
 /**
  * @brief Načíta ďalší token.
- * @param[out] token Načítaný token.
- * @return ERR_OK, pri lexikálnej chybe ERR_LEX.
+ *
+ * Komentáre sa preskakujú. Na začiatku každého logického riadku (okrem prvého) príde
+ * TOK_EOL a podľa odsadenia TOK_INDENT alebo jeden či viac TOK_DEDENT; na konci vstupu
+ * TOK_EOL, TOK_DEDENT až po nulové odsadenie a TOK_EOF (potom už stále TOK_EOF).
+ * Vnútri zátvoriek sa koniec riadku nevracia.
+ *
+ * Interpolovaný reťazec prichádza po častiach ako TOK_INTERP_STRING; časť sa rozlíši podľa
+ * lexému: začína s" alebo } a končí " (koniec reťazca) alebo ${ (nasleduje výraz, ktorý
+ * končí časťou začínajúcou }).
+ *
+ * @param[out] token Načítaný token; token->lexeme musí byť inicializovaný (dynstr_init)
+ *                   alebo vynulovaný, obsah sa prepíše.
+ * @return ERR_OK, pri lexikálnej chybe ERR_LEX, pri chybnom odsadení ERR_SYNTAX,
+ *         pri nedostatku pamäte ERR_INTERNAL.
  */
 int scanner_get_token(Token *token);
+
+/**
+ * @brief Uvoľní pamäť skenera (zásobníky, rozpracované tokeny).
+ */
+void scanner_free(void);
