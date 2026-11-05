@@ -49,14 +49,15 @@ int scanner_get_token(Token *token) {
   * @brief funkcia na vyplnenie stromu kľúčovými slovami
   * @returns ..
   */
-void fillKeyWordTree(void){
+KeyWordTree* fillKeyWordTree(void){
     KeyWordTree *root = NULL;
     char *keyWords[] = {"def", "do", "double", "else", "if", "import", "int", "return", "string", "then",
                         "unit", "val", "var", "while", "boolean", "case", "class", "extension", "for", "list", 
                         "match", "type"};
     for (int i = 0; i < 22; i++){
-        addNode(root, keyWords[i]);
+       root = addNode(root, keyWords[i]);
     }
+    return root;
 }
 /**
  * @brief funkcia na skenovanie čísla

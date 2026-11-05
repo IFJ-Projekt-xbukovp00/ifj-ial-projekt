@@ -31,35 +31,43 @@
 
 #include "bst.h"
 
+/**
+ * @brief strom pre identifikátory
+ */
+typedef struct IDs{
+    Token *Node;
+    struct IDs *left;
+    struct IDs *right  
+}IDs;
 
-typedef struct Values{
-    char *val_dataType;
-    char *val_name;
-    char *val_value;
-    struct Values *left;
-    struct Values *right;   
-}Values;
+/**
+ * @brief funkcia na vytvorenie listu do stromu identifikátorov
+ * @param Node je štruktúra, ktorá má v sebe informáciu o tokene
+ * @returns list
+ */
+IDs *initNodeID(Token *Node);
 
-/** 
- * @brief funkcie pre vytvorenie štruktúry
- * @returns ukazateľ na novo vytvorenú štruktúru
-*/
+/**
+ * @brief funkcia na pridanie listu do stromu identifikátorov
+ * @param Node je štruktúra, ktorá má v sebe informáciu o tokene
+ * @returns list 
+ */
+IDs *addNodeID(Token *Node);
 
-Values *valCtor(void);
+/**
+ * @brief funkcia na hľadanie a kontrolovanie identikátora v strome
+ * @param root je kontrolovaný list
+ * @param Node je štruktúra, ktorá má v sebe informáciu o tokene
+ * @returns pravdivostnú hodnotu
+ */
+bool findAndControlNodeID;
 
-/** 
- * @brief funkcie pre pridávanie štruktúry na koniec
- * @param *tail ukazuje na list stromu, kde sa bude pridávať
-*/
-
-void *AddValue (Values *tail);
-
-/** 
- *@brief odstraňuje list zo stromu
- *@param *cur ukazuje na list, ktorý sa odstraňuje
-*/
-
-void ValueDtor(Values *cur);
+/**
+ * @brief funkcia na mazanie stromu identifikátorov
+ * @param root je list, ktorý odstraňujem
+ * @returns ..
+ */
+void clearTreeID(IDs *root);
 
 /**
  * @brief binárny strom pre keyWords
@@ -71,33 +79,33 @@ typedef struct KeyWordTree{
 }KeyWordTree;
 
 /**
- * @brief funkcia na vytvorenie listu do stromu
+ * @brief funkcia na vytvorenie listu do stromu kľúčových slov
  * @param word je kľúčové slovo
  * @returns list
  */
-KeyWordTree *initNode(char *word);
+KeyWordTree *initNodeKW(char *word);
 
 /**
- * @brief funkcia na pridanie listu do stromu
+ * @brief funkcia na pridanie listu do stromu kľúčových slov
  * @param root je miesto, kde sa má pridať
  * @param word je kľúčové slovo
  * @returns root
  */
-KeyWordTree *addNode(KeyWordTree *root, char *word);
+KeyWordTree *addNodeKW(KeyWordTree *root, char *word);
 
 /** 
  * @brief funkcia na hľadanie kľúčového slova v strome
- * @param root je koreň, resp. kontrolovaný list
+ * @param root je kontrolovaný list
  * @param word je kľúčové slovo, ktoré hľadám
  * @returns pravdivostnú hodnotu
 */
-bool findNode(KeyWordTree *root, char *word);
+bool findNodeKW(KeyWordTree *root, char *word);
 
 /**
- * @brief funkcia na mazanie stromu
+ * @brief funkcia na mazanie stromu kľúčových slov
  * @param root je list, ktorý odstraňujem
  * @returns ..
  */
-void clearTree(KeyWordTree *root);
+void clearTreeKW(KeyWordTree *root);
 
 
