@@ -29,8 +29,25 @@
 
 #include "symtable.h"
 #include <string.h>
+IDs *initNodeID(Token *Node){
+    IDs *newNode = malloc(sizeof(IDs));
+    if (newNode == NULL){
+        return NULL;
+    }
+    newNode->Node = Node;
+    newNode->left = NULL;
+    newNode->right = NULL;
+    return newNode;
+}
 
-KeyWordTree *initNode(char *word){
+IDs *addNodeID(IDs *root, Token *Node){
+    if (root == NULL){
+        return initNodeID(Node);
+    }
+    int cmp = strcmp(root->Node->lexeme, Node->lexeme);
+}
+
+KeyWordTree *initNodeKW(char *word){
     KeyWordTree *newNode = malloc(sizeof(KeyWordTree));
     if (newNode == NULL){
         return NULL;
@@ -45,20 +62,20 @@ KeyWordTree *initNode(char *word){
     newNode->right = NULL;
     return newNode;
 }
-KeyWordTree *addNode(KeyWordTree *root, char *word){
+KeyWordTree *addNodeKW(KeyWordTree *root, char *word){
     if (root == NULL){
         return initNode(word);
     }
     int cmp = strcmp(word, root->word);
     if (cmp < 0){
-        addNode(root->left, word);
+        addNodeKW(root->left, word);
     }
     else{
-        addNode(root->right, word);
+        addNodeKW(root->right, word);
     }
     return root;
 }
-bool findNode(KeyWordTree *root, char *word){
+bool findNodeKW(KeyWordTree *root, char *word){
     if (root == NULL){
         return false;
     }
@@ -67,18 +84,18 @@ bool findNode(KeyWordTree *root, char *word){
         return true;
     }
     else if (cmp < 0){
-        return findNode(root->left, word);
+        return findNodeKW(root->left, word);
     }
     else{
-        return findNode(root->right, word);
+        return findNodeKW(root->right, word);
     }
 }
-void clearTree(KeyWordTree *root){
+void clearTreeKW(KeyWordTree *root){
     if (root == NULL){
         return;
     }
-    clearTree(root->left);
-    clearTree(root->right);
+    clearTreeKW(root->left);
+    clearTreeKW(root->right);
     free(root->word);
     free(root);
 }
