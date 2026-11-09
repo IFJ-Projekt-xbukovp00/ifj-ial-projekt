@@ -1,6 +1,6 @@
 /**
  * @file scanner.c
- * @brief Lexikálny analyzátor (konečný automat)
+ * @brief Lexikálny analyzátor – z lexémov konečného automatu (dfa.c) robí tokeny pre parser
  *
  * Implementace překladače imperativního jazyka IFJ26.
  * Projekt z predmetov IFJ a IAL, FIT VUT v Brne, 2026/2027.
@@ -26,587 +26,392 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-#include "error.h"
+
 #include "scanner.h"
+
+#include "dfa.h"
+#include "dynstr.h"
+#include "error.h"
 #include "symtable.h"
-#define EOL '\n'
 
-static FILE *source = NULL;
+#include <stdbool.h>
+#include <stdlib.h>
+#include <string.h>
 
-/** @copydoc scanner_init */
-void scanner_init(FILE *input) { 
-    source = input; 
+/** @brief Určuje, či máme otvorený výraz v jednoriadkovom alebo viacriadkovom interpolovanom reťazci. */
+typedef enum {
+    INTERP_SINGLE, // s"…"
+    INTERP_MULTI,  // s"""…"""
+} InterpMode;
+
+/** @brief Ukladáme si informácie o otvorenom výraze ${…} v interpolovanom reťazci. */
+typedef struct {
+    InterpMode mode; // podľa toho zistíme, do ktorého reťazca sa po } vrátime
+    int depth;       // sledujeme zátvorky, aby } ukončilo výraz až na správnej úrovni
+} InterpFrame;
+
+/** @brief Pomocná štruktúra pre token, ktorý čaká vo fronte. */
+typedef struct {
+    TokenType type;
+    int line;
+} QueuedToken;
+
+/** @brief Zoznam slov, ktoré po načítaní identifikátora rozpoznáme ako kľúčové slová alebo literály. */
+static const struct {
+    const char *word;
+    TokenType type;
+} keywords[] = {
+    {"def", TOK_KW_DEF},
+    {"do", TOK_KW_DO},
+    {"Double", TOK_KW_DOUBLE},
+    {"else", TOK_KW_ELSE},
+    {"if", TOK_KW_IF},
+    {"import", TOK_KW_IMPORT},
+    {"Int", TOK_KW_INT},
+    {"return", TOK_KW_RETURN},
+    {"String", TOK_KW_STRING},
+    {"then", TOK_KW_THEN},
+    {"Unit", TOK_KW_UNIT},
+    {"val", TOK_KW_VAL},
+    {"var", TOK_KW_VAR},
+    {"while", TOK_KW_WHILE},
+    {"Boolean", TOK_KW_BOOLEAN},
+    {"case", TOK_KW_CASE},
+    {"class", TOK_KW_CLASS},
+    {"extension", TOK_KW_EXTENSION},
+    {"for", TOK_KW_FOR},
+    {"List", TOK_KW_LIST},
+    {"match", TOK_KW_MATCH},
+    {"type", TOK_KW_TYPE},
+    {"true", TOK_BOOL_LIT},
+    {"false", TOK_BOOL_LIT},
+};
+
+static DfaInput input; // uchovávame vstup a informácie o polohe pri čítaní znakov
+static DfaCtx ctx;     // tu máme počítadlá a príznaky, ktoré používa automat
+static Token cur;      // sem sa načíta aktuálny lexém
+static Token held;     // token, ktorý vydáme až po spracovaní tokenov vo fronte
+static bool has_held;
+
+static QueuedToken *queue; // tu čakajú tokeny konca riadku, odsadenia a konca vstupu
+static size_t queue_len, queue_head, queue_cap;
+
+static int *indents; // ukladáme si úrovne odsadenia, pričom začíname od nuly
+static size_t indents_len, indents_cap;
+
+static InterpFrame *interps; // evidujeme otvorené výrazy interpolovaných reťazcov
+static size_t interps_len, interps_cap;
+
+static int depth;        // počítame otvorené okrúhle a hranaté zátvorky
+static int last_line;    // pamätáme si riadok posledného tokenu, aby sme ho vedeli priradiť k TOK_EOL
+static bool line_start;  // označuje, že ďalší token bude prvý na riadku
+static bool had_line;    // zistíme, či už máme za sebou nejaký logický riadok
+static bool expect_eol;  // po takomto blokovom komentári ešte očakávame koniec riadku
+static bool at_eof;      // označuje, že koniec vstupu sme už spracovali
+static bool init_failed; // inicializácia zlyhala, pretože sa nepodarilo získať potrebnú pamäť
+
+static KeyWordTree *keyword_tree; // strom kľúčových slov a literálov true/false (z keywords[])
+
+/**
+ * @brief Zväčší dynamické pole, keď už v ňom nie je miesto pre ďalší prvok.
+ * @return Ukazovateľ na pole alebo NULL, ak sa pole nepodarilo zväčšiť.
+ */
+static void *grow(void *array, size_t *cap, size_t len, size_t item_size) {
+    if (len < *cap) {
+        return array;
+    }
+    size_t new_cap = *cap ? *cap * 2 : 16;
+    void *tmp = realloc(array, new_cap * item_size);
+    if (tmp != NULL) {
+        *cap = new_cap;
+    }
+    return tmp;
 }
 
-/* TODO: implementácia konečného automatu */
-/** @copydoc scanner_get_token */
-int scanner_get_token(Token *token) {
-    (void)source;
-    token->type = TOK_EOF;
+/** @brief Pridá nový token na koniec fronty. */
+static bool enqueue(TokenType type, int line) {
+    QueuedToken *q = grow(queue, &queue_cap, queue_len, sizeof *queue);
+    if (q == NULL) {
+        return false;
+    }
+    queue = q;
+    queue[queue_len].type = type;
+    queue[queue_len].line = line;
+    queue_len++;
+    return true;
+}
+
+/** @brief Uloží novú úroveň odsadenia na zásobník. */
+static bool push_indent(int col) {
+    int *p = grow(indents, &indents_cap, indents_len, sizeof *indents);
+    if (p == NULL) {
+        return false;
+    }
+    indents = p;
+    indents[indents_len++] = col;
+    return true;
+}
+
+/** @brief Nastaví typ, riadok a obsah výstupného tokenu. */
+static int give(Token *out, TokenType type, int line, const char *text) {
+    dynstr_clear(&out->lexeme);
+    if (text != NULL && !dynstr_append(&out->lexeme, text)) {
+        return ERR_INTERNAL;
+    }
+    out->type = type;
+    out->line = line;
     return ERR_OK;
 }
- /**
-  * @brief funkcia na vyplnenie stromu kľúčovými slovami
-  * @returns ..
-  */
-KeyWordTree* fillKeyWordTree(void){
-    KeyWordTree *root = NULL;
-    char *keyWords[] = {"def", "do", "double", "else", "if", "import", "int", "return", "string", "then",
-                        "unit", "val", "var", "while", "boolean", "case", "class", "extension", "for", "list", 
-                        "match", "type"};
-    for (int i = 0; i < 22; i++){
-       root = addNode(root, keyWords[i]);
-    }
-    return root;
-}
-/**
- * @brief funkcia na skenovanie čísla
- * @param f je skenovaný súbor
- * @param firstChar je prvé číslo 
- * @param line je číslo riadku
- * @param error je pointer, cez ktorý si vrátim typ chybovej hlášky
- * @returns Token, kde sú uložené informácie
- */
-Token *scanNumber(FILE *f, int firstChar, int line, ErrorCode *error){
-    Token *newToken = malloc(sizeof(Token));
-    if (newToken == NULL){
-        *error = ERR_INTERNAL;
-        return NULL;
-    }
-    int c = firstChar;
-    int i = 0;
-    char tmp[100];
-    bool isDouble = false;
-    while (isdigit(c)){
-        tmp[i++] = c;
-        c = fgetc(f);
-    }
-    if (c == '.'){
-        tmp[i++] = c;
-        isDouble = true;
-        while (isdigit(c)){
-            tmp[i++] = c;
-            c = fgetc(f);
-        }
-    }
-    tmp[i] = '\0';
-    int lexemeLen = strlen(tmp);
-    newToken->lexeme.data = malloc(lexemeLen+1);
-    if (newToken->lexeme.data == NULL){
-        *error = ERR_INTERNAL;
-        return NULL;
-    }
-    strcpy(newToken->lexeme.data, tmp);
-    if (isDouble){
-        newToken->type = TOK_DOUBLE_LIT;
-    }
-    else{
-        newToken->type = TOK_INT_LIT;
-    }
-    newToken->line = line;
-    newToken->lexeme.len = lexemeLen;
-    ungetc(c, f);
-    *error = ERR_OK;
-    return newToken;
-}
-/**
- * @brief funkcia na zistenie, či je naskenované slovo medzi kľúčovými slovami
- * @param word je slovo na kontrolu
- * @param type je pointer, cez ktorý si vrátim pri zhode typ tokenu
- * @returns true ak je medzi nimi, inak false
- */
-bool IskeyWord(char *word, TokenType *type){
-    return false;
-}
-/**
- * @brief funkcia na skenovanie mena premennej alebo identifikátora
- * @param f je skenovaný súbor
- * @param firstChar je prvé písmeno
- * @param line je číslo riadku
- * @param error je pointer, cez ktorý v prípade chyby vrátim typ chybovej hlášky
- * @returns Token, kde sú získané informácie
- */
-Token *scanName(FILE *f, int firstChar, int line, ErrorCode *error){
-    Token *newToken = malloc(sizeof(Token));
-    if (newToken == NULL){
-        *error = ERR_INTERNAL;
-        return NULL;
-    }
-    int c = firstChar;
-    int i = 0;
-    char tmp[100];
-    while (isalnum(c) || c == '_'){
-        tmp[i++] = c;
-        c = fgetc(f);
-    }
-    tmp[i] = '\0';
-    int lexemeLen = strlen(tmp);
-    newToken->lexeme.data = malloc(lexemeLen+1);
-    if (newToken->lexeme.data == NULL){
-        *error = ERR_INTERNAL;
-        return NULL;
-    }
-    strcpy(newToken->lexeme.data, tmp);
 
-    if (!IskeyWord(tmp, &newToken->type)){
-        newToken->type = TOK_IDENTIFIER;
+/** @brief Vyberie prvý čakajúci token z fronty a vráti ho ako výstup. */
+static int give_queued(Token *out) {
+    QueuedToken q = queue[queue_head++];
+    if (queue_head == queue_len) {
+        queue_head = queue_len = 0;
     }
-    newToken->line = line;
-    newToken->lexeme.len = lexemeLen;
-    *error = ERR_OK;
-    ungetc(c, f);
-    return newToken;
-}
-/**
- * @brief funkcia na skenovanie stringov
- * @param f je skenovaný súbor
- * @param firstChar je prvý znak
- * @param line je číslo riadku
- * @param error je pointer, cez ktorý vrátim chybovú hlášku
- * @returns Token, kde sú získané informácie
- */
-Token *scanString(FILE *f, int firstChar, int line, ErrorCode *error){
-    Token *newToken = malloc(sizeof(Token));
-    if (newToken == NULL){
-        *error = ERR_INTERNAL;
-        return NULL;
-    }
-    int c = firstChar;
-    int i = 0;
-    char tmp[1024];
-    if (c == '\''){ /*string s jedným znakom*/
-        tmp[i++] = c;
-        c = fgetc(f);
-        if (c == EOL || c == EOF){
-            *error = ERR_LEX;
-            return NULL;
-        }
-        else if (c == '\\'){ /*\n, \t, \\*/
-            tmp[i++] = c;
-            c = fgetc(f);
-            if (c != 'n' || c != 't' || c != '\\' || c != '\'' || c != '"'){
-                *error = ERR_LEX;
-                return NULL;
-            }
-            tmp[i++] = c;
-        }
-        else{
-            tmp[i++] = c;
-        }
-        c = fgetc(f);
-        if (c != '\''){
-            *error = ERR_LEX;
-            return NULL;
-        }
-        tmp[i++] = c;
-        tmp[i] = '\0';
-        newToken->type = TOK_CHAR_LIT;
-    }
-    else{ /*string s viacerými znakmi*/
-        tmp[i++] = c;
-        c = fgetc(f);
-        int start_quote_seq = 1;
-        while (start_quote_seq < 3 && c == '"'){ /*zisťujem úvodnú dĺžku sekvecie "*/
-            tmp[i++] = c;
-            c = fgetc(f);
-            start_quote_seq++;
-        }
-        if (start_quote_seq == 2){/*""*/
-            tmp[i] = '\0';
-        }
-        else if (start_quote_seq == 3){ /*začiatok multilane stringu*/
-            int end_quote_seq = 0;
-            while (end_quote_seq < 3){
-                tmp[i++] = c;
-                c = fgetc(f);
-                if (c == '"'){
-                    end_quote_seq++;
-                }
-                else{
-                    end_quote_seq = 0;
-                }
-                if (i == 1024){
-                    *error = ERR_INTERNAL; /*priveľký string na spracovanie*/
-                    return NULL;
-                }
-            }
-        }
-        else{ /*klasický string*/
-            while (c != '"'){
-                if (c == EOL || c == EOF){
-                    *error = ERR_LEX;
-                    return NULL;
-                }
-                tmp[i++] = c;
-                c = fgetc(f);
-            }
-        }
-        tmp[i] = '\0';
-        newToken->type = TOK_STRING_LIT;
-    }
-    int lexemeLen = strlen(tmp);
-    newToken->lexeme.data = malloc(lexemeLen+1);
-    if (newToken->lexeme.data == NULL){
-        *error = ERR_INTERNAL;
-        return NULL;
-    }
-    strcpy(newToken->lexeme.data, tmp);
-    newToken->line = line; 
-    newToken->lexeme.len = lexemeLen;
-    *error = ERR_OK;
-    ungetc(c, f);
-    return newToken;
-}
-/**
- * @brief funkcia na detenovanie komentáru
- * @param newToken je token na zachytenie komentáru
- * @param f je skenovaný súbor
- * @param firstChar je znak značiaci typ komentára
- * @param line je číslo riadku začiatku komentáru
- * @param error je pointer, cez ktorý si vrátim chybovú hlášku
- * @return ..
- */
-void scanComment(Token *newToken, FILE *f, int firstChar, int line, ErrorCode *error){
-    int c = firstChar;
-    char tmp[1000];
-    int i = 0;
-    int depth = 1;
-    tmp[i++] = '/';
-    if (c == '/'){ /*1-line comment*/
-        while (c != EOL && c != EOF){
-            tmp[i++] = c;
-            c = fgetc(f);
-        }
-        newToken->type = TOK_1LINE_COMMENT;
-    }
-    else{ /*multi-line koment*/
-        int CASE = 0;
-        const int CASE_DEFAULT = 0;
-        const int CASE_POSSIBLE_DEPTH_INC = 1;
-        const int CASE_POSSIBLE_DEPTH_DEC = 2;
-        while (depth > 0 && c != EOF){
-            tmp[i++] = c;
-            c = fgetc(f);
-            switch (CASE){
-                case CASE_DEFAULT:
-                    if (c == '/'){
-                        CASE = CASE_POSSIBLE_DEPTH_INC;
-                    }
-                    else if (c == '*'){
-                        CASE = CASE_POSSIBLE_DEPTH_DEC;
-                    }
-                    break;
-                case CASE_POSSIBLE_DEPTH_INC:
-                    if (c == '*'){
-                        depth++;
-                    }
-                    CASE = CASE_DEFAULT;
-                    break;
-                case CASE_POSSIBLE_DEPTH_DEC:
-                    if (c == '/'){
-                        depth--;
-                    }
-                    CASE = CASE_DEFAULT;
-                    break;
-            }
-        }
-        newToken->type = TOK_MULTI_LINE_COMMENT;
-    }
-    tmp[i] = '\0';
-    int lexemeLen = strlen(tmp);
-    newToken->lexeme.data = malloc(lexemeLen+1);
-    if (newToken->lexeme.data == NULL){
-        *error = ERR_INTERNAL;
-        return NULL;
-    }
-    strcpy(newToken->lexeme.data, tmp);
-    newToken->line = line;
-    newToken->lexeme.len = lexemeLen;
-    *error = ERR_OK;
-    return *newToken;
-}
-/**
- * @brief funkcia na zistenie, či je '/' deleno alebo začiatok komentáru
- * @param f je skenovaný súbor
- * @param line je číslo riadku
- * @param error je pointer, cez ktorý si vrátim chybovú hlášku
- * @returns token s informáciami
- */
-Token *scanCommentOrDiv(FILE *f, int line, ErrorCode *error){
-    Token *newToken = malloc(sizeof(Token));
-    if (newToken == NULL){
-        *error = ERR_INETRNAL;
-        return NULL;
-    }
-    int c = fgetc(f);
-    if (c == '*' || c == '/'){ /*začiatok komentáru*/
-        scanComment(newToken, f, c, newToken, line, error);
-    }
-    else if (c == '='){
-        newToken->lexeme.data = malloc(3);
-        if (newToken->lexeme.data == NULL){
-            *error = ERR_INTERNAL;
-            return NULL;
-        }
-        strcpy(newToken->lexeme.data, "/=");
-        newToken->line = line;
-        newToken->type = TOK_DIVIDE_EQUALS;
-        newToken->lexeme.len = 2;
-    }
-    else if (isdigit(c) || isspace(c)){
-        newToken->lexeme.data = malloc(2);
-            if (newToken->lexeme.data == NULL){
-            *error = ERR_INTERNAL;
-            return NULL;
-        }
-        strcpy(newToken->lexeme.data, '/');
-        newToken->line = line;
-        newToken->type = TOK_DIVIDE;
-        newToken->lexeme.len = 1;
-    }
-    else{
-        *error = ERR_LEX;
-        return NULL;
-    }
-    *error = ERR_OK;
-    return newToken;
-}
-/**
- * @brief funkcia na skenovanie logických operátorov
- * @param f je skenovaný súbor
- * @param firstChar je prvý znak
- * @param line je číslo riadku 
- * @param error je pointer, cez ktorý si vrátim chybovú hlášku
- * @returns token s informáciami
- */
-Token *scanLogicalExpression(FILE *f, int firstChar, int line, ErrorCode *error){
-    Token *newToken = malloc(sizeof(Token));
-    if (newToken == NULL){
-        *error = ERR_INETRNAL;
-        return NULL;
-    }
-    int c = firstChar;
-    char tmp[3];
-    int i = 0;
-    if (c == '='){
-        tmp[i++] = c;
-        c = fgetc(f);
-        if (c == '='){
-            tmp[i++] = c;
-            tmp[i] = '\0';
-            newToken->type = TOK_EQUAL;
-        }
-        else if (c == '>'){
-            tmp[i++] = c;
-            tmp[i] = '\0';
-            newToken->type = TOK_ARROW;
-        }
-        else{
-            tmp[i] = '\0';
-            newToken->type = TOK_ASSIGN;
-            ungetc(c, f);
-        }
-    }
-    else if (c == '<'){
-        tmp[i++] = c;
-        c = fgetc(f);
-        if (c == '='){
-            tmp[i++] = c;
-            tmp[i] = '\0';
-            newToken->type = TOK_LESS_EQUAL;
-        }
-        else if (c == '-'){
-            tmp[i++] = c;
-            tmp[i] = '\0';
-            newToken->type = TOK_LARROW;
-        }
-        else{
-            tmp[i] = '\0';
-            newToken->type = TOK_LESS;
-            ungetc(c, f);
-        }
-    }
-    else if (c == '>'){
-        tmp[i++] = c;
-        c = fgetc(f);
-        if (c == '='){
-            tmp[i++] = c;
-            tmp[i] = '\0';
-            newToken->type = TOK_GREATER_EQUAL;
-        }
-        else{
-            tmp[i] = '\0';
-            newToken->type = TOK_GREATER;
-            ungetc(c, f);
-        }
-    }
-    else if (c == '!'){
-        tmp[i++] = c;
-        c = fgetc(f);
-        if (c == '='){
-            tmp[i++] = c;
-            tmp[i] = '\0';
-            newToken->type = TOK_NOT_EQUAL;
-        }
-        else{
-            tmp[i] = '\0';
-            newToken->type = TOK_NOT;
-            ungetc(c, f);
-        }
-    }
-    else{
-        tmp[i++] = c;
-        c = fgetc(f);
-        if (c == '|'){
-            tmp[i++] = c;
-            tmp[i] = '\0';
-            newToken->type = TOK_OR;
-        }
-        else{
-            tmp[i] = '\0';
-            newToken->type = TOK_PIPE;
-            ungetc(c, f); 
-        }
-    }
-    int lexemeLen = strlen(tmp);
-    newToken->lexeme.data = malloc(lexemeLen+1);
-    if (newToken->lexeme.data == NULL){
-        *error = ERR_INTERNAL;
-        return NULL;
-    }
-    strcpy(newToken->lexeme.data, tmp);
-    newToken->line = line;
-    newToken->lexeme.len = lexemeLen;
-    *error = ERR_OK;
-    return newToken;
+    return give(out, q.type, q.line, "");
 }
 
 /**
- * @brief funkcia na skenovanie matematických operátorov
- * @param f je skenovaný súbor
- * @param firstChar je prvý znak
- * @param line je číslo riadku
- * @param error je pointer, cez ktorý si vrátim chybovú hlášku
- * @returns token s informáciami
+ * @brief Naplní strom kľúčových slov zo zoznamu keywords[].
+ * @return false pri nedostatku pamäte
  */
-Token *scanMathExpression(FILE *f, int firstChar, int line, ErrorCode *error){
-    Token *newToken = malloc(sizeof(Token));
-    if (newToken == NULL){
-        *error = ERR_INTERNAL;
-        return NULL;
+static bool fillKeyWordTree(void) {
+    for (size_t i = 0; i < sizeof keywords / sizeof keywords[0]; i++) {
+        // addNodeKW si slovo skopíruje, preto smie dostať slovo z konštantnej tabuľky
+        KeyWordTree *root = addNodeKW(keyword_tree, (char *)keywords[i].word);
+        if (root == NULL) {
+            return false;
+        }
+        keyword_tree = root; // výsledok vloženia sa musí priradiť, inak strom ostane prázdny
     }
-    char tmp[3];
-    int i = 0;
-    int c = firstChar;
-    if (c == '+'){
-        tmp[i++] = c;
-        c = fgetc(f);
-        if (c == '+'){
-            tmp[i++] = c;
-            tmp[i] = '\0';
-            newToken->type = TOK_CONCAT;
-        }
-        else if (c == '='){
-            tmp[i++] = c;
-            tmp[i] = '\0';
-            newToken->type = TOK_PLUS_EQUALS;
-        }
-        else{
-            tmp[i] = '\0';
-            newToken->type = TOK_PLUS;
-            ungetc(c, f);
-        }
-    }
-    else if (c == '-'){
-        tmp[i++] = c;
-        c = fgetc(f);
-        if (c == '-'){
-            tmp[i++] = c;
-            tmp[i] = '\0';
-            newToken->type = TOK_REMOVE;
-        }
-        else if (c == '='){
-            tmp[i++] = c;
-            tmp[i] = '\0';
-            newToken->type = TOK_MINUS_EQUALS;
-        }
-        else{
-            tmp[i] = '\0';
-            newToken->type = TOK_MINUS;
-            ungetc(c, f);
-        }
-    }
-    else if (c == '*'){
-        tmp[i++] = c;
-        c = fgetc(f);
-        if (c == '='){
-            tmp[i++] = c;
-            tmp[i] = '\0';
-            newToken->type = TOK_MULTIPLY_EQUALS;
-        }
-        else{
-            tmp[i] = '\0';
-            newToken->type = TOK_MULTIPLY;
-            ungetc(c, f);
-        }
-    }
-    else{
-        tmp[i++] = c;
-        tmp[i] = '\0';
-        newToken->type = TOK_MODULO;
-    }
-    int lexemeLen = strlen(tmp);
-    newToken->lexeme.data = malloc(lexemeLen+1);
-    if (newToken->lexeme.data == NULL){
-        *error = ERR_INTERNAL;
-        return NULL;
-    }
-    strcpy(newToken->lexeme.data, tmp);
-    newToken->line = line;
-    newToken->lexeme.len = lexemeLen;
-    return newToken;
+    return true;
 }
+
 /**
- * @brief funkcia na načítanie riadku
- * @param f je čítaný súbor
- * @param line je číslo riadku
- * @returns true, ak je riadok načítaný celý, inak false
+ * @brief Typ tokenu pre identifikátor: kľúčové slovo alebo literál, ak je v strome, inak TOK_IDENTIFIER.
+ *
+ * Strom zatiaľ ukladá len slovo, preto sa typ nájdeného slova dohľadá v keywords[].
  */
-bool getLine(FILE *f, int line){
-    int c = fgetc(f);
-    while (c != EOL && c != EOF){
-        while (isspace(c)){
-            if (c == '\t'){
-                return false;
-            }
-            c = fgetc(f);
-        }
-        if (isdigit(c)){
-            ErrorCode error;
-            Token *newToken = scanNumber(f, c, line, &error);
-            if (error != ERR_OK){
-                return false;
-            }
-        }
-        else if (isalpha(c) || c == '_'){
-            ErrorCode error;
-            Token *new_token = scanName(f, c, line, &error);
-        }
-        else if (c == '"' || c == '\''){
-            ErrorCode error;
-            Token *newToken = scanString(f, c, line, &error);
-        }
-        else if (c == '/'){
-            ErrorCode error;
-            Token *newToken = scanCommentOrDiv(f, line, &error);
-        }
-        else if (c == '=' || c == '<' || c == '>' || c == '!' || c == '|'){
-            ErrorCode error;
-            Token *newToken = scanLogicalExpression(f, c, line, &error);
-        }
-        else if (c == '+' || c == '-' || c == '*' || c == '%'){
-            ErrorCode error;
-            Token *newToken = scanMathExpression(f, c, line, &error);
+static TokenType keyword(char *word) {
+    if (!findNodeKW(keyword_tree, word)) {
+        return TOK_IDENTIFIER;
+    }
+    for (size_t i = 0; i < sizeof keywords / sizeof keywords[0]; i++) {
+        if (strcmp(word, keywords[i].word) == 0) {
+            return keywords[i].type;
         }
     }
-} 
+    return TOK_IDENTIFIER;
+}
+
+/**
+ * @brief Pri znaku } kontrolujeme, či môžeme ukončiť vložený výraz v interpolovanom reťazci
+ *        a či sú všetky zátvorky vo vnútri výrazu už uzavreté.
+ */
+bool dfa_guard_custom(DfaCtx *c, DfaGuard guard) {
+    (void)c;
+    if (interps_len == 0) {
+        return false;
+    }
+    const InterpFrame *top = &interps[interps_len - 1];
+    if (top->depth != depth) {
+        return false;
+    }
+    switch (guard) {
+    case DFA_GUARD_0: // na vrchole zásobníka je jednoriadkový interpolovaný reťazec
+        return top->mode == INTERP_SINGLE;
+    case DFA_GUARD_1: // na vrchole zásobníka je viacriadkový interpolovaný reťazec
+        return top->mode == INTERP_MULTI;
+    default:
+        return false;
+    }
+}
+
+/**
+ * @brief Pri prvom tokene na riadku podľa odsadenia pripravíme TOK_EOL, TOK_INDENT
+ *        alebo TOK_DEDENT a uložíme ich do fronty.
+ * @param lead Počet medzier na začiatku riadku.
+ * @param lead_tab Informácia, či sa v odsadení nachádza tabulátor.
+ */
+static int resolve_indent(int lead, bool lead_tab, int line) {
+    if (lead_tab) {
+        return ERR_LEX; // Na začiatku neprázdneho riadku tabulátor nepovoľujeme.
+    }
+    int top = indents[indents_len - 1];
+    if (depth > 0) {
+        // Ak pokračujeme v zátvorkách, riadok musí byť odsadený viac ako jeho začiatok.
+        return lead > top ? ERR_OK : ERR_LEX;
+    }
+    if (had_line && !enqueue(TOK_EOL, last_line)) {
+        return ERR_INTERNAL;
+    }
+    had_line = true;
+    if (lead > top) {
+        if (!push_indent(lead) || !enqueue(TOK_INDENT, line)) {
+            return ERR_INTERNAL;
+        }
+        return ERR_OK;
+    }
+    while (lead < indents[indents_len - 1]) {
+        indents_len--;
+        if (!enqueue(TOK_DEDENT, line)) {
+            return ERR_INTERNAL;
+        }
+    }
+    // Nové odsadenie musí sedieť na niektorú z už použitých úrovní.
+    return lead == indents[indents_len - 1] ? ERR_OK : ERR_SYNTAX;
+}
+
+/** @brief Pri konci vstupu ešte vrátime TOK_EOL, všetky potrebné TOK_DEDENT a nakoniec TOK_EOF. */
+static int finish(Token *out, int line) {
+    at_eof = true;
+    if (interps_len > 0) {
+        return ERR_LEX; // Na konci vstupu nám zostal neukončený interpolovaný reťazec.
+    }
+    if (had_line && !enqueue(TOK_EOL, last_line)) {
+        return ERR_INTERNAL;
+    }
+    while (indents_len > 1) {
+        indents_len--;
+        if (!enqueue(TOK_DEDENT, line)) {
+            return ERR_INTERNAL;
+        }
+    }
+    if (!enqueue(TOK_EOF, line)) {
+        return ERR_INTERNAL;
+    }
+    return give_queued(out);
+}
+
+/** @copydoc scanner_free */
+void scanner_free(void) {
+    free(queue);
+    free(indents);
+    free(interps);
+    queue = NULL;
+    indents = NULL;
+    interps = NULL;
+    queue_len = queue_head = queue_cap = 0;
+    indents_len = indents_cap = 0;
+    interps_len = interps_cap = 0;
+    dynstr_free(&cur.lexeme);
+    dynstr_free(&held.lexeme);
+    clearTreeKW(keyword_tree);
+    keyword_tree = NULL;
+}
+
+/** @copydoc scanner_init */
+void scanner_init(FILE *input_file) {
+    scanner_free();
+    dfa_input_init(&input, input_file);
+    memset(&ctx, 0, sizeof ctx);
+    has_held = false;
+    depth = 0;
+    last_line = 1;
+    line_start = true;
+    had_line = false;
+    expect_eol = false;
+    at_eof = false;
+    init_failed = !dynstr_init(&cur.lexeme) || !dynstr_init(&held.lexeme) || !push_indent(0) ||
+                  !fillKeyWordTree();
+}
+
+/** @copydoc scanner_get_token */
+int scanner_get_token(Token *token) {
+    if (init_failed) {
+        return ERR_INTERNAL;
+    }
+    if (queue_head < queue_len) {
+        return give_queued(token);
+    }
+    if (has_held) {
+        has_held = false;
+        return give(token, held.type, held.line, held.lexeme.data);
+    }
+    if (at_eof) {
+        return give(token, TOK_EOF, input.line, "");
+    }
+
+    for (;;) {
+        DfaState state;
+        int err = dfa_next_token(&input, &ctx, &state, &cur);
+        if (err != ERR_OK) {
+            return err;
+        }
+
+        switch (cur.type) {
+        case TOK_1LINE_COMMENT:
+            continue; // Znak nového riadku potom spracujeme ako koniec riadku.
+        case TOK_MULTI_LINE_COMMENT:
+            if (ctx.nl && depth == 0) {
+                expect_eol = true; // Ak komentár obsahuje nový riadok, berieme ho ako koniec riadku.
+            }
+            continue;
+        case TOK_EOL:
+            expect_eol = false;
+            line_start = true;
+            continue;
+        case TOK_EOF:
+            return finish(token, cur.line);
+        default:
+            break;
+        }
+
+        if (expect_eol) {
+            return ERR_LEX; // Za blokovým komentárom s novým riadkom už ďalší token nepovoľujeme.
+        }
+        if (cur.type == TOK_IDENTIFIER) {
+            cur.type = keyword(cur.lexeme.data);
+        }
+
+        if (line_start) {
+            line_start = false;
+            err = resolve_indent(input.tok_lead, input.tok_lead_tab, cur.line);
+            if (err != ERR_OK) {
+                return err;
+            }
+        }
+
+        // Teraz aktualizujeme stav zátvoriek a interpolácie podľa načítaného lexému.
+        switch (cur.type) {
+        case TOK_LPAREN:
+        case TOK_LBRACKET:
+            depth++;
+            break;
+        case TOK_RPAREN:
+        case TOK_RBRACKET:
+            if (depth > 0) {
+                depth--;
+            }
+            break;
+        default:
+            break;
+        }
+        if (cur.type == TOK_INTERP_STRING && cur.lexeme.data[0] == '}') {
+            interps_len--; // Znak } ukončil vložený výraz, ktorý sme mali otvorený.
+        }
+        if (state == DFA_EXS || state == DFA_IMEXS) {
+            InterpFrame *f = grow(interps, &interps_cap, interps_len, sizeof *interps);
+            if (f == NULL) {
+                return ERR_INTERNAL;
+            }
+            interps = f;
+            interps[interps_len].mode = state == DFA_EXS ? INTERP_SINGLE : INTERP_MULTI;
+            interps[interps_len].depth = depth;
+            interps_len++;
+        }
+
+        last_line = cur.line;
+        if (queue_head < queue_len) {
+            // Najskôr musíme vrátiť tokeny odsadenia a konca riadku, až potom tento token.
+            has_held = true;
+            err = give(&held, cur.type, cur.line, cur.lexeme.data);
+            if (err != ERR_OK) {
+                return err;
+            }
+            return give_queued(token);
+        }
+        return give(token, cur.type, cur.line, cur.lexeme.data);
+    }
+}
