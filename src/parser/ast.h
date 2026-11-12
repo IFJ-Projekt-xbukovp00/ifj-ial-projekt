@@ -29,6 +29,7 @@
 
 #pragma once
 #include "token.h"
+#include "types.h"
 
 /**
  * @brief štruktúra pre informáciu o pozícií výrazu v kóde
@@ -77,7 +78,7 @@ typedef enum{
 typedef struct{
     ASTNodeKind kind; 
     Span span;
-    Token *type;
+    Type *type;
 }ASTNode;
 
 /**
@@ -107,7 +108,7 @@ typedef struct{
  */
 typedef struct {
     ASTNode node;
-    char *operator;
+    TokenType operator;
     ASTNode *left;
     ASTNode *right;
 }BinaryNode;
@@ -117,7 +118,7 @@ typedef struct {
  */
 typedef struct{
     ASTNode node;
-    char *operator;
+    TokenType operator;
     ASTNode *right;
 }UnaryNode;
 
@@ -130,5 +131,26 @@ typedef struct{
     ASTNode **args; /** argumenty funkcie */
     size_t argsCount; /** počet argumentov */
 }CallNode;
+
+
+/**
+ * @brief uzol if-podmienok
+ */
+typedef struct{
+    ASTNode node;
+    ASTNode *condition; /** podmienka */
+    ASTNode *conditionTrue; /** ak je splnená */
+    ASTNode *conditionFalse; /** ak nie je splnená */
+}IfNode;
+
+/**
+ * @brief uzol while-podmienok
+ */
+typedef struct{
+    ASTNode node;
+    ASTNode *condition;
+    ASTNode *conditionTrue;
+}WhileNode;
+
 
 
