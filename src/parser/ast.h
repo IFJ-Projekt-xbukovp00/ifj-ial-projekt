@@ -28,5 +28,107 @@
  */
 
 #pragma once
+#include "token.h"
 
-/* TODO: uzly AST */
+/**
+ * @brief štruktúra pre informáciu o pozícií výrazu v kóde
+ */
+typedef struct{
+    int line;
+    int col;
+    int offset;
+}Position;
+
+/**
+ * @brief štruktúra, ktorá hovorí, kde začína a končí výraz
+ */
+typedef struct{
+    Position start;
+    Position end;
+}Span;
+
+/**
+ * @brief štruktúra očíslovania typov uzlov
+ */
+typedef enum{
+    AST_LIT, /** literál */
+    AST_ID, /** identifikátor */
+    AST_BINARY, /** binárna operácia ('+', '-',...) */
+    AST_UNARY, /** unárna operácia (-x, negácia,...) */
+    AST_CALL, /** volanie funkcie */
+    AST_IF, /** podmienka IF */
+    AST_WHILE, /** podmienka WHILE */
+    AST_ /*TO DO: pridať ďalšie mega pls*/
+}ASTNodeKind;
+
+/**
+ * @brief štruktúra očíslovania typov literálov
+ */
+typedef enum{
+    LIT_INT, /** int */
+    LIT_DOUBLE, /** double */
+    LIT_STRING, /** char/char * */
+    LIT_BOOLEAN, /** bool */
+    LIT_UNIT /** void */
+}LiteralType;
+/**
+ * @brief štruktúra, ako bude vyzerať samotný uzol v AST strome
+ */
+typedef struct{
+    ASTNodeKind kind; 
+    Span span;
+    Token *type;
+}ASTNode;
+
+/**
+ * @brief uzol literálov
+ */
+typedef struct{
+    ASTNode node;
+    LiteralType type;
+    union {
+        long long int_value;
+        double float_value;
+        char *string_value;
+        bool bool_value;
+    }litValue;
+}ASTLiteralNode;
+
+/**
+ * @brief uzol identifikátorov
+ */
+typedef struct{
+    ASTNode node;
+    char *name;
+}IDNode;
+
+/**
+ * @brief uzol binárnych operácíi
+ */
+typedef struct {
+    ASTNode node;
+    char *operator;
+    ASTNode *left;
+    ASTNode *right;
+}BinaryNode;
+
+/**
+ * @brief uzol unárnych operácíi
+ */
+typedef struct{
+    ASTNode node;
+    char *operator;
+    ASTNode *right;
+}UnaryNode;
+
+/**
+ * @brief uzol volaní funkcíi
+ */
+typedef struct{
+    ASTNode node;
+    ASTNode *caller; /** ten, kto funkciu volá */
+    ASTNode **args; /** argumenty funkcie */
+    size_t argsCount; /** počet argumentov */
+}CallNode;
+
+
