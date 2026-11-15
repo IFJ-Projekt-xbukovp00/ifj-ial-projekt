@@ -3,7 +3,6 @@
 > Kostra obsahuje iba štruktúru a zoznam konštrukcií, ktoré musí gramatika pokryť.
 > **Pravidlá, LL tabuľku a precedenčnú tabuľku píšete vy.** Zadanie (sekcia 4) zakazuje
 > ich prípravu pomocou AI. AI smie váš hotový návrh skontrolovať a hľadať v ňom chyby.
->
 > Rozsah: základ + všetky povinne voliteľné rozšírenia
 > (FUNEXP, BOOLTHEN, CONTROL, VALMEM, ALGEBDT, INTERPOLATEDS, LAMBDAS, LISTS, EXTKW, PARAMLISTS).
 > Odkazy `§` smerujú na *Specifikace IFJ26 a IFJcode26* (revize z 11. 10. 2026).
@@ -35,7 +34,10 @@ ktoré nie sú „obyčajné“ (konce riadkov, odsadenie, časti interpolované
 
 | Token | Kedy ho lexer vráti | Poznámka |
 | --- | --- | --- |
-| | | |
+| `TOK_EOF` | na konci vstupného súboru | ukončuje `<program>`, predchádza mu prípadný `TOK_DEDENT` / `TOK_EOL` |
+| `TOK_EOL` | na konci logického riadku mimo zátvoriek `()` a `[]` | oddeľovač definícií a príkazov+(ignoruje prázdne riadky) |
+| `TOK_INDENT` | pri zväčšení odsadenia na novom riadku | otvára odsadený blok príkazov alebo vetiev `match` |
+| `TOK_DEDENT` | pri zmenšení odsadenia späť na predchádzajúcu úroveň | uzatvára blok+(môže prísť viac `TOK_DEDENT` za sebou) |
 
 ## 3. Pravidlá
 
