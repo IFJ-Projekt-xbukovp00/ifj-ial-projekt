@@ -80,7 +80,7 @@ typedef struct{
  */
 typedef struct{
     ASTNode node;
-    LiteralType type;
+    LiteralType litType;
     union {
         long long int_value;
         double float_value;
@@ -134,8 +134,8 @@ typedef struct{
 typedef struct{
     ASTNode node;
     ASTNode *condition; /** podmienka */
-    ASTNode *conditionTrue; /** ak je splnená */
-    ASTNode *conditionFalse; /** ak nie je splnená */
+    ASTNode *thenBranch; /** ak je splnená */
+    ASTNode *elseBranch; /** ak nie je splnená */
 }IfNode;
 
 /**
@@ -144,7 +144,7 @@ typedef struct{
 typedef struct{
     ASTNode node;
     ASTNode *condition;
-    ASTNode *conditionTrue;
+    ASTNode *body;
 }WhileNode;
 
 /**
@@ -201,7 +201,7 @@ typedef struct{
  */
 typedef struct{
     ASTNode node;
-    ASTNode *returnValue;
+    ASTNode *returnValue; // NULL pri return bez hodnoty
 }ReturnNode;
 
 /**
@@ -219,8 +219,8 @@ typedef struct{
     ASTNode node;
     char *name;
     ParamList *paramList; /** zoznam parametrov */
-    size_t paramListCount;
-    Type *returnValue;
+    size_t paramListCount; // 0 = def f: Int, 1 = def f()
+    Type *returnType;
     bool isMain; /** či je funkcia @main */
     ASTNode *body; /** telo funkcie */
     struct Symbol *symbol;
