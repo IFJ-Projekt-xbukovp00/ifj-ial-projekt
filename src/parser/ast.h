@@ -60,6 +60,7 @@ typedef enum{
     AST_CLASS_DEF, // case class
     AST_TYPE_ALIAS, // alias typu
     AST_FOR, // cyklus FOR
+    AST_MEMBER, // pristup cez bodku
     AST_RANGE, // rozsah
 }ASTNodeKind;
 
@@ -97,6 +98,17 @@ typedef enum{
     ID_FUNC_CALL,  // volanie funkcie bez zatvoriek
     ID_FUNC_REF    // funkcia ako hodnota
 }IdKind;
+
+/**
+ * @brief druh pristupu cez bodku
+ */
+typedef enum{
+    MEM_UNRESOLVED, // nevyriesene
+    MEM_BUILTIN,    // vstavany clen
+    MEM_FIELD,      // atribut triedy
+    MEM_EXT_METHOD, // rozsirujuca metoda
+    MEM_CALLEE      // volana metoda
+}MemberKind;
 /**
  * @brief štruktúra, ako bude vyzerať samotný uzol v AST strome
  */
@@ -313,6 +325,17 @@ typedef struct{
     ASTNode *body;
     struct Symbol *symbol; // (S)
 }ForNode;
+
+/**
+ * @brief uzol pristupu cez bodku
+ */
+typedef struct{
+    ASTNode node;
+    ASTNode *object;       // vyraz pred bodkou
+    char *name;            // meno za bodkou
+    MemberKind memberKind; // (S)
+    struct Symbol *symbol; // (S)
+}MemberNode;
 
 /**
  * @brief uzol rozsahu
