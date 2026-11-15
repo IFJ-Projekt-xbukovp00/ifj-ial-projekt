@@ -71,6 +71,7 @@ pack:
 	cp $(SRC) $(HDR) $(PACK_DIR)/src/
 	cp Makefile $(PACK_DIR)/
 	-cp rozdeleni $(PACK_DIR)/
+	-cp rozsireni $(PACK_DIR)/
 	-cp docs/dokumentace.pdf $(PACK_DIR)/
 	cd $(PACK_DIR) && zip -rq ../$(PACK_ZIP) .
 	rm -rf $(PACK_DIR)
