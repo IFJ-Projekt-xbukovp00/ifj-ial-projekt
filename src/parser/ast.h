@@ -59,6 +59,8 @@ typedef enum{
     AST_EXTENSION, // extension
     AST_CLASS_DEF, // case class
     AST_TYPE_ALIAS, // alias typu
+    AST_FOR, // cyklus FOR
+    AST_RANGE, // rozsah
 }ASTNodeKind;
 
 /**
@@ -298,3 +300,27 @@ typedef struct{
     Type *aliased;         // typ aliasu
     struct Symbol *symbol; // (S)
 }TypeAliasNode;
+
+/**
+ * @brief uzol for cyklu
+ */
+typedef struct{
+    ASTNode node;
+    char *varName;    // riadiaca premenna
+    ASTNode *source;  // rozsah alebo zoznam
+    ASTNode **guards; // straze
+    size_t guardsCount;
+    ASTNode *body;
+    struct Symbol *symbol; // (S)
+}ForNode;
+
+/**
+ * @brief uzol rozsahu
+ */
+typedef struct{
+    ASTNode node;
+    ASTNode *from;
+    ASTNode *to;
+    ASTNode *step;  // NULL = 1
+    bool inclusive; // to->true, until->false
+}RangeNode;
