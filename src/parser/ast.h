@@ -28,25 +28,13 @@
  */
 
 #pragma once
+#include <stdbool.h>
+#include <stddef.h>
+
 #include "token.h"
 #include "types.h"
 
-/**
- * @brief štruktúra pre informáciu o pozícií výrazu v kóde
- */
-typedef struct{
-    int line;
-    int col;
-    int offset;
-}Position;
-
-/**
- * @brief štruktúra, ktorá hovorí, kde začína a končí výraz
- */
-typedef struct{
-    Position start;
-    Position end;
-}Span;
+struct Symbol; // definicia v symtable.h
 
 /**
  * @brief štruktúra očíslovania typov uzlov
@@ -83,7 +71,7 @@ typedef enum{
  */
 typedef struct{
     ASTNodeKind kind; 
-    Span span;
+    int line; // riadok
     Type *type;
 }ASTNode;
 
@@ -174,7 +162,7 @@ typedef struct{
 typedef struct{
     char *name;
     Type *type;
-    Span span;
+    int line;
     struct Symbol *symbol;
 }Param;
 
