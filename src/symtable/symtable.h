@@ -37,7 +37,7 @@
 typedef struct IDs{
     Token *Node;
     struct IDs *left;
-    struct IDs *right  
+    struct IDs *right;
 }IDs;
 
 /**
@@ -49,10 +49,11 @@ IDs *initNodeID(Token *Node);
 
 /**
  * @brief funkcia na pridanie listu do stromu identifikátorov
+ * @param root je miesto, kde sa má pridať
  * @param Node je štruktúra, ktorá má v sebe informáciu o tokene
- * @returns list 
+ * @returns root
  */
-IDs *addNodeID(Token *Node);
+IDs *addNodeID(IDs *root, Token *Node);
 
 /**
  * @brief funkcia na hľadanie a kontrolovanie identikátora v strome
@@ -60,7 +61,7 @@ IDs *addNodeID(Token *Node);
  * @param Node je štruktúra, ktorá má v sebe informáciu o tokene
  * @returns pravdivostnú hodnotu
  */
-bool findAndControlNodeID;
+bool findAndControlNodeID(IDs *root, Token *Node);
 
 /**
  * @brief funkcia na mazanie stromu identifikátorov
@@ -75,7 +76,7 @@ void clearTreeID(IDs *root);
 typedef struct KeyWordTree{
     char *word;
     struct KeyWordTree *left;
-    struct KeyWordTree *right   
+    struct KeyWordTree *right;
 }KeyWordTree;
 
 /**

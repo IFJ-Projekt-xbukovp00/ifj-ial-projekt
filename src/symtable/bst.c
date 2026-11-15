@@ -30,6 +30,9 @@
 #include "bst.h"
 #include "token.h"
 #include "error.h"
+
+#include <stdlib.h>
+#include <string.h>
 /** 
  * @brief funkcia na pridanie do BVS
  * @param root je koreň/list, na ktorom sa nachádzam
@@ -41,16 +44,21 @@
 Node *insertNode(Node *root, const char *name, TokenType type, ErrorCode *error){
     if (root == NULL){
         Node *node = malloc(sizeof(Node));
-        root->name = malloc(strlen(name)+1);
-        if (root->name == NULL){
+        if (node == NULL){
             *error = ERR_INTERNAL;
             return NULL;
         }
-        strcpy(root->name, name);
-        root->type = type;
-        root->left = NULL;
-        root->right = NULL;
-        return root;
+        node->name = malloc(strlen(name)+1);
+        if (node->name == NULL){
+            free(node);
+            *error = ERR_INTERNAL;
+            return NULL;
+        }
+        strcpy(node->name, name);
+        node->type = type;
+        node->left = NULL;
+        node->right = NULL;
+        return node;
     }
     int cmp = strcmp(name, root->name);
     if (cmp < 0){
@@ -79,9 +87,7 @@ Node *findNode(Node *root, const char *name, ErrorCode *error){
     if (cmp < 0){
         return findNode(root->left, name, error);
     }
-    else if (cmp > 0){
-        return findNode(root->right, name, error);
-    }
+    return findNode(root->right, name, error);
 }
  
 /**
