@@ -59,7 +59,13 @@ typedef enum{
     AST_CALL, /** volanie funkcie */
     AST_IF, /** podmienka IF */
     AST_WHILE, /** podmienka WHILE */
-    AST_ /*TO DO: pridať ďalšie mega pls*/
+    AST_RETURN, /** return; */
+    AST_BLOCK, /** blok */
+    AST_ASSIGN, /** priradenie */
+    AST_VAR_DEF, /** definícia premenných */
+    AST_EXPR_STATEMENT, /** údaj o výraze */
+    AST_FUNCTION_DEF, /** definícia funkcie */
+    AST_PROGRAM /** program */
 }ASTNodeKind;
 
 /**
@@ -93,7 +99,7 @@ typedef struct{
         char *string_value;
         bool bool_value;
     }litValue;
-}ASTLiteralNode;
+}LiteralNode;
 
 /**
  * @brief uzol identifikátorov
@@ -101,6 +107,7 @@ typedef struct{
 typedef struct{
     ASTNode node;
     char *name;
+    struct Symbol *symbol;
 }IDNode;
 
 /**
@@ -152,5 +159,90 @@ typedef struct{
     ASTNode *conditionTrue;
 }WhileNode;
 
+/**
+ * @brief uzol bloku
+ */
+typedef struct{
+    ASTNode node;
+    ASTNode **commandOrder; /** pole príkazov v poradí bloku*/
+    size_t commandOrderCount; /** počet príkazov */
+}BlockNode;
 
+/**
+ * @brief štruktúra parametrov
+ */
+typedef struct{
+    char *name;
+    Type *type;
+    Span span;
+    struct Symbol *symbol;
+}Param;
 
+/**
+ * @brief štruktúra zoznamu parametrov
+ */
+typedef struct{
+    Param *params;
+    size_t params_count;
+}ParamList;
+
+/**
+ * @brief uzol definícii premenných var & val
+ */
+typedef struct{
+    ASTNode node;
+    ASTNode *init;
+    char *name;
+    bool isMutable; /** var->true, val->false */
+    Type *declaredType;
+    struct Symbol *symbol;
+}VarOrValNode;
+
+/**
+ * @brief uzol priradenia k premennej
+ */
+typedef struct{
+    ASTNode node;
+    char *name;
+    ASTNode *value;
+    struct Symbol *symbol;
+}AssignNode;
+
+/**
+ * @brief uzol returnov
+ */
+typedef struct{
+    ASTNode node;
+    ASTNode *returnValue;
+}ReturnNode;
+
+/**
+ * @brief uzol samostatných príkazov
+ */
+typedef struct{
+    ASTNode node;
+    ASTNode *expr;
+}LonelyExprNode;
+
+/**
+ * @brief uzol deficícíi funkcíi
+ */
+typedef struct{
+    ASTNode node;
+    char *name;
+    ParamList *paramList; /** zoznam parametrov */
+    size_t paramListCount;
+    Type *returnValue;
+    bool isMain; /** či je funkcia @main */
+    ASTNode *body; /** telo funkcie */
+    struct Symbol *symbol;
+}DefFuncNode;
+
+/**
+ * @brief uzol koreňa celého programu
+ */
+typedef struct{
+    ASTNode node;
+    ASTNode **funcDefinitions;
+    size_t funcDefinitionsCount;
+}ProgramNode;
