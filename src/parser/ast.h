@@ -63,7 +63,11 @@ typedef enum{
     AST_MEMBER, // pristup cez bodku
     AST_MATCH, // match
     AST_CASE, // vetva case
+    AST_LAMBDA, // lambda
     AST_RANGE, // rozsah
+    AST_LIST_LIT, // zoznam
+    AST_INTERP, // interpolovany retazec
+    AST_CONVERT // prevod Int na Double
 }ASTNodeKind;
 
 /**
@@ -375,6 +379,18 @@ typedef struct{
 }CaseNode;
 
 /**
+ * @brief uzol lambdy
+ */
+typedef struct{
+    ASTNode node;
+    ParamList params;       // parametre
+    ASTNode *body;          // telo
+    struct Symbol *symbol;  // (S)
+    struct Symbol **locals; // (S) lokalne premenne
+    size_t localsCount;     // (S)
+}LambdaNode;
+
+/**
  * @brief uzol rozsahu
  */
 typedef struct{
@@ -384,3 +400,29 @@ typedef struct{
     ASTNode *step;  // NULL = 1
     bool inclusive; // to->true, until->false
 }RangeNode;
+
+/**
+ * @brief uzol zoznamu
+ */
+typedef struct{
+    ASTNode node;
+    ASTNode **elems; // prvky
+    size_t elemsCount;
+}ListLitNode;
+
+/**
+ * @brief uzol interpolovaneho retazca
+ */
+typedef struct{
+    ASTNode node;
+    ASTNode **parts; // casti retazca
+    size_t partsCount;
+}InterpNode;
+
+/**
+ * @brief uzol prevodu Int na Double
+ */
+typedef struct{
+    ASTNode node;
+    ASTNode *operand; // vyraz Int
+}ConvertNode;
