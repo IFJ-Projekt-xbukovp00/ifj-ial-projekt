@@ -36,6 +36,8 @@
 
 struct Symbol; // definicia v symtable.h
 
+// (S) - vyplni semantika, parser necha NULL
+
 /**
  * @brief štruktúra očíslovania typov uzlov
  */
@@ -66,6 +68,30 @@ typedef enum{
     LIT_BOOLEAN, /** bool */
     LIT_UNIT /** void */
 }LiteralType;
+
+/**
+ * @brief druh volania
+ */
+typedef enum{
+    CALL_UNRESOLVED,  // nevyriesene
+    CALL_FUNC,        // nasa funkcia
+    CALL_BUILTIN,     // vstavana funkcia
+    CALL_VALUE,       // lambda v premennej
+    CALL_CONSTRUCTOR, // konstruktor
+    CALL_LIST_INDEX,  // index zoznamu
+    CALL_EXT_METHOD,  // rozsirujuca metoda
+    CALL_LIST_METHOD  // metoda zoznamu
+}CallKind;
+
+/**
+ * @brief druh identifikatora
+ */
+typedef enum{
+    ID_UNRESOLVED, // nevyriesene
+    ID_VAR,        // premenna alebo parameter
+    ID_FUNC_CALL,  // volanie funkcie bez zatvoriek
+    ID_FUNC_REF    // funkcia ako hodnota
+}IdKind;
 /**
  * @brief štruktúra, ako bude vyzerať samotný uzol v AST strome
  */
@@ -95,6 +121,7 @@ typedef struct{
 typedef struct{
     ASTNode node;
     char *name;
+    IdKind idKind; // (S)
     struct Symbol *symbol;
 }IDNode;
 
@@ -125,6 +152,8 @@ typedef struct{
     ASTNode *caller; /** ten, kto funkciu volá */
     ASTNode **args; /** argumenty funkcie */
     size_t argsCount; /** počet argumentov */
+    CallKind callKind; // (S)
+    struct Symbol *symbol; // (S)
 }CallNode;
 
 
@@ -224,6 +253,8 @@ typedef struct{
     bool isMain; /** či je funkcia @main */
     ASTNode *body; /** telo funkcie */
     struct Symbol *symbol;
+    struct Symbol **locals; // (S) lokalne premenne
+    size_t localsCount; // (S)
 }DefFuncNode;
 
 /**
