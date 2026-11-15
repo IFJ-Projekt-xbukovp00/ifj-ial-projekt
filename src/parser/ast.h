@@ -55,7 +55,10 @@ typedef enum{
     AST_VAR_DEF, /** definícia premenných */
     AST_EXPR_STATEMENT, /** údaj o výraze */
     AST_FUNCTION_DEF, /** definícia funkcie */
-    AST_PROGRAM /** program */
+    AST_PROGRAM, /** program */
+    AST_EXTENSION, // extension
+    AST_CLASS_DEF, // case class
+    AST_TYPE_ALIAS, // alias typu
 }ASTNodeKind;
 
 /**
@@ -262,6 +265,36 @@ typedef struct{
  */
 typedef struct{
     ASTNode node;
-    ASTNode **funcDefinitions;
-    size_t funcDefinitionsCount;
+    ASTNode **items; // definicie v poradi zo zdrojaku
+    size_t itemsCount;
 }ProgramNode;
+
+/**
+ * @brief uzol extension
+ */
+typedef struct{
+    ASTNode node;
+    Param receiver;    // prijemca
+    ASTNode **methods; // metody
+    size_t methodsCount;
+}ExtensionNode;
+
+/**
+ * @brief uzol case class
+ */
+typedef struct{
+    ASTNode node;
+    char *name;
+    ParamList fields;      // atributy
+    struct Symbol *symbol; // (S)
+}ClassDefNode;
+
+/**
+ * @brief uzol aliasu typu
+ */
+typedef struct{
+    ASTNode node;
+    char *name;
+    Type *aliased;         // typ aliasu
+    struct Symbol *symbol; // (S)
+}TypeAliasNode;
