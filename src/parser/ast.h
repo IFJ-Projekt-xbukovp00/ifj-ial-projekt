@@ -61,6 +61,8 @@ typedef enum{
     AST_TYPE_ALIAS, // alias typu
     AST_FOR, // cyklus FOR
     AST_MEMBER, // pristup cez bodku
+    AST_MATCH, // match
+    AST_CASE, // vetva case
     AST_RANGE, // rozsah
 }ASTNodeKind;
 
@@ -109,6 +111,16 @@ typedef enum{
     MEM_EXT_METHOD, // rozsirujuca metoda
     MEM_CALLEE      // volana metoda
 }MemberKind;
+
+/**
+ * @brief druh vzoru vo vetve case
+ */
+typedef enum{
+    PAT_WILDCARD,   // case _
+    PAT_LITERAL,    // literal
+    PAT_TYPED,      // typ
+    PAT_CONSTRUCTOR // konstruktor
+}PatternKind;
 /**
  * @brief štruktúra, ako bude vyzerať samotný uzol v AST strome
  */
@@ -336,6 +348,31 @@ typedef struct{
     MemberKind memberKind; // (S)
     struct Symbol *symbol; // (S)
 }MemberNode;
+
+/**
+ * @brief uzol match
+ */
+typedef struct{
+    ASTNode node;
+    ASTNode *subject; // porovnavany vyraz
+    ASTNode **cases;  // vetvy
+    size_t casesCount;
+}MatchNode;
+
+/**
+ * @brief uzol vetvy case
+ */
+typedef struct{
+    ASTNode node;
+    PatternKind patternKind;
+    ASTNode *literal;           // PAT_LITERAL
+    Param binder;               // PAT_TYPED
+    char *className;            // PAT_CONSTRUCTOR
+    ParamList ctorBinders;      // PAT_CONSTRUCTOR
+    struct Symbol *classSymbol; // (S)
+    ASTNode *guard;             // straz alebo NULL
+    ASTNode *body;              // telo
+}CaseNode;
 
 /**
  * @brief uzol rozsahu
