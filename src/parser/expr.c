@@ -281,3 +281,165 @@ static int classifyToken(PsaState *state, PtIndex *column) {
     }
     return ERR_OK;
 }
+
+static bool isTerminal(const StackItem *item, PtIndex ptIndex) {
+    return item->kind == SYM_TERM && item->ptIndex == ptIndex;
+}
+
+static bool isExpr(const StackItem *item) { return item->kind == SYM_EXPR; }
+
+static bool isBinaryOperator(PtIndex ptIndex) {
+    switch (ptIndex) {
+    case PT_MUL:
+    case PT_DIV:
+    case PT_ADD:
+    case PT_SUB:
+    case PT_CONCAT:
+    case PT_LT:
+    case PT_LE:
+    case PT_GT:
+    case PT_GE:
+    case PT_EQ:
+    case PT_NEQ:
+    case PT_AND:
+    case PT_OR:
+        return true;
+    default:
+        return false;
+    }
+}
+
+// zredukuje handle nad znackou < na AST uzol
+static int reduceHandle(StackItem *handle, int count, ASTNode **result) {
+    // E -> i
+    if (count == 1 && isTerminal(&handle[0], PT_ID)) {
+        *result = handle[0].node;
+        return ERR_OK;
+    }
+
+    // E -> ( E )
+    if (count == 3 && isTerminal(&handle[0], PT_LPAR) && isExpr(&handle[1]) &&
+        isTerminal(&handle[2], PT_RPAR)) {
+        *result = handle[1].node;
+        return ERR_OK;
+    }
+
+    // E -> E op E
+    if (count == 3 && isExpr(&handle[0]) && handle[1].kind == SYM_TERM &&
+        isBinaryOperator(handle[1].ptIndex) && isExpr(&handle[2])) {
+        BinaryNode *bin = newNode(sizeof(BinaryNode), AST_BINARY, handle[1].line);
+        if (bin == NULL) {
+            return ERR_INTERNAL;
+        }
+        bin->operator = handle[1].tokenType;
+        bin->left = handle[0].node;
+        bin->right = handle[2].node;
+        *result = (ASTNode *)bin;
+        return ERR_OK;
+    }
+
+    return ERR_SYNTAX;
+}
+
+static int reduce(TAStack *stack) {
+    int mark = stack->top - 1;
+    while (mark >= 0 && stack->dataArray[mark].kind != SYM_MARK) {
+        mark--;
+    }
+    if (mark < 0) {
+        return ERR_SYNTAX;
+    }
+
+    ASTNode *result = NULL;
+    int err = reduceHandle(&stack->dataArray[mark + 1], stack->top - mark - 1, &result);
+    if (err != ERR_OK) {
+        return err;
+    }
+
+    int line = result->line;
+    stack->top = mark; // zahodi <handle
+    StackItem expr = {.kind = SYM_EXPR, .node = result, .line = line};
+    A_Push(stack, expr);
+    return ERR_OK;
+}
+
+static void freeStack(TAStack *stack) {
+    for (int i = 0; i < stack->top; i++) {
+        expr_free(stack->dataArray[i].node);
+    }
+    stack->top = 0;
+}
+
+int expr_parse(Token *token, ASTNode **output) {
+    if (token == NULL || output == NULL) {
+        return ERR_INTERNAL;
+    }
+
+    static TAStack stack;
+    PsaState state = {.token = token};
+    int err;
+
+    A_InitStack(&stack);
+    StackItem dollar = {.kind = SYM_TERM, .ptIndex = PT_DOLLAR, .line = token->line};
+    A_Push(&stack, dollar);
+
+    PtIndex input;
+    if ((err = classifyToken(&state, &input)) != ERR_OK) {
+        goto fail;
+    }
+
+    for (;;) {
+        const StackItem *topTerm = A_TopTerminal(&stack);
+        if (topTerm == NULL) {
+            err = ERR_INTERNAL;
+            goto fail;
+        }
+        PtRel rel = precTable[topTerm->ptIndex][input];
+
+        if (rel == R_LT || rel == R_EQ) {
+            if (A_IsFull(&stack) || (rel == R_LT && !A_InsertMark(&stack)) || A_IsFull(&stack)) {
+                err = ERR_INTERNAL;
+                goto fail;
+            }
+            StackItem term = {
+                .kind = SYM_TERM, .ptIndex = input, .tokenType = token->type, .line = token->line};
+            // uzol robime hned pri shifte, kym mame lexem
+            if (input == PT_ID) {
+                term.node = nodeFromToken(token);
+                if (term.node == NULL) {
+                    err = ERR_INTERNAL;
+                    goto fail;
+                }
+            }
+            A_Push(&stack, term);
+
+            if ((err = nextToken(&state)) != ERR_OK) {
+                goto fail;
+            }
+            if ((err = classifyToken(&state, &input)) != ERR_OK) {
+                goto fail;
+            }
+        } else if (rel == R_GT) {
+            if ((err = reduce(&stack)) != ERR_OK) {
+                goto fail;
+            }
+            if ((err = nextToken(&state)) != ERR_OK) {
+                goto fail;
+            }
+            if ((err = classifyToken(&state, &input)) != ERR_OK) {
+                goto fail;
+            }
+        } else if (rel == R_END) {
+            *output = stack.dataArray[1].node;
+            stack.top = 0;
+            return ERR_OK;
+        } else {
+            err = ERR_SYNTAX;
+            goto fail;
+        }
+    }
+
+fail:
+    freeStack(&stack);
+    return err;
+}
