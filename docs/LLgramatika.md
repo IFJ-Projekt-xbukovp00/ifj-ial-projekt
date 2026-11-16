@@ -64,7 +64,8 @@ Pokryť:
 - `extension (p: T)` s jednou alebo viacerými metódami (EXTKW, §5.9)
 
 ```
-TODO
+1.  <program> → <prolog> <top_lvl_list> TOK_EOF
+2.  <prolog> → TOK_KW_IMPORT TOK_IDENTIFIER TOK_DOT TOK_MULTIPLY TOK_EOL
 ```
 
 ### 3.2 Definícia funkcie
