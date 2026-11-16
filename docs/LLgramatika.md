@@ -38,6 +38,18 @@ ktoré nie sú „obyčajné“ (konce riadkov, odsadenie, časti interpolované
 | `TOK_EOL` | na konci logického riadku mimo zátvoriek `()` a `[]` | oddeľovač definícií a príkazov+(ignoruje prázdne riadky) |
 | `TOK_INDENT` | pri zväčšení odsadenia na novom riadku | otvára odsadený blok príkazov alebo vetiev `match` |
 | `TOK_DEDENT` | pri zmenšení odsadenia späť na predchádzajúcu úroveň | uzatvára blok+(môže prísť viac `TOK_DEDENT` za sebou) |
+| `TOK_IDENTIFIER` | meno premennej, funkcie, typu aj kontext slová `to`, `until`, `by` | pri `for` cykle sa `to`/`until`/`by` rozlišujú podľa `lexeme` |
+| `TOK_UNDERSCORE` | samostatný znak `_` (ALGEBDT) | zástupný vzor (wildcard) vo vetve `case _` |
+| `TOK_AT_MAIN` | je to `@main` | predchádza definícu vstupnej funkcie `def` (na tom istom alebo predchádzajúcom riadku) |
+| `TOK_INT_LIT`, `TOK_DOUBLE_LIT`, `TOK_BOOL_LIT` | číselný alebo pravdivostný literál | vystupujú vo výrazoch `<expr>` aj ako vzory vo vetvách `case` |
+| `TOK_STRING_LIT`, `TOK_CHAR_LIT` | retazec `"..."` / `"""..."""` alebo znak `'a'` | `TOK_CHAR_LIT` sa mapuje na `LiteralNode` (`LIT_STRING` alebo `LIT_INT`) |
+| `TOK_INTERP_STRING` | interpolovaný retazec `s"..."` (INTERPOLATEDS) | parser aleb/lexer rozloží časti reťazca a vnútorné výrazy do `InterpNode` |
+| `TOK_1LINE_COMMENT`, `TOK_MULTI_LINE_COMMENT` | jednoriadkový alebo viacriadkový komentár | zahadzuje ich lexer (alebo`next_token()`) |
+| kľúčové slová (základné) (`TOK_KW_DEF`, `DO`, `DOUBLE`, `ELSE`, `IF`, `IMPORT`, `INT`, `RETURN`, `STRING`, `THEN`, `UNIT`, `VAL`, `VAR`, `WHILE`) | rezervácia pre slová základného jazyka | tvorý kostru LL pravidiel (deklarácie, typy, tok riaden) |
+| kľúčové slová (rozšírené) (`TOK_KW_BOOLEAN`, `CASE`, `CLASS`, `EXTENSION`, `FOR`, `LIST`, `MATCH`, `TYPE`) | rezervovane  slová pre rozšírenia | tvorý LL pravidlá pre rozš `ALGEBDT`, `EXTKW`, `CONTROL`, `LISTS`, `BOOLTHEN` |
+| operátory v LL pravd (`=`, `+=`, `-=`, `*=`, `/=`, `=>`, `<-`, `\|`, `.`, `*`) | priradenia, šípky, bodka, zjednotenie, `*` v prologu | použíjú sa priamo v LL gramatike (`*` sa zdieľa aj s `<expr>`!!) |
+| operátory len pre `<expr>` nezdiel (`+`, `-`, `/`, `%`, `++`, `--`, `->`, `==`, `!=`, `<`, `<=`, `>`, `>=`, `!`, `&&`, `\|\|`) | aritmetika, zoznam, relaci a logi operátory | rieši výhradne/iba expr analýza (`expr.c`); LL pars ich nerobý |
+| zátvorky a interpunkcia (`(`, `)`, `[`, `]`, `,`, `:`, `;`) | oddeľovanie zoznamov, typeov a príkazou | `()`+`[]` sa používajú v LL pravidlách aj pri `<expr>` |
 
 ## 3. Pravidlá
 
