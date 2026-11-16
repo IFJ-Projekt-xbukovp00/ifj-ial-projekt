@@ -74,6 +74,136 @@ static const PtRel precTable[PT_COUNT][PT_COUNT] = {
 };
 // clang-format on
 
+/* docasne pomocne funkcie pre AST, kym nie je ast.c */
+
+static void *newNode(size_t size, ASTNodeKind kind, int line) {
+    ASTNode *node = calloc(1, size);
+    if (node == NULL) {
+        return NULL;
+    }
+    node->kind = kind;
+    node->line = line;
+    return node;
+}
+
+static char *copyString(const char *text, size_t len) {
+    char *copy = malloc(len + 1);
+    if (copy == NULL) {
+        return NULL;
+    }
+    memcpy(copy, text, len);
+    copy[len] = '\0';
+    return copy;
+}
+
+// pravidlo E -> i, vytvori LiteralNode alebo IDNode z tokenu
+static ASTNode *nodeFromToken(const Token *token) {
+    const char *lexeme = token->lexeme.data;
+    size_t len = token->lexeme.len;
+
+    if (token->type == TOK_IDENTIFIER) {
+        IDNode *idNode = newNode(sizeof(IDNode), AST_ID, token->line);
+        if (idNode == NULL) {
+            return NULL;
+        }
+        idNode->name = copyString(lexeme, len);
+        if (idNode->name == NULL) {
+            free(idNode);
+            return NULL;
+        }
+        return (ASTNode *)idNode;
+    }
+
+    LiteralNode *lit = newNode(sizeof(LiteralNode), AST_LIT, token->line);
+    if (lit == NULL) {
+        return NULL;
+    }
+
+    switch (token->type) {
+    case TOK_INT_LIT:
+        lit->litType = LIT_INT;
+        if (len > 2 && lexeme[0] == '0' && (lexeme[1] == 'x' || lexeme[1] == 'X')) {
+            lit->litValue.int_value = strtoll(lexeme + 2, NULL, 16);
+        } else {
+            lit->litValue.int_value = strtoll(lexeme, NULL, 10);
+        }
+        break;
+    case TOK_DOUBLE_LIT:
+        lit->litType = LIT_DOUBLE;
+        lit->litValue.float_value = strtod(lexeme, NULL);
+        break;
+    case TOK_BOOL_LIT:
+        lit->litType = LIT_BOOLEAN;
+        lit->litValue.bool_value = (strcmp(lexeme, "true") == 0);
+        break;
+    case TOK_STRING_LIT: {
+        // TODO: escape sekvencie v retazci, zatial len oreze uvodzovky
+        size_t quotes = (len >= 6 && strncmp(lexeme, "\"\"\"", 3) == 0) ? 3 : 1;
+        if (len < 2 * quotes) {
+            free(lit);
+            return NULL;
+        }
+        lit->litType = LIT_STRING;
+        lit->litValue.string_value = copyString(lexeme + quotes, len - 2 * quotes);
+        if (lit->litValue.string_value == NULL) {
+            free(lit);
+            return NULL;
+        }
+        break;
+    }
+    default:
+        free(lit);
+        return NULL;
+    }
+    return (ASTNode *)lit;
+}
+
+void expr_free(ASTNode *node) {
+    if (node == NULL) {
+        return;
+    }
+    switch (node->kind) {
+    case AST_LIT: {
+        LiteralNode *lit = (LiteralNode *)node;
+        if (lit->litType == LIT_STRING) {
+            free(lit->litValue.string_value);
+        }
+        break;
+    }
+    case AST_ID:
+        free(((IDNode *)node)->name);
+        break;
+    case AST_BINARY:
+        expr_free(((BinaryNode *)node)->left);
+        expr_free(((BinaryNode *)node)->right);
+        break;
+    case AST_UNARY:
+        expr_free(((UnaryNode *)node)->right);
+        break;
+    case AST_MEMBER:
+        expr_free(((MemberNode *)node)->object);
+        free(((MemberNode *)node)->name);
+        break;
+    case AST_CALL: {
+        CallNode *call = (CallNode *)node;
+        expr_free(call->caller);
+        for (size_t i = 0; i < call->argsCount; i++) {
+            expr_free(call->args[i]);
+        }
+        free(call->args);
+        break;
+    }
+    case AST_RANGE:
+        expr_free(((RangeNode *)node)->from);
+        expr_free(((RangeNode *)node)->to);
+        expr_free(((RangeNode *)node)->step);
+        break;
+    default:
+        break;
+    }
+    free(node);
+}
+
 typedef struct {
     Token *token;
 } PsaState;

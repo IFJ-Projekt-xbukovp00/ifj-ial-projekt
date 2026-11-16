@@ -40,3 +40,6 @@
  * @return ERR_OK, ERR_SYNTAX, ERR_LEX alebo ERR_INTERNAL
  */
 int expr_parse(Token *token, ASTNode **output);
+
+/** @brief docasne uvolnenie AST uzlov, kym nebude ast_free v ast.c */
+void expr_free(ASTNode *node);
