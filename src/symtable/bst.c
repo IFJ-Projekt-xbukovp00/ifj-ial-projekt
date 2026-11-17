@@ -33,15 +33,90 @@
 
 #include <stdlib.h>
 #include <string.h>
-/** 
+
+/**
+ * @brief výška podstromu (prázdny = 0)
+ */
+static int height(Node *node){
+    if (node == NULL){
+        return 0;
+    }
+    return node->height;
+}
+
+/**
+ * @brief prepočíta výšku uzla z výšok jeho detí
+ */
+static void updateHeight(Node *node){
+    int leftHeight = height(node->left);
+    int rightHeight = height(node->right);
+    if (leftHeight > rightHeight){
+        node->height = 1 + leftHeight;
+    }
+    else {
+        node->height = 1 + rightHeight;
+    }
+}
+
+/**
+ * @brief pravá rotácia okolo root
+ * @returns nový koreň podstromu
+ */
+static Node *rotateRight(Node *root){
+    Node *newRoot = root->left;
+    root->left = newRoot->right;
+    newRoot->right = root;
+    updateHeight(root);
+    updateHeight(newRoot);
+    return newRoot;
+}
+
+/**
+ * @brief ľavá rotácia okolo root
+ * @returns nový koreň podstromu
+ */
+static Node *rotateLeft(Node *root){
+    Node *newRoot = root->right;
+    root->right = newRoot->left;
+    newRoot->left = root;
+    updateHeight(root);
+    updateHeight(newRoot);
+    return newRoot;
+}
+
+/**
+ * @brief obnoví vyváženie uzla po vložení (prípady LL, LR, RR, RL)
+ * @returns nový koreň podstromu
+ */
+static Node *balance(Node *root){
+    updateHeight(root);
+    int balanceFactor = height(root->left) - height(root->right);
+    if (balanceFactor > 1){
+        if (height(root->left->left) < height(root->left->right)){
+            root->left = rotateLeft(root->left); // LR
+        }
+        return rotateRight(root);
+    }
+    if (balanceFactor < -1){
+        if (height(root->right->right) < height(root->right->left)){
+            root->right = rotateRight(root->right); // RL
+        }
+        return rotateLeft(root);
+    }
+    return root;
+}
+
+/**
  * @brief funkcia na pridanie do BVS
  * @param root je koreň/list, na ktorom sa nachádzam
  * @param name je hodnota, ktorú pridávam
- * @param type je typ hodnoty
+ * @param symbol je symbol priradený k menu
  * @param error je pointer, cez ktorý si vrátim chybové hlásenie
+ *        (ERR_REDEF ak meno v strome už je, ERR_INTERNAL pri chybe alokácie, no
+ *        pri úspechu sa nemení)
  * @returns updatnutý strom
 */
-Node *insertNode(Node *root, const char *name, TokenType type, ErrorCode *error){
+Node *insertNode(Node *root, const char *name, struct Symbol *symbol, ErrorCode *error){
     if (root == NULL){
         Node *node = malloc(sizeof(Node));
         if (node == NULL){
@@ -55,20 +130,26 @@ Node *insertNode(Node *root, const char *name, TokenType type, ErrorCode *error)
             return NULL;
         }
         strcpy(node->name, name);
-        node->type = type;
+        node->symbol = symbol;
+        node->height = 1;
         node->left = NULL;
         node->right = NULL;
         return node;
     }
     int cmp = strcmp(name, root->name);
     if (cmp < 0){
-        root->left = insertNode(root->left, name, type, error);
+        root->left = insertNode(root->left, name, symbol, error);
     }
     else if (cmp > 0){
-        root->right = insertNode(root->right, name, type, error);
+        root->right = insertNode(root->right, name, symbol, error);
     }
-    return root;
+    else {
+        *error = ERR_REDEF;
+        return root;
+    }
+    return balance(root);
 }
+
 /**
  * @brief funkcia na hľadanie Node v BVS
  * @param root je koreň/list, na ktorom sa nachádzam
@@ -91,9 +172,9 @@ Node *findNode(Node *root, const char *name, ErrorCode *error){
 }
  
 /**
- * @brief funkcia na uvoľnenie stromu z pamäte
+ * @brief Uvoľnenie stromu z pamäte
  * @param root je koreň/list, na ktorom sa nachádzam
- * @returns ..
+ * @returns nič
  */
 void destroyTree(Node *root){
     if (root == NULL){
