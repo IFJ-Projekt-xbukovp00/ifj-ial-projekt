@@ -37,3 +37,4 @@ ifj26
 /pack/
 /tests/tmp/
 /tests/lexer_dump
+/tests/unit/test_bst

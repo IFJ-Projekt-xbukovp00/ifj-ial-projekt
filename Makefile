@@ -41,10 +41,13 @@ LEXDUMP     := tests/lexer_dump
 LEXDUMP_OBJ := src/lexer/scanner.o src/lexer/dfa.o src/common/dynstr.o src/common/error.o \
                src/symtable/symtable.o
 
+UNIT_BST     := tests/unit/test_bst
+UNIT_BST_OBJ := src/symtable/bst.o src/common/error.o
+
 PACK_DIR := pack
 PACK_ZIP := xbukovp00.zip
 
-.PHONY: build check build-check format docs test test-lexer pack clean
+.PHONY: build check build-check format docs test test-lexer test-unit pack clean
 
 build: $(TARGET)
 
@@ -75,6 +78,12 @@ $(LEXDUMP): tests/lexer_dump.c $(LEXDUMP_OBJ)
 test-lexer: $(LEXDUMP)
 	LEXDUMP=./$(LEXDUMP) tests/run_lexer_tests.sh
 
+$(UNIT_BST): tests/unit/test_bst.c $(UNIT_BST_OBJ)
+	$(CC) $(CFLAGS) -o $@ $^
+
+test-unit: $(UNIT_BST)
+	./$(UNIT_BST)
+
 pack:
 	rm -rf $(PACK_DIR) $(PACK_ZIP)
 	mkdir -p $(PACK_DIR)/src
@@ -87,5 +96,5 @@ pack:
 	rm -rf $(PACK_DIR)
 
 clean:
-	rm -f $(TARGET) $(OBJ) $(LEXDUMP)
+	rm -f $(TARGET) $(OBJ) $(LEXDUMP) $(UNIT_BST)
 	rm -rf docs/doxygen $(PACK_DIR) $(PACK_ZIP) tests/tmp
