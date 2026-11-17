@@ -41,11 +41,18 @@ StackItem *A_TopTerminal(TAStack *stack) {
 }
 
 bool A_InsertMark(TAStack *stack) {
-    if (topTerminalIndex(stack) < 0 || A_IsFull(stack)) {
+    int idx = topTerminalIndex(stack);
+    if (idx < 0 || A_IsFull(stack)) {
         return false;
     }
 
+    // posun prvkov nad terminalom o jedno miesto hore
+    for (int i = stack->top; i > idx + 1; i--) {
+        stack->dataArray[i] = stack->dataArray[i - 1];
+    }
+
     StackItem mark = {.kind = SYM_MARK, .node = NULL};
-    A_Push(stack, mark);
+    stack->dataArray[idx + 1] = mark;
+    stack->top++;
     return true;
 }

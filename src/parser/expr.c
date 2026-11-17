@@ -423,12 +423,6 @@ int expr_parse(Token *token, ASTNode **output) {
             if ((err = reduce(&stack)) != ERR_OK) {
                 goto fail;
             }
-            if ((err = nextToken(&state)) != ERR_OK) {
-                goto fail;
-            }
-            if ((err = classifyToken(&state, &input)) != ERR_OK) {
-                goto fail;
-            }
         } else if (rel == R_END) {
             *output = stack.dataArray[1].node;
             stack.top = 0;
