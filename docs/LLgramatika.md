@@ -142,7 +142,19 @@ Pokryť:
 - posledný príkaz bez oddeľovača (§1.2)
 
 ```
-TODO
+51. <block> → TOK_INDENT <statem_list> TOK_DEDENT
+
+52. <statem_list> → <statem> <statem_list_tail>
+53. <statem_list_tail> → <statem_sep> <statem_list_after_sep>
+54. <statem_list_tail> → ε
+
+55. <statem_list_after_sep> → <statem> <statem_list_tail>
+56. <statem_list_after_sep> → ε
+
+57. <statem_sep> → TOK_EOL
+58. <statem_sep> → TOK_SEMICOLON <opt_eol>
+59. <opt_eol> → TOK_EOL
+60. <opt_eol> → ε
 ```
 
 ### 3.5 Príkazy
@@ -155,7 +167,25 @@ Pokryť:
 - samostatný výraz ako príkaz (§2.1)
 
 ```
-TODO
+61. <statem> → <var_decl>
+62. <statem> → <return_statem>
+63. <statem> → <while_statem>
+64. <statem> → <for_statem>
+65. <statem> → TOK_IDENTIFIER <id_statem_tail>
+66. <statem> → <expr_non_id>
+
+67. <id_statem_tail> → TOK_ASSIGN <expr>
+68. <id_statem_tail> → <expr_after_id>
+
+74. <var_decl> → <var_kind> TOK_IDENTIFIER <var_type_opt> TOK_ASSIGN <expr>
+75. <var_kind> → TOK_KW_VAL
+76. <var_kind> → TOK_KW_VAR
+77. <var_type_opt> → TOK_COLON <type>
+78. <var_type_opt> → ε
+
+79. <return_statem> → TOK_KW_RETURN <return_val_opt>
+80. <return_val_opt> → <expr>
+81. <return_val_opt> → ε
 ```
 
 ### 3.6 Riadiace štruktúry
