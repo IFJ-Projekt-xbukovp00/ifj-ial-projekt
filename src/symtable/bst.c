@@ -152,23 +152,7 @@ Node *alocNode(const char *name, struct Symbol *symbol, ErrorCode *error){
 */
 Node *insertNode(Node *root, const char *name, struct Symbol *symbol, ErrorCode *error){
     if (root == NULL){
-        Node *node = malloc(sizeof(Node));
-        if (node == NULL){
-            *error = ERR_INTERNAL;
-            return NULL;
-        }
-        node->name = malloc(strlen(name)+1);
-        if (node->name == NULL){
-            free(node);
-            *error = ERR_INTERNAL;
-            return NULL;
-        }
-        strcpy(node->name, name);
-        node->symbol = symbol;
-        node->height = 1;
-        node->left = NULL;
-        node->right = NULL;
-        return node;
+        return alocNode(name, symbol, error);
     }
     int cmp = strcmp(name, root->name);
     if (cmp < 0){
