@@ -199,7 +199,34 @@ Pokryť:
 - zdroje generátora `to`, `until`, `by` (CONTROL, §5.3) a `List[T]` (LISTS, §5.8)
 
 ```
-TODO
+82. <if_expr> → TOK_KW_IF <expr> TOK_KW_THEN <branch_body> <else_part>
+
+83. <branch_body> → TOK_EOL <block>
+84. <branch_body> → <statem>
+
+85. <else_part> → TOK_KW_ELSE <branch_body>
+86. <else_part> → ε
+
+87. <while_statem> → TOK_KW_WHILE <expr> TOK_KW_DO <branch_body>
+
+88. <for_statem> → TOK_KW_FOR <for_header> TOK_KW_DO <branch_body>
+89. <for_header> → TOK_INDENT <for_gen> <for_guards_ml> TOK_DEDENT
+90. <for_header> → <for_gen> <for_guard_sl>
+
+91. <for_gen> → TOK_IDENTIFIER TOK_LARROW <for_source>
+92. <for_source> → <expr> <range_tail_opt>
+93. <range_tail_opt> → TOK_IDENTIFIER <expr> <range_step_opt>
+94. <range_tail_opt> → ε
+95. <range_step_opt> → TOK_IDENTIFIER <expr>
+96. <range_step_opt> → ε
+
+97. <for_guard_sl> → TOK_KW_IF <expr> <for_guard_sl>
+98. <for_guard_sl> → ε
+
+99.  <for_guards_ml> → TOK_EOL <for_guard_ml_opt>
+100. <for_guards_ml> → ε
+101. <for_guard_ml_opt> → TOK_KW_IF <expr> <for_guards_ml>
+102. <for_guard_ml_opt> → ε
 ```
 
 ### 3.7 `match` (ALGEBDT, §5.5)
