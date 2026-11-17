@@ -37,10 +37,14 @@ CFLAGS  += $(INC)
 
 IC26INT ?= tests/bin/ic26int-linux-$(shell uname -m)
 
+LEXDUMP     := tests/lexer_dump
+LEXDUMP_OBJ := src/lexer/scanner.o src/lexer/dfa.o src/common/dynstr.o src/common/error.o \
+               src/symtable/symtable.o
+
 PACK_DIR := pack
 PACK_ZIP := xbukovp00.zip
 
-.PHONY: build check build-check format docs test pack clean
+.PHONY: build check build-check format docs test test-lexer pack clean
 
 build: $(TARGET)
 
@@ -62,8 +66,14 @@ format:
 docs:
 	doxygen Doxyfile
 
-test: build
-	IFJ26=./$(TARGET) IC26INT=$(IC26INT) tests/run_tests.sh
+test: build $(LEXDUMP)
+	IFJ26=./$(TARGET) IC26INT=$(IC26INT) LEXDUMP=./$(LEXDUMP) tests/run_tests.sh
+
+$(LEXDUMP): tests/lexer_dump.c $(LEXDUMP_OBJ)
+	$(CC) $(CFLAGS) -o $@ $^
+
+test-lexer: $(LEXDUMP)
+	LEXDUMP=./$(LEXDUMP) tests/run_lexer_tests.sh
 
 pack:
 	rm -rf $(PACK_DIR) $(PACK_ZIP)
@@ -77,5 +87,5 @@ pack:
 	rm -rf $(PACK_DIR)
 
 clean:
-	rm -f $(TARGET) $(OBJ)
+	rm -f $(TARGET) $(OBJ) $(LEXDUMP)
 	rm -rf docs/doxygen $(PACK_DIR) $(PACK_ZIP) tests/tmp

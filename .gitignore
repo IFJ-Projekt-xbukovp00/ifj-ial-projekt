@@ -36,3 +36,4 @@ ifj26
 /docs/doxygen/
 /pack/
 /tests/tmp/
+/tests/lexer_dump
