@@ -39,7 +39,7 @@ IC26INT ?= tests/bin/ic26int-linux-$(shell uname -m)
 
 LEXDUMP     := tests/lexer_dump
 LEXDUMP_OBJ := src/lexer/scanner.o src/lexer/dfa.o src/common/dynstr.o src/common/error.o \
-               src/symtable/symtable.o
+               src/lexer/keywords.o
 
 UNIT_BST     := tests/unit/test_bst
 UNIT_BST_OBJ := src/symtable/bst.o src/common/error.o

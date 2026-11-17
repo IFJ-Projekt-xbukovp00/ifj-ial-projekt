@@ -30,11 +30,14 @@
 #include "symtable.h"
 #include <stdlib.h>
 #include <string.h>
+
 IDs *initNodeID(Token *Node){
     IDs *newNode = malloc(sizeof(IDs));
+
     if (newNode == NULL){
         return NULL;
     }
+
     newNode->Node = Node;
     newNode->left = NULL;
     newNode->right = NULL;
@@ -45,13 +48,16 @@ IDs *addNodeID(IDs *root, Token *Node){
     if (root == NULL){
         return initNodeID(Node);
     }
+
     int cmp = strcmp(Node->lexeme.data, root->Node->lexeme.data);
+
     if (cmp < 0){
         root->left = addNodeID(root->left, Node);
     }
     else if (cmp > 0){
         root->right = addNodeID(root->right, Node);
     }
+
     return root;
 }
 
@@ -59,7 +65,9 @@ bool findAndControlNodeID(IDs *root, Token *Node){
     if (root == NULL){
         return false;
     }
+
     int cmp = strcmp(Node->lexeme.data, root->Node->lexeme.data);
+
     if (cmp == 0){
         return true;
     }
@@ -75,60 +83,9 @@ void clearTreeID(IDs *root){
     if (root == NULL){
         return;
     }
+    
     clearTreeID(root->left);
     clearTreeID(root->right);
     free(root);
 }
 
-KeyWordTree *initNodeKW(char *word){
-    KeyWordTree *newNode = malloc(sizeof(KeyWordTree));
-    if (newNode == NULL){
-        return NULL;
-    }
-    newNode->word = malloc(strlen(word)+1);
-    if (newNode->word == NULL){
-        free(newNode);
-        return NULL;
-    }
-    strcpy(newNode->word, word);
-    newNode->left = NULL;
-    newNode->right = NULL;
-    return newNode;
-}
-KeyWordTree *addNodeKW(KeyWordTree *root, char *word){
-    if (root == NULL){
-        return initNodeKW(word);
-    }
-    int cmp = strcmp(word, root->word);
-    if (cmp < 0){
-        root->left = addNodeKW(root->left, word);
-    }
-    else if (cmp > 0){
-        root->right = addNodeKW(root->right, word);
-    }
-    return root;
-}
-bool findNodeKW(KeyWordTree *root, char *word){
-    if (root == NULL){
-        return false;
-    }
-    int cmp = strcmp(word, root->word);
-    if (cmp == 0){
-        return true;
-    }
-    else if (cmp < 0){
-        return findNodeKW(root->left, word);
-    }
-    else{
-        return findNodeKW(root->right, word);
-    }
-}
-void clearTreeKW(KeyWordTree *root){
-    if (root == NULL){
-        return;
-    }
-    clearTreeKW(root->left);
-    clearTreeKW(root->right);
-    free(root->word);
-    free(root);
-}

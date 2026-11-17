@@ -32,7 +32,7 @@
 #include "dfa.h"
 #include "dynstr.h"
 #include "error.h"
-#include "symtable.h"
+#include "keywords.h"
 
 #include <stdbool.h>
 #include <stdlib.h>
