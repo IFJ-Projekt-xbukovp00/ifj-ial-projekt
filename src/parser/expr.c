@@ -206,16 +206,45 @@ void expr_free(ASTNode *node) {
 
 typedef struct {
     Token *token;
+    Token lookahead;   // lookahead na rozlisenie f( od i
+    bool hasLookahead;
     bool afterOperand; // posledny bol i alebo ), takze - je binarne
 } PsaState;
 
-static int nextToken(PsaState *state) { return scanner_get_token(state->token); }
+static int nextToken(PsaState *state) {
+    if (state->hasLookahead) {
+        dynstr_free(&state->token->lexeme);
+        *state->token = state->lookahead;
+        memset(&state->lookahead, 0, sizeof(Token));
+        state->hasLookahead = false;
+        return ERR_OK;
+    }
+    return scanner_get_token(state->token);
+}
+
+// nacita dalsi token bez posunu aktualneho
+static int peekToken(PsaState *state, Token **next) {
+    if (!state->hasLookahead) {
+        memset(&state->lookahead, 0, sizeof(Token));
+        if (!dynstr_init(&state->lookahead.lexeme)) {
+            return ERR_INTERNAL;
+        }
+        int err = scanner_get_token(&state->lookahead);
+        if (err != ERR_OK) {
+            dynstr_free(&state->lookahead.lexeme);
+            return err;
+        }
+        state->hasLookahead = true;
+    }
+    *next = &state->lookahead;
+    return ERR_OK;
+}
 
 // zaradi token do stlpca tabulky, vsetko mimo vyrazu je $
 static int classifyToken(PsaState *state, PtIndex *column) {
     const Token *token = state->token;
     switch (token->type) {
-    case TOK_IDENTIFIER:
+    case TOK_IDENTIFIER: {
         // to/until/by chodia z lexera ako bezny identifikator
         if (strcmp(token->lexeme.data, "to") == 0) {
             *column = PT_TO;
@@ -229,8 +258,14 @@ static int classifyToken(PsaState *state, PtIndex *column) {
             *column = PT_BY;
             return ERR_OK;
         }
-        *column = PT_ID;
-        break;
+        Token *next;
+        int err = peekToken(state, &next);
+        if (err != ERR_OK) {
+            return err;
+        }
+        *column = (next->type == TOK_LPAREN) ? PT_FUNC : PT_ID;
+        return ERR_OK;
+    }
     case TOK_INT_LIT:
     case TOK_DOUBLE_LIT:
     case TOK_STRING_LIT:
@@ -328,6 +363,41 @@ static bool isBinaryOperator(PtIndex ptIndex) {
     }
 }
 
+// rozparsuje ( ) alebo ( E , E , ... ) do CallNode
+static int takeArguments(StackItem *items, int count, CallNode *call) {
+    if (count < 2 || !isTerminal(&items[0], PT_LPAR) || !isTerminal(&items[count - 1], PT_RPAR)) {
+        return ERR_SYNTAX;
+    }
+    if (count == 2) {
+        return ERR_OK; // f()
+    }
+
+    int inner = count - 2;
+    if (inner % 2 == 0) {
+        return ERR_SYNTAX;
+    }
+    for (int i = 1; i <= inner; i++) {
+        if (i % 2 == 1) {
+            if (!isExpr(&items[i])) {
+                return ERR_SYNTAX;
+            }
+        } else if (!isTerminal(&items[i], PT_COMMA)) {
+            return ERR_SYNTAX;
+        }
+    }
+
+    size_t argsCount = (size_t)(inner + 1) / 2;
+    call->args = malloc(argsCount * sizeof(ASTNode *));
+    if (call->args == NULL) {
+        return ERR_INTERNAL;
+    }
+    for (size_t i = 0; i < argsCount; i++) {
+        call->args[i] = items[1 + 2 * i].node;
+    }
+    call->argsCount = argsCount;
+    return ERR_OK;
+}
+
 // zredukuje handle nad znackou < na AST uzol
 static int reduceHandle(StackItem *handle, int count, ASTNode **result) {
     int line = handle[0].line;
@@ -355,6 +425,24 @@ static int reduceHandle(StackItem *handle, int count, ASTNode **result) {
     if (count == 3 && isTerminal(&handle[0], PT_LPAR) && isExpr(&handle[1]) &&
         isTerminal(&handle[2], PT_RPAR)) {
         *result = handle[1].node;
+        return ERR_OK;
+    }
+
+    // E -> E . i
+    if (count == 3 && isExpr(&handle[0]) && isTerminal(&handle[1], PT_DOT) &&
+        isTerminal(&handle[2], PT_ID)) {
+        if (handle[2].node == NULL || handle[2].node->kind != AST_ID) {
+            return ERR_SYNTAX; // x.5 nie je platny clen
+        }
+        MemberNode *mem = newNode(sizeof(MemberNode), AST_MEMBER, handle[1].line);
+        if (mem == NULL) {
+            return ERR_INTERNAL;
+        }
+        mem->object = handle[0].node;
+        mem->name = ((IDNode *)handle[2].node)->name;
+        ((IDNode *)handle[2].node)->name = NULL;
+        expr_free(handle[2].node);
+        *result = (ASTNode *)mem;
         return ERR_OK;
     }
 
@@ -393,6 +481,50 @@ static int reduceHandle(StackItem *handle, int count, ASTNode **result) {
             bin->right = handle[2].node;
             *result = (ASTNode *)bin;
         }
+        return ERR_OK;
+    }
+
+    // E -> f ( args )
+    if (count >= 3 && isTerminal(&handle[0], PT_FUNC)) {
+        CallNode *call = newNode(sizeof(CallNode), AST_CALL, line);
+        if (call == NULL) {
+            return ERR_INTERNAL;
+        }
+        int err = takeArguments(&handle[1], count - 1, call);
+        if (err != ERR_OK) {
+            expr_free((ASTNode *)call);
+            return err;
+        }
+        call->caller = handle[0].node;
+        *result = (ASTNode *)call;
+        return ERR_OK;
+    }
+
+    // E -> E . f ( args )
+    if (count >= 5 && isExpr(&handle[0]) && isTerminal(&handle[1], PT_DOT) &&
+        isTerminal(&handle[2], PT_FUNC)) {
+        if (handle[2].node == NULL || handle[2].node->kind != AST_ID) {
+            return ERR_SYNTAX;
+        }
+        CallNode *call = newNode(sizeof(CallNode), AST_CALL, line);
+        MemberNode *mem = newNode(sizeof(MemberNode), AST_MEMBER, handle[1].line);
+        if (call == NULL || mem == NULL) {
+            free(call);
+            free(mem);
+            return ERR_INTERNAL;
+        }
+        int err = takeArguments(&handle[3], count - 3, call);
+        if (err != ERR_OK) {
+            expr_free((ASTNode *)call);
+            free(mem);
+            return err;
+        }
+        mem->object = handle[0].node;
+        mem->name = ((IDNode *)handle[2].node)->name;
+        ((IDNode *)handle[2].node)->name = NULL;
+        expr_free(handle[2].node);
+        call->caller = (ASTNode *)mem;
+        *result = (ASTNode *)call;
         return ERR_OK;
     }
 
@@ -462,7 +594,7 @@ int expr_parse(Token *token, ASTNode **output) {
             StackItem term = {
                 .kind = SYM_TERM, .ptIndex = input, .tokenType = token->type, .line = token->line};
             // uzol robime hned pri shifte, kym mame lexem
-            if (input == PT_ID) {
+            if (input == PT_ID || input == PT_FUNC) {
                 term.node = nodeFromToken(token);
                 if (term.node == NULL) {
                     err = ERR_INTERNAL;
