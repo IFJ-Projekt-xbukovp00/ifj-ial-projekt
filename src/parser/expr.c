@@ -206,6 +206,7 @@ void expr_free(ASTNode *node) {
 
 typedef struct {
     Token *token;
+    bool afterOperand; // posledny bol i alebo ), takze - je binarne
 } PsaState;
 
 static int nextToken(PsaState *state) { return scanner_get_token(state->token); }
@@ -215,6 +216,21 @@ static int classifyToken(PsaState *state, PtIndex *column) {
     const Token *token = state->token;
     switch (token->type) {
     case TOK_IDENTIFIER:
+        // to/until/by chodia z lexera ako bezny identifikator
+        if (strcmp(token->lexeme.data, "to") == 0) {
+            *column = PT_TO;
+            return ERR_OK;
+        }
+        if (strcmp(token->lexeme.data, "until") == 0) {
+            *column = PT_UNTIL;
+            return ERR_OK;
+        }
+        if (strcmp(token->lexeme.data, "by") == 0) {
+            *column = PT_BY;
+            return ERR_OK;
+        }
+        *column = PT_ID;
+        break;
     case TOK_INT_LIT:
     case TOK_DOUBLE_LIT:
     case TOK_STRING_LIT:
@@ -222,7 +238,7 @@ static int classifyToken(PsaState *state, PtIndex *column) {
         *column = PT_ID;
         break;
     case TOK_MINUS:
-        *column = PT_SUB;
+        *column = state->afterOperand ? PT_SUB : PT_UMINUS;
         break;
     case TOK_PLUS:
         *column = PT_ADD;
@@ -303,6 +319,9 @@ static bool isBinaryOperator(PtIndex ptIndex) {
     case PT_NEQ:
     case PT_AND:
     case PT_OR:
+    case PT_TO:
+    case PT_UNTIL:
+    case PT_BY:
         return true;
     default:
         return false;
@@ -311,9 +330,24 @@ static bool isBinaryOperator(PtIndex ptIndex) {
 
 // zredukuje handle nad znackou < na AST uzol
 static int reduceHandle(StackItem *handle, int count, ASTNode **result) {
+    int line = handle[0].line;
+
     // E -> i
     if (count == 1 && isTerminal(&handle[0], PT_ID)) {
         *result = handle[0].node;
+        return ERR_OK;
+    }
+
+    // E -> -E | !E
+    if (count == 2 && handle[0].kind == SYM_TERM &&
+        (handle[0].ptIndex == PT_UMINUS || handle[0].ptIndex == PT_NOT) && isExpr(&handle[1])) {
+        UnaryNode *un = newNode(sizeof(UnaryNode), AST_UNARY, line);
+        if (un == NULL) {
+            return ERR_INTERNAL;
+        }
+        un->operator = handle[0].tokenType;
+        un->right = handle[1].node;
+        *result = (ASTNode *)un;
         return ERR_OK;
     }
 
@@ -327,14 +361,38 @@ static int reduceHandle(StackItem *handle, int count, ASTNode **result) {
     // E -> E op E
     if (count == 3 && isExpr(&handle[0]) && handle[1].kind == SYM_TERM &&
         isBinaryOperator(handle[1].ptIndex) && isExpr(&handle[2])) {
-        BinaryNode *bin = newNode(sizeof(BinaryNode), AST_BINARY, handle[1].line);
-        if (bin == NULL) {
-            return ERR_INTERNAL;
+        PtIndex op = handle[1].ptIndex;
+
+        if (op == PT_TO || op == PT_UNTIL) {
+            RangeNode *range = newNode(sizeof(RangeNode), AST_RANGE, handle[1].line);
+            if (range == NULL) {
+                return ERR_INTERNAL;
+            }
+            range->from = handle[0].node;
+            range->to = handle[2].node;
+            range->inclusive = (op == PT_TO);
+            *result = (ASTNode *)range;
+        } else if (op == PT_BY) {
+            // by moze ist len za to/until, ktore este nema krok
+            if (handle[0].node == NULL || handle[0].node->kind != AST_RANGE) {
+                return ERR_SYNTAX;
+            }
+            RangeNode *range = (RangeNode *)handle[0].node;
+            if (range->step != NULL) {
+                return ERR_SYNTAX;
+            }
+            range->step = handle[2].node;
+            *result = handle[0].node;
+        } else {
+            BinaryNode *bin = newNode(sizeof(BinaryNode), AST_BINARY, handle[1].line);
+            if (bin == NULL) {
+                return ERR_INTERNAL;
+            }
+            bin->operator = handle[1].tokenType;
+            bin->left = handle[0].node;
+            bin->right = handle[2].node;
+            *result = (ASTNode *)bin;
         }
-        bin->operator = handle[1].tokenType;
-        bin->left = handle[0].node;
-        bin->right = handle[2].node;
-        *result = (ASTNode *)bin;
         return ERR_OK;
     }
 
@@ -413,6 +471,7 @@ int expr_parse(Token *token, ASTNode **output) {
             }
             A_Push(&stack, term);
 
+            state.afterOperand = (input == PT_ID);
             if ((err = nextToken(&state)) != ERR_OK) {
                 goto fail;
             }
