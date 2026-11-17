@@ -42,7 +42,7 @@ typedef struct Node{
 }Node;
 
 int height(Node *node);
-void upadateHeight(Node *node);
+void updateHeight(Node *node);
 Node *rotateRight(Node *root);
 Node *rotateLeft(Node *root);
 Node *balance(Node *root);
