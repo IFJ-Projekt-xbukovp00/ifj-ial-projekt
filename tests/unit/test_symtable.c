@@ -38,7 +38,7 @@
 
 #include <stdio.h>
 
-static int failureCount = 0;
+int failureCount = 0;
 
 #define CHECK(condition)                                                                           \
     do {                                                                                           \
@@ -49,7 +49,7 @@ static int failureCount = 0;
     } while (0)
 
 /* Definuje meno a overí, že nenastala chyba. */
-static Symbol *defineChecked(Symtable *table, const char *name, SymbolKind kind, bool isMutable) {
+Symbol *defineChecked(Symtable *table, const char *name, SymbolKind kind, bool isMutable) {
     ErrorCode error = ERR_OK;
     Symbol *symbol = defineSymbol(table, name, kind, NULL, isMutable, &error);
     CHECK(error == ERR_OK);
@@ -57,7 +57,7 @@ static Symbol *defineChecked(Symtable *table, const char *name, SymbolKind kind,
     return symbol;
 }
 
-static void testEmpty(void) {
+void testEmpty(void) {
     Symtable table;
     symtableInit(&table);
     CHECK(lookupSymbol(&table, "x") == NULL);
@@ -70,7 +70,7 @@ static void testEmpty(void) {
     symtableFree(&table);
 }
 
-static void testDefineLookup(void) {
+void testDefineLookup(void) {
     Symtable table;
     symtableInit(&table);
     ErrorCode error = ERR_OK;
@@ -90,7 +90,7 @@ static void testDefineLookup(void) {
     CHECK(table.top == NULL && table.allSymbols == NULL);
 }
 
-static void testRedefinition(void) {
+void testRedefinition(void) {
     Symtable table;
     symtableInit(&table);
     ErrorCode error = ERR_OK;
@@ -105,7 +105,7 @@ static void testRedefinition(void) {
     symtableFree(&table);
 }
 
-static void testShadowingAndPop(void) {
+void testShadowingAndPop(void) {
     Symtable table;
     symtableInit(&table);
     ErrorCode error = ERR_OK;

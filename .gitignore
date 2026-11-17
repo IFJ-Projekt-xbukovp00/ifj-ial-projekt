@@ -39,3 +39,4 @@ ifj26
 /tests/lexer_dump
 /tests/unit/test_bst
 /tests/unit/test_symtable
+/tests/unit/test_builtins

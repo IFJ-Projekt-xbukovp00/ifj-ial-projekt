@@ -45,6 +45,9 @@ UNIT_BST     := tests/unit/test_bst
 UNIT_BST_OBJ := src/symtable/bst.o src/common/error.o
 UNIT_SYMTABLE     := tests/unit/test_symtable
 UNIT_SYMTABLE_OBJ := src/symtable/symtable.o src/symtable/bst.o src/common/error.o
+UNIT_BUILTINS     := tests/unit/test_builtins
+UNIT_BUILTINS_OBJ := src/semantic/semantic.o src/symtable/symtable.o src/symtable/bst.o \
+                     src/common/types.o src/common/error.o
 
 PACK_DIR := pack
 PACK_ZIP := xbukovp00.zip
@@ -86,9 +89,13 @@ $(UNIT_BST): tests/unit/test_bst.c $(UNIT_BST_OBJ)
 $(UNIT_SYMTABLE): tests/unit/test_symtable.c $(UNIT_SYMTABLE_OBJ)
 	$(CC) $(CFLAGS) -o $@ $^
 
-test-unit: $(UNIT_BST) $(UNIT_SYMTABLE)
+$(UNIT_BUILTINS): tests/unit/test_builtins.c $(UNIT_BUILTINS_OBJ)
+	$(CC) $(CFLAGS) -o $@ $^
+
+test-unit: $(UNIT_BST) $(UNIT_SYMTABLE) $(UNIT_BUILTINS)
 	./$(UNIT_BST)
 	./$(UNIT_SYMTABLE)
+	./$(UNIT_BUILTINS)
 
 pack:
 	rm -rf $(PACK_DIR) $(PACK_ZIP)
@@ -102,5 +109,5 @@ pack:
 	rm -rf $(PACK_DIR)
 
 clean:
-	rm -f $(TARGET) $(OBJ) $(LEXDUMP) $(UNIT_BST) $(UNIT_SYMTABLE)
+	rm -f $(TARGET) $(OBJ) $(LEXDUMP) $(UNIT_BST) $(UNIT_SYMTABLE) $(UNIT_BUILTINS)
 	rm -rf docs/doxygen $(PACK_DIR) $(PACK_ZIP) tests/tmp

@@ -29,4 +29,18 @@
 
 #pragma once
 
-/* TODO: rozhranie sémantickej analýzy */
+#include "symtable.h"
+
+/**
+ * @brief funkcia na vloženie vstavaných funkcií do aktuálneho (globálneho) rozsahu
+ *
+ * Vloží vstavané funkcie zo základného zadania aj z rozšírení BOOLTHEN
+ * (readBoolean), ALGEBDT (readIntMaybe, readDoubleMaybe) a LISTS (List.range).
+ * Typ každej funkcie je TY_FUNC s typmi parametrov a návratovým typom.
+ * Členy hodnôt (VALMEM, metódy zoznamov) tu nie sú, nie sú to mená v rozsahu.
+ *
+ * @param table je tabuľka symbolov, musí mať aspoň jeden rozsah
+ * @param error je pointer, cez ktorý si vrátim chybové hlásenie
+ *        (pred volaním musí byť ERR_OK, pri úspechu sa nemení)
+ */
+void addBuiltins(Symtable *table, ErrorCode *error);
