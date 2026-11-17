@@ -5,6 +5,10 @@
  * Po každom vložení kontroluje usporiadanie BVS, správne uložené výšky
  * a vyváženosť (rozdiel výšok podstromov najviac 1).
  *
+ * Použitie AI: tento súbor vygenerovala AI (Claude Opus 5.5).
+ * Prompt: "Vytvor nam prosim unit testy na testovanie bst pre jazyk ifj26, zadanie najdes
+ *   v .zadanie, po spravnosti mame vsetky extensions"
+ *
  * Implementace překladače imperativního jazyka IFJ26.
  * Projekt z predmetov IFJ a IAL, FIT VUT v Brne, 2026/2027.
  *

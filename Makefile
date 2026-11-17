@@ -43,6 +43,8 @@ LEXDUMP_OBJ := src/lexer/scanner.o src/lexer/dfa.o src/common/dynstr.o src/commo
 
 UNIT_BST     := tests/unit/test_bst
 UNIT_BST_OBJ := src/symtable/bst.o src/common/error.o
+UNIT_SYMTABLE     := tests/unit/test_symtable
+UNIT_SYMTABLE_OBJ := src/symtable/symtable.o src/symtable/bst.o src/common/error.o
 
 PACK_DIR := pack
 PACK_ZIP := xbukovp00.zip
@@ -81,8 +83,12 @@ test-lexer: $(LEXDUMP)
 $(UNIT_BST): tests/unit/test_bst.c $(UNIT_BST_OBJ)
 	$(CC) $(CFLAGS) -o $@ $^
 
-test-unit: $(UNIT_BST)
+$(UNIT_SYMTABLE): tests/unit/test_symtable.c $(UNIT_SYMTABLE_OBJ)
+	$(CC) $(CFLAGS) -o $@ $^
+
+test-unit: $(UNIT_BST) $(UNIT_SYMTABLE)
 	./$(UNIT_BST)
+	./$(UNIT_SYMTABLE)
 
 pack:
 	rm -rf $(PACK_DIR) $(PACK_ZIP)
@@ -96,5 +102,5 @@ pack:
 	rm -rf $(PACK_DIR)
 
 clean:
-	rm -f $(TARGET) $(OBJ) $(LEXDUMP) $(UNIT_BST)
+	rm -f $(TARGET) $(OBJ) $(LEXDUMP) $(UNIT_BST) $(UNIT_SYMTABLE)
 	rm -rf docs/doxygen $(PACK_DIR) $(PACK_ZIP) tests/tmp

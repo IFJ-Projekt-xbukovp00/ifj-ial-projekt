@@ -31,61 +31,94 @@
 #include <stdlib.h>
 #include <string.h>
 
-IDs *initNodeID(Token *Node){
-    IDs *newNode = malloc(sizeof(IDs));
+void symtableInit(Symtable *table){
+    table->top = NULL;
+    table->allSymbols = NULL;
+}
 
-    if (newNode == NULL){
+void symtableFree(Symtable *table){
+    while (table->top != NULL){
+        popScope(table);
+    }
+
+    Symbol *symbol = table->allSymbols;
+
+    while (symbol != NULL){
+        Symbol *nextSymbol = symbol->nextAllocated;
+        free(symbol);
+        symbol = nextSymbol;
+    }
+
+    table->allSymbols = NULL;
+}
+
+void pushScope(Symtable *table, ErrorCode *error){
+    Scope *newScope = malloc(sizeof(Scope));
+
+    if (newScope == NULL){
+        *error = ERR_INTERNAL;
+        return;
+    }
+
+    newScope->tree = NULL;
+    newScope->parent = table->top;
+    table->top = newScope;
+}
+
+void popScope(Symtable *table){
+
+    Scope *oldScope = table->top;
+    if (oldScope == NULL){
+        return;
+    }
+
+    table->top = oldScope->parent;
+    destroyTree(oldScope->tree);
+    free(oldScope);
+}
+
+Symbol *defineSymbol(Symtable *table, const char *name, SymbolKind kind, Type *type,
+                     bool isMutable, ErrorCode *error){
+    if (table->top == NULL){
+        *error = ERR_INTERNAL;
         return NULL;
     }
 
-    newNode->Node = Node;
-    newNode->left = NULL;
-    newNode->right = NULL;
-    return newNode;
+    Symbol *symbol = malloc(sizeof(Symbol));
+    if (symbol == NULL){
+        *error = ERR_INTERNAL;
+        return NULL;
+    }
+
+    symbol->kind = kind;
+    symbol->type = type;
+    symbol->isMutable = isMutable;
+
+    ErrorCode insertError = ERR_OK;
+
+    table->top->tree = insertNode(table->top->tree, name, symbol, &insertError);
+
+    if (insertError != ERR_OK){
+        free(symbol);
+        *error = insertError;
+        return NULL;
+    }
+
+    symbol->nextAllocated = table->allSymbols;
+    table->allSymbols = symbol;
+    return symbol;
 }
 
-IDs *addNodeID(IDs *root, Token *Node){
-    if (root == NULL){
-        return initNodeID(Node);
-    }
+Symbol *lookupSymbol(Symtable *table, const char *name){
+    ErrorCode findError = ERR_OK;
 
-    int cmp = strcmp(Node->lexeme.data, root->Node->lexeme.data);
+    for (Scope *scope = table->top; scope != NULL; scope = scope->parent){
+        Node *foundNode = findNode(scope->tree, name, &findError);
 
-    if (cmp < 0){
-        root->left = addNodeID(root->left, Node);
-    }
-    else if (cmp > 0){
-        root->right = addNodeID(root->right, Node);
-    }
-
-    return root;
-}
-
-bool findAndControlNodeID(IDs *root, Token *Node){
-    if (root == NULL){
-        return false;
-    }
-
-    int cmp = strcmp(Node->lexeme.data, root->Node->lexeme.data);
-
-    if (cmp == 0){
-        return true;
-    }
-    else if (cmp < 0){
-        return findAndControlNodeID(root->left, Node);
-    }
-    else{
-        return findAndControlNodeID(root->right, Node);
-    }
-}
-
-void clearTreeID(IDs *root){
-    if (root == NULL){
-        return;
+        if (foundNode != NULL){
+            return foundNode->symbol;
+        }
     }
     
-    clearTreeID(root->left);
-    clearTreeID(root->right);
-    free(root);
+    return NULL;
 }
-

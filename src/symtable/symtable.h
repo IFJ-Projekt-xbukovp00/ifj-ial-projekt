@@ -30,42 +30,93 @@
 #pragma once
 
 #include "bst.h"
+#include "types.h"
+
+#include <stdbool.h>
 
 /**
- * @brief strom pre identifikátory
+ * @brief druh symbolu
  */
-typedef struct IDs{
-    Token *Node;
-    struct IDs *left;
-    struct IDs *right;
-}IDs;
+typedef enum{
+    SYM_VARIABLE,   // premenná (val / var)
+    SYM_PARAMETER,  // formálny parameter funkcie
+    SYM_FUNCTION,   // používateľská funkcia
+    SYM_BUILTIN,    // vstavaná funkcia
+    SYM_CLASS,      // case class (ALGEBDT)
+    SYM_ALIAS,      // alias typu (ALGEBDT)
+    SYM_EXTENSION   // rozširujúca metóda (EXTKW)
+}SymbolKind;
 
 /**
- * @brief funkcia na vytvorenie listu do stromu identifikátorov
- * @param Node je štruktúra, ktorá má v sebe informáciu o tokene
- * @returns list
+ * @brief informácie o jednom mene v programe
  */
-IDs *initNodeID(Token *Node);
+typedef struct Symbol{
+    SymbolKind kind;
+    Type *type;                 // typ symbolu, NULL = zatiaľ neodvodený
+    bool isMutable;             // true pre var, inak false
+    struct Symbol *nextAllocated; // zoznam všetkých symbolov, aby sa dali na konci uvoľniť
+}Symbol;
 
 /**
- * @brief funkcia na pridanie listu do stromu identifikátorov
- * @param root je miesto, kde sa má pridať
- * @param Node je štruktúra, ktorá má v sebe informáciu o tokene
- * @returns root
+ * @brief jeden rozsah platnosti (blok), rozsahy tvoria zásobník
  */
-IDs *addNodeID(IDs *root, Token *Node);
+typedef struct Scope{
+    Node *tree;             // AVL strom: meno -> symbol
+    struct Scope *parent;   // nadradený rozsah, NULL pre globálny
+}Scope;
 
 /**
- * @brief funkcia na hľadanie a kontrolovanie identikátora v strome
- * @param root je kontrolovaný list
- * @param Node je štruktúra, ktorá má v sebe informáciu o tokene
- * @returns pravdivostnú hodnotu
+ * @brief tabuľka symbolov
  */
-bool findAndControlNodeID(IDs *root, Token *Node);
+typedef struct Symtable{
+    Scope *top;             // aktuálny (najvnútornejší) rozsah
+    Symbol *allSymbols;     // všetky vytvorené symboly
+}Symtable;
 
 /**
- * @brief funkcia na mazanie stromu identifikátorov
- * @param root je list, ktorý odstraňujem
- * @returns ..
+ * @brief funkcia na inicializáciu prázdnej tabuľky (bez rozsahov)
+ * @param table je inicializovaná tabuľka
  */
-void clearTreeID(IDs *root);
+void symtableInit(Symtable *table);
+
+/**
+ * @brief funkcia na uvoľnenie všetkých rozsahov aj symbolov
+ * @param table je uvoľňovaná tabuľka
+ */
+void symtableFree(Symtable *table);
+
+/**
+ * @brief funkcia na vnorenie do nového rozsahu (prvý vytvorený je globálny)
+ * @param table je tabuľka symbolov
+ * @param error je pointer, cez ktorý si vrátim chybové hlásenie (ERR_INTERNAL)
+ */
+void pushScope(Symtable *table, ErrorCode *error);
+
+/**
+ * @brief funkcia na opustenie aktuálneho rozsahu
+ * @param table je tabuľka symbolov
+ * Symboly z rozsahu sa neuvoľnia, môže na ne ukazovať AST (uvoľní ich symtableFree).
+ */
+void popScope(Symtable *table);
+
+/**
+ * @brief funkcia na definovanie mena v aktuálnom rozsahu
+ * @param table je tabuľka symbolov
+ * @param name je definované meno
+ * @param kind je druh symbolu
+ * @param type je typ symbolu (môže byť NULL)
+ * @param isMutable je true pre var
+ * @param error je pointer, cez ktorý si vrátim chybové hlásenie
+ *        (ERR_REDEF ak meno v aktuálnom rozsahu už je, ERR_INTERNAL pri chybe alokácie)
+ * @returns nový symbol, pri chybe NULL
+ */
+Symbol *defineSymbol(Symtable *table, const char *name, SymbolKind kind, Type *type,
+                     bool isMutable, ErrorCode *error);
+
+/**
+ * @brief funkcia na hľadanie mena od aktuálneho rozsahu po globálny
+ * @param table je tabuľka symbolov
+ * @param name je hľadané meno
+ * @returns najbližší symbol s daným menom, alebo NULL ak meno neexistuje
+ */
+Symbol *lookupSymbol(Symtable *table, const char *name);
