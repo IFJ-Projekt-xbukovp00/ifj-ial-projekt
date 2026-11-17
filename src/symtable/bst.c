@@ -36,8 +36,10 @@
 
 /**
  * @brief výška podstromu (prázdny = 0)
+ * @param node je uzol, ktorého výšku potrebujem
+ * @returns výška uzla
  */
-static int height(Node *node){
+int height(Node *node){
     if (node == NULL){
         return 0;
     }
@@ -46,8 +48,10 @@ static int height(Node *node){
 
 /**
  * @brief prepočíta výšku uzla z výšok jeho detí
+ * @param node je uzol, ktorého výšku aktualizujem
+ * @returns ..
  */
-static void updateHeight(Node *node){
+void updateHeight(Node *node){
     int leftHeight = height(node->left);
     int rightHeight = height(node->right);
     if (leftHeight > rightHeight){
@@ -60,9 +64,10 @@ static void updateHeight(Node *node){
 
 /**
  * @brief pravá rotácia okolo root
+ * @param root je koreň, cez ktorý robím rotáciu
  * @returns nový koreň podstromu
  */
-static Node *rotateRight(Node *root){
+Node *rotateRight(Node *root){
     Node *newRoot = root->left;
     root->left = newRoot->right;
     newRoot->right = root;
@@ -73,9 +78,10 @@ static Node *rotateRight(Node *root){
 
 /**
  * @brief ľavá rotácia okolo root
+ * @param root je koreň, cez ktorý robím rotáciu
  * @returns nový koreň podstromu
  */
-static Node *rotateLeft(Node *root){
+Node *rotateLeft(Node *root){
     Node *newRoot = root->right;
     root->right = newRoot->left;
     newRoot->left = root;
@@ -86,9 +92,10 @@ static Node *rotateLeft(Node *root){
 
 /**
  * @brief obnoví vyváženie uzla po vložení (prípady LL, LR, RR, RL)
+ * @param root je koreň, ktorý balansujem
  * @returns nový koreň podstromu
  */
-static Node *balance(Node *root){
+Node *balance(Node *root){
     updateHeight(root);
     int balanceFactor = height(root->left) - height(root->right);
     if (balanceFactor > 1){
@@ -104,6 +111,33 @@ static Node *balance(Node *root){
         return rotateLeft(root);
     }
     return root;
+}
+/**
+ * @brief funkcia na alokovanie uzla AVL stromu
+ * @param name je hodnota 
+ * @param symbol je symbol 
+ * @param error je pointer, cez ktorý si vrátim chybu (ERR_INTERNAL 
+ *              ak zlyhá alokácia)
+ * @returns nový uzol
+ */
+Node *alocNode(const char *name, struct Symbol *symbol, ErrorCode *error){
+    Node *node = malloc(sizeof(Node));
+    if (node == NULL){
+        *error = ERR_INTERNAL;
+        return NULL;
+    }
+    node->name = malloc(strlen(name)+1);
+    if (node->name == NULL){
+        free(node);
+        *error = ERR_INTERNAL;
+        return NULL;
+    }
+    strcpy(node->name, name);
+    node->symbol = symbol;
+    node->height = 1;
+    node->left = NULL;
+    node->right = NULL;
+    return node;
 }
 
 /**

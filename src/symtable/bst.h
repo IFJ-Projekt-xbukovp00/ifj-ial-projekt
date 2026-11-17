@@ -41,6 +41,12 @@ typedef struct Node{
     struct Node *right;
 }Node;
 
+int height(Node *node);
+void upadateHeight(Node *node);
+Node *rotateRight(Node *root);
+Node *rotateLeft(Node *root);
+Node *balance(Node *root);
+Node *alocNode(const char *name, struct Symbol *symbol, ErrorCode *error);
 Node *insertNode(Node *root, const char *name, struct Symbol *symbol, ErrorCode *error);
 Node *findNode(Node *root, const char *name, ErrorCode *error);
 void destroyTree(Node *root);
