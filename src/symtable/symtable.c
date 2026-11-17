@@ -93,6 +93,8 @@ Symbol *defineSymbol(Symtable *table, const char *name, SymbolKind kind, Type *t
     symbol->kind = kind;
     symbol->type = type;
     symbol->isMutable = isMutable;
+    symbol->definition = NULL;
+    symbol->checkState = FUNC_NOT_STARTED;
 
     ErrorCode insertError = ERR_OK;
 

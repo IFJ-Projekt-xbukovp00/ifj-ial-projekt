@@ -29,6 +29,7 @@
 
 #pragma once
 
+#include "ast.h"
 #include "bst.h"
 #include "types.h"
 
@@ -48,12 +49,23 @@ typedef enum{
 }SymbolKind;
 
 /**
+ * @brief stav kontroly tela funkcie
+ */
+typedef enum{
+    FUNC_NOT_STARTED,   // ešte nekontrolovaná
+    FUNC_IN_PROGRESS,   // práve sa kontroluje (rekurzia)
+    FUNC_DONE           // hotová
+}FunctionCheckState;
+
+/**
  * @brief informácie o jednom mene v programe
  */
 typedef struct Symbol{
     SymbolKind kind;
     Type *type;                 // typ symbolu, NULL = zatiaľ neodvodený
     bool isMutable;             // true pre var, inak false
+    ASTNode *definition;        // uzol definície funkcie, inak NULL
+    FunctionCheckState checkState; // stav kontroly tela
     struct Symbol *nextAllocated; // zoznam všetkých symbolov, aby sa dali na konci uvoľniť
 }Symbol;
 

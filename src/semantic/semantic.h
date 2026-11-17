@@ -44,3 +44,28 @@
  *        (pred volaním musí byť ERR_OK, pri úspechu sa nemení)
  */
 void addBuiltins(Symtable *table, ErrorCode *error);
+
+/**
+ * @brief funkcia na vloženie funkcie do tabuľky a kontrolu parametrov a @main
+ * @param table je tabuľka symbolov
+ * @param function je definícia funkcie
+ * @param mainCount je počet doteraz nájdených @main
+ * @param error je pointer, cez ktorý si vrátim chybové hlásenie (4, 5, 6)
+ */
+void collectFunction(Symtable *table, DefFuncNode *function, int *mainCount, ErrorCode *error);
+
+/**
+ * @brief funkcia na prvý prechod, pozbiera globálne definície (zatiaľ len funkcie)
+ * @param table je tabuľka symbolov
+ * @param program je koreň AST
+ * @param error je pointer, cez ktorý si vrátim chybové hlásenie (3 ak chýba @main)
+ */
+void collectGlobalDefinitions(Symtable *table, ProgramNode *program, ErrorCode *error);
+
+/**
+ * @brief funkcia na sémantickú analýzu programu
+ * @param program je koreň AST
+ * @param table je prázdna tabuľka symbolov (init aj free robí volajúci)
+ * @param error je pointer, cez ktorý si vrátim prvú chybu
+ */
+void semanticAnalyze(ASTNode *program, Symtable *table, ErrorCode *error);

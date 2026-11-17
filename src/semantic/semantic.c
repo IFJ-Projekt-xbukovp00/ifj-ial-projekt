@@ -97,3 +97,118 @@ void addBuiltins(Symtable *table, ErrorCode *error){
     addBuiltin(table, error, "List.range", type_create_list(intType), 3, intType, intType,
                intType);
 }
+
+void collectFunction(Symtable *table, DefFuncNode *function, int *mainCount, ErrorCode *error){
+    if (*error != ERR_OK){
+        return;
+    }
+
+    // parametre zo všetkých zoznamov dáme za sebou
+    TypeList paramTypes = {NULL, 0, 0};
+
+    for (size_t listIndex = 0; listIndex < function->paramListCount; listIndex++){
+        ParamList *paramList = &function->paramList[listIndex];
+
+        for (size_t paramIndex = 0; paramIndex < paramList->params_count; paramIndex++){
+            type_list_append(&paramTypes, paramList->params[paramIndex].type);
+        }
+    }
+
+    Type *functionType = type_create_function(paramTypes, function->returnType);
+    Symbol *functionSymbol = defineSymbol(table, function->name, SYM_FUNCTION, functionType,
+                                          false, error);
+    if (functionSymbol == NULL){
+        return;
+    }
+
+    functionSymbol->definition = (ASTNode *)function;
+    function->symbol = functionSymbol;
+
+    // rovnaké meno parametra aj v inom zozname je chyba 4
+    pushScope(table, error);
+    if (*error != ERR_OK){
+        return;
+    }
+
+    bool hasParameter = false;
+
+    for (size_t listIndex = 0; listIndex < function->paramListCount; listIndex++){
+        ParamList *paramList = &function->paramList[listIndex];
+
+        for (size_t paramIndex = 0; paramIndex < paramList->params_count; paramIndex++){
+            Param *param = &paramList->params[paramIndex];
+            hasParameter = true;
+
+            if (defineSymbol(table, param->name, SYM_PARAMETER, param->type, false, error) == NULL){
+                popScope(table);
+                return;
+            }
+        }
+    }
+
+    popScope(table);
+
+    if (!function->isMain){
+        return;
+    }
+
+    (*mainCount)++;
+
+    if (*mainCount > 1){
+        *error = ERR_REDEF;
+        return;
+    }
+
+    if (hasParameter){
+        *error = ERR_PARAMS;
+        return;
+    }
+
+    // neuvedený typ a alias skontrolujeme až neskôr
+    if (function->returnType != NULL && function->returnType->kind != TY_UNIT
+        && function->returnType->kind != TY_NAMED){
+        *error = ERR_TYPE;
+    }
+}
+
+void collectGlobalDefinitions(Symtable *table, ProgramNode *program, ErrorCode *error){
+    int mainCount = 0;
+
+    for (size_t itemIndex = 0; itemIndex < program->itemsCount; itemIndex++){
+        if (*error != ERR_OK){
+            return;
+        }
+
+        ASTNode *item = program->items[itemIndex];
+
+        if (item->kind == AST_FUNCTION_DEF){
+            collectFunction(table, (DefFuncNode *)item, &mainCount, error);
+        }
+    }
+
+    if (*error == ERR_OK && mainCount == 0){
+        *error = ERR_UNDEF;
+    }
+}
+
+void semanticAnalyze(ASTNode *program, Symtable *table, ErrorCode *error){
+    if (program == NULL || program->kind != AST_PROGRAM){
+        *error = ERR_INTERNAL;
+        return;
+    }
+
+    // vstavané funkcie majú vlastný rozsah, aby sa dali prekryť
+    pushScope(table, error);
+    addBuiltins(table, error);
+
+    // globálny rozsah
+    if (*error == ERR_OK){
+        pushScope(table, error);
+    }
+
+    if (*error != ERR_OK){
+        return;
+    }
+
+    collectGlobalDefinitions(table, (ProgramNode *)program, error);
+}
