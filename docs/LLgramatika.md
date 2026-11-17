@@ -66,6 +66,31 @@ Pokryť:
 ```
 1.  <program> → <prolog> <top_lvl_list> TOK_EOF
 2.  <prolog> → TOK_KW_IMPORT TOK_IDENTIFIER TOK_DOT TOK_MULTIPLY TOK_EOL
+
+3.  <top_lvl_list> → <top_lvl_def> <top_lvl_list>
+4.  <top_lvl_list> → ε
+
+5.  <top_lvl_def> → TOK_AT_MAIN <main_sepr> <func_def>
+6.  <top_lvl_def> → <func_def>
+7.  <top_lvl_def> → <type_alias>
+8.  <top_lvl_def> → <case_class>
+9.  <top_lvl_def> → <extens_def>
+
+10. <main_sepr> → TOK_EOL
+11. <main_sepr> → ε
+
+12. <type_alias> → TOK_KW_TYPE TOK_IDENTIFIER TOK_ASSIGN <type> TOK_EOL
+
+13. <case_class> → TOK_KW_CASE TOK_KW_CLASS TOK_IDENTIFIER <case_parms_opti> TOK_EOL
+14. <case_parms_opti> → TOK_LPAREN <param_list_opt> TOK_RPAREN
+15. <case_parms_opti> → ε
+
+16. <extens_def> → TOK_KW_EXTENSION TOK_LPAREN <param> TOK_RPAREN <ext_body>
+17. <ext_body> → TOK_EOL TOK_INDENT <ext_method_list> TOK_DEDENT
+18. <ext_body> → <func_def>
+19. <ext_method_list> → <func_def> <ext_method_tail>
+20. <ext_method_tail> → <func_def> <ext_method_tail>
+21. <ext_method_tail> → ε
 ```
 
 ### 3.2 Definícia funkcie
