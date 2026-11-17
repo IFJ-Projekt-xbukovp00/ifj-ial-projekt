@@ -115,7 +115,23 @@ Pokryť:
 - `List[T]` (LISTS, §5.8)
 
 ```
-TODO
+36. <type> → <prim_type> <union_tail>
+37. <union_tail> → TOK_PIPE <prim_type> <union_tail>
+38. <union_tail> → ε
+
+39. <prim_type> → TOK_KW_INT
+40. <prim_type> → TOK_KW_DOUBLE
+41. <prim_type> → TOK_KW_STRING
+42. <prim_type> → TOK_KW_UNIT
+43. <prim_type> → TOK_KW_BOOLEAN
+44. <prim_type> → TOK_IDENTIFIER
+45. <prim_type> → TOK_KW_LIST TOK_LBRACKET <type> TOK_RBRACKET
+46. <type> → TOK_LPAREN <type_list_opt> TOK_RPAREN TOK_ARROW <type>
+
+47. <type_list_opt> → <type> <type_list_tail>
+48. <type_list_opt> → ε
+49. <type_list_tail> → TOK_COMMA <type> <type_list_tail>
+50. <type_list_tail> → ε
 ```
 
 ### 3.4 Blok a oddeľovače príkazov
