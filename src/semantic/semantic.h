@@ -364,3 +364,50 @@ Type *checkBinary(Symtable *table, BodyContext *context, BinaryNode *binary, Err
  * @returns typ výsledku, pri chybe NULL
  */
 Type *checkUnary(Symtable *table, BodyContext *context, UnaryNode *unary, ErrorCode *error);
+
+/**
+ * @brief funkcia na kontrolu vetvy podmienky alebo tela cyklu vo vlastnom rozsahu
+ * @param table je tabuľka symbolov
+ * @param context je kontext kontrolovanej funkcie
+ * @param branch je pointer na miesto v AST, kde je vetva
+ * @param isValueUsed je true, ak sa výsledok vetvy dalej použije
+ * @param error je pointer, cez ktorý si vrátim chybové hlásenie
+ * @returns typ vetvy (NULL, ak konci príkazom return)
+ */
+Type *checkBranch(Symtable *table, BodyContext *context, ASTNode **branch, bool isValueUsed,
+                  ErrorCode *error);
+
+/**
+ * @brief funkcia na kontrolu, že podmienka je typu Boolean
+ * @param table je tabuľka symbolov
+ * @param context je kontext kontrolovanej funkcie
+ * @param condition je pointer na miesto v AST, kde je podmienka
+ * @param error je pointer, cez ktorý si vrátim chybové hlásenie (6)
+ */
+void checkCondition(Symtable *table, BodyContext *context, ASTNode **condition,
+                    ErrorCode *error);
+
+/**
+ * @brief funkcia na kontrolu podmienky if (prikaz aj vyraz)
+ *
+ * Ak sa hodnota použije, vetvy musia mať rovnaký typ (príp. Int a Double),
+ * chýbajúce else sa berie ako (). Ak sa nepouzije, typy vetiev sa neporovnávajú.
+ * @param table je tabuľka symbolov
+ * @param context je kontext kontrolovanej funkcie
+ * @param ifNode je uzol podmienky
+ * @param isValueUsed je true, ak sa výsledok podmienky dalej použije
+ * @param error je pointer, cez ktorý si vrátim chybové hlásenie (6)
+ * @returns typ výsledku (NULL, ak obe vetvy konci príkazom return)
+ */
+Type *checkIf(Symtable *table, BodyContext *context, IfNode *ifNode, bool isValueUsed,
+              ErrorCode *error);
+
+/**
+ * @brief funkcia na kontrolu cyklu while
+ * @param table je tabuľka symbolov
+ * @param context je kontext kontrolovanej funkcie
+ * @param whileNode je uzol cyklu
+ * @param error je pointer, cez ktorý si vrátim chybové hlásenie (6)
+ * @returns Unit, pri chybe NULL
+ */
+Type *checkWhile(Symtable *table, BodyContext *context, WhileNode *whileNode, ErrorCode *error);

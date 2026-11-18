@@ -755,6 +755,12 @@ Type *checkNode(Symtable *table, BodyContext *context, ASTNode **node, bool isVa
     else if (current->kind == AST_UNARY){
         nodeType = checkUnary(table, context, (UnaryNode *)current, error);
     }
+    else if (current->kind == AST_IF){
+        nodeType = checkIf(table, context, (IfNode *)current, isValueUsed, error);
+    }
+    else if (current->kind == AST_WHILE){
+        nodeType = checkWhile(table, context, (WhileNode *)current, error);
+    }
     else if (current->kind == AST_EXPR_STATEMENT){
         nodeType = checkNode(table, context, &((LonelyExprNode *)current)->expr, isValueUsed,
                              error);
@@ -949,4 +955,99 @@ Type *checkUnary(Symtable *table, BodyContext *context, UnaryNode *unary, ErrorC
 
     *error = ERR_TYPE;
     return NULL;
+}
+
+Type *checkBranch(Symtable *table, BodyContext *context, ASTNode **branch, bool isValueUsed,
+                  ErrorCode *error){
+    // aj vetva bez bloku je samostatny rozsah platnosti
+    pushScope(table, error);
+    if (*error != ERR_OK){
+        return NULL;
+    }
+
+    Type *branchType = checkNode(table, context, branch, isValueUsed, error);
+
+    popScope(table);
+    return branchType;
+}
+
+void checkCondition(Symtable *table, BodyContext *context, ASTNode **condition,
+                    ErrorCode *error){
+    Type *conditionType = getRealType(checkNode(table, context, condition, true, error));
+
+    if (*error != ERR_OK){
+        return;
+    }
+
+    if (conditionType == NULL || conditionType->kind != TY_BOOL){
+        *error = ERR_TYPE;
+    }
+}
+
+Type *checkIf(Symtable *table, BodyContext *context, IfNode *ifNode, bool isValueUsed,
+              ErrorCode *error){
+    checkCondition(table, context, &ifNode->condition, error);
+
+    Type *thenType = checkBranch(table, context, &ifNode->thenBranch, isValueUsed, error);
+    Type *elseType = type_get_basic(TY_UNIT);
+
+    // chýbajúce else sa správa ako vetva s ()
+    if (ifNode->elseBranch != NULL){
+        elseType = checkBranch(table, context, &ifNode->elseBranch, isValueUsed, error);
+    }
+
+    if (*error != ERR_OK){
+        return NULL;
+    }
+
+    if (!isValueUsed){
+        if (thenType == NULL && elseType == NULL){
+            return NULL;
+        }
+        return type_get_basic(TY_UNIT);
+    }
+
+    // vetva, ktora konci returnom, typ neurcuje
+    if (thenType == NULL){
+        return elseType;
+    }
+    if (elseType == NULL){
+        return thenType;
+    }
+
+    if (type_equals(thenType, elseType)){
+        return thenType;
+    }
+
+    Type *realThenType = getRealType(thenType);
+    Type *realElseType = getRealType(elseType);
+
+    if (isNumericType(realThenType) && isNumericType(realElseType)){
+        // jedna vetva je Int, druha Double, Int vetva sa prevedie
+        Type *doubleType = type_get_basic(TY_DOUBLE);
+
+        if (realThenType->kind == TY_INT){
+            acceptValue(doubleType, &ifNode->thenBranch, error);
+        }
+        else{
+            acceptValue(doubleType, &ifNode->elseBranch, error);
+        }
+        return doubleType;
+    }
+
+    *error = ERR_TYPE;
+    return NULL;
+}
+
+Type *checkWhile(Symtable *table, BodyContext *context, WhileNode *whileNode, ErrorCode *error){
+    checkCondition(table, context, &whileNode->condition, error);
+
+    // hodnoty z tela cyklu sa neprenasaju dalej
+    checkBranch(table, context, &whileNode->body, false, error);
+
+    if (*error != ERR_OK){
+        return NULL;
+    }
+
+    return type_get_basic(TY_UNIT);
 }

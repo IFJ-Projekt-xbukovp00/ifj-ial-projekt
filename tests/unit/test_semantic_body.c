@@ -1,6 +1,7 @@
 /**
  * @file test_semantic_body.c
- * @brief Unit testy kontroly tiel funkcií v sémantike (premenné, rozsahy, priradenie, výrazy)
+ * @brief Unit testy kontroly tiel funkcií v sémantike (premenné, rozsahy, priradenie, výrazy,
+ *        podmienky, cykly)
  *
  * Použitie AI: tento súbor vygenerovala AI (Claude Opus 5.5).
  * Prompt: "Vyrob testy ako pre zvyšok semntickeho analyzatora, tentokrát ale na ich telá,
@@ -194,6 +195,23 @@ ASTNode *newUnary(TokenType operator, ASTNode *right) {
     return (ASTNode *)unary;
 }
 
+ASTNode *newIf(ASTNode *condition, ASTNode *thenBranch, ASTNode *elseBranch) {
+    IfNode *ifNode = calloc(1, sizeof(IfNode));
+    ifNode->node.kind = AST_IF;
+    ifNode->condition = condition;
+    ifNode->thenBranch = thenBranch;
+    ifNode->elseBranch = elseBranch;
+    return (ASTNode *)ifNode;
+}
+
+ASTNode *newWhile(ASTNode *condition, ASTNode *body) {
+    WhileNode *whileNode = calloc(1, sizeof(WhileNode));
+    whileNode->node.kind = AST_WHILE;
+    whileNode->condition = condition;
+    whileNode->body = body;
+    return (ASTNode *)whileNode;
+}
+
 /* uvoľnenie AST (aj ConvertNode, ktoré vložila sémantika) */
 
 void freeNode(ASTNode *node) {
@@ -220,6 +238,13 @@ void freeNode(ASTNode *node) {
         freeNode(((BinaryNode *)node)->right);
     } else if (node->kind == AST_UNARY) {
         freeNode(((UnaryNode *)node)->right);
+    } else if (node->kind == AST_IF) {
+        freeNode(((IfNode *)node)->condition);
+        freeNode(((IfNode *)node)->thenBranch);
+        freeNode(((IfNode *)node)->elseBranch);
+    } else if (node->kind == AST_WHILE) {
+        freeNode(((WhileNode *)node)->condition);
+        freeNode(((WhileNode *)node)->body);
     }
 
     free(node);
@@ -753,6 +778,173 @@ void testAssignDoubleExpressionToInt(void) {
     CHECK(analyzeMainBody(body) == ERR_TYPE);
 }
 
+/* testy: podmienky a cykly */
+
+/* blok s jediným výrazom */
+ASTNode *blockOf(ASTNode *expr) {
+    BlockNode *block = newBlock();
+    addCommand(block, newExprStatement(expr));
+    return (ASTNode *)block;
+}
+
+ASTNode *lessThan(long long left, long long right) {
+    return newBinary(TOK_LESS, newIntLiteral(left), newIntLiteral(right));
+}
+
+void testIfConditionInt(void) {
+    /* if 1 then 1 else 2 */
+    BlockNode *body = newBlock();
+    addCommand(body, newExprStatement(newIf(newIntLiteral(1), blockOf(newIntLiteral(1)),
+                                            blockOf(newIntLiteral(2)))));
+    CHECK(analyzeMainBody(body) == ERR_TYPE);
+}
+
+void testWhileConditionString(void) {
+    /* while "a" do 1 */
+    BlockNode *body = newBlock();
+    addCommand(body, newWhile(newStringLiteral("a"), blockOf(newIntLiteral(1))));
+    CHECK(analyzeMainBody(body) == ERR_TYPE);
+}
+
+void testIfConditionUndefined(void) {
+    /* if y < 1 then 1 else 2 */
+    BlockNode *body = newBlock();
+    addCommand(body, newExprStatement(
+                         newIf(newBinary(TOK_LESS, newId("y"), newIntLiteral(1)),
+                               blockOf(newIntLiteral(1)), blockOf(newIntLiteral(2)))));
+    CHECK(analyzeMainBody(body) == ERR_UNDEF);
+}
+
+void testIfBranchesMismatch(void) {
+    /* val x = if 1 < 2 then 1 else "a" (err6_if_expression_branches) */
+    CHECK(analyzeInitExpression(newIf(lessThan(1, 2), newIntLiteral(1),
+                                      newStringLiteral("a"))) == ERR_TYPE);
+}
+
+void testIfBranchScope(void) {
+    /* if 1 < 2 then { val y = 1 ; y } else () ; y (err3_out_of_scope) */
+    BlockNode *thenBlock = newBlock();
+    addCommand(thenBlock, newVarDef("y", false, NULL, newIntLiteral(1)));
+    addCommand(thenBlock, newExprStatement(newId("y")));
+
+    BlockNode *body = newBlock();
+    addCommand(body, newExprStatement(newIf(lessThan(1, 2), (ASTNode *)thenBlock,
+                                            blockOf(newUnitLiteral()))));
+    addCommand(body, newExprStatement(newId("y")));
+    CHECK(analyzeMainBody(body) == ERR_UNDEF);
+}
+
+void testSingleStatementBranchScope(void) {
+    /* if 1 < 2 then val y = 1 else () ; y -> aj vetva bez bloku má vlastný rozsah */
+    BlockNode *body = newBlock();
+    addCommand(body, newExprStatement(newIf(lessThan(1, 2),
+                                            newVarDef("y", false, NULL, newIntLiteral(1)),
+                                            newUnitLiteral())));
+    addCommand(body, newExprStatement(newId("y")));
+    CHECK(analyzeMainBody(body) == ERR_UNDEF);
+}
+
+void testWhileBodyScope(void) {
+    /* while 1 < 2 do { var i = 1 } ; i */
+    BlockNode *loopBody = newBlock();
+    addCommand(loopBody, newVarDef("i", true, NULL, newIntLiteral(1)));
+
+    BlockNode *body = newBlock();
+    addCommand(body, newWhile(lessThan(1, 2), (ASTNode *)loopBody));
+    addCommand(body, newExprStatement(newId("i")));
+    CHECK(analyzeMainBody(body) == ERR_UNDEF);
+}
+
+void testIfValueSameType(void) {
+    /* val x = if 1 < 2 then "a" else "b" je String */
+    ProgramNode *program;
+    ASTNode *expr = newIf(lessThan(1, 2), newStringLiteral("a"), newStringLiteral("b"));
+    CHECK(expressionType(&program, &expr) == type_get_basic(TY_STRING));
+    finishAnalyze(program);
+}
+
+void testIfValueIntDouble(void) {
+    /* val x = if 1 < 2 then 1 else 2.5 je Double, then vetva sa prevedie */
+    ProgramNode *program;
+    ASTNode *expr = newIf(lessThan(1, 2), newIntLiteral(1), newDoubleLiteral(2.5));
+    CHECK(expressionType(&program, &expr) == type_get_basic(TY_DOUBLE));
+    CHECK(((IfNode *)expr)->thenBranch->kind == AST_CONVERT);
+    CHECK(((IfNode *)expr)->elseBranch->kind == AST_LIT);
+    finishAnalyze(program);
+}
+
+void testIfValueWithoutElse(void) {
+    /* val x = if 1 < 2 then 1 -> chýbajúce else je (), Int a Unit sa nezhodujú */
+    CHECK(analyzeInitExpression(newIf(lessThan(1, 2), newIntLiteral(1), NULL)) == ERR_TYPE);
+}
+
+void testIfUnitValueWithoutElse(void) {
+    /* val x = if 1 < 2 then () -> obe vetvy sú Unit */
+    ProgramNode *program;
+    ASTNode *expr = newIf(lessThan(1, 2), newUnitLiteral(), NULL);
+    CHECK(expressionType(&program, &expr) == type_get_basic(TY_UNIT));
+    finishAnalyze(program);
+}
+
+void testElseIfChain(void) {
+    /* val x = if 1 < 2 then 1 else if 2 < 3 then 2 else 3 je Int (BOOLTHEN) */
+    ProgramNode *program;
+    ASTNode *expr = newIf(lessThan(1, 2), newIntLiteral(1),
+                          newIf(lessThan(2, 3), newIntLiteral(2), newIntLiteral(3)));
+    CHECK(expressionType(&program, &expr) == type_get_basic(TY_INT));
+    finishAnalyze(program);
+}
+
+void testElseIfChainMismatch(void) {
+    /* val x = if 1 < 2 then 1 else if 2 < 3 then "a" else 3 */
+    CHECK(analyzeInitExpression(newIf(lessThan(1, 2), newIntLiteral(1),
+                                      newIf(lessThan(2, 3), newStringLiteral("a"),
+                                            newIntLiteral(3)))) == ERR_TYPE);
+}
+
+void testIfStatementMixedBranches(void) {
+    /* if 1 < 2 then 1 else "a" ; () -> hodnota sa nepoužije, typy vetiev nevadia */
+    BlockNode *body = newBlock();
+    addCommand(body, newExprStatement(newIf(lessThan(1, 2), blockOf(newIntLiteral(1)),
+                                            blockOf(newStringLiteral("a")))));
+    addCommand(body, newExprStatement(newUnitLiteral()));
+    CHECK(analyzeMainBody(body) == ERR_OK);
+}
+
+void testBooleanVariableCondition(void) {
+    /* val b = true ; if b then () (BOOLTHEN: podmienka je ľubovoľný Boolean, bez else) */
+    BlockNode *body = newBlock();
+    addCommand(body, newVarDef("b", false, NULL, newBoolLiteral(true)));
+    addCommand(body, newExprStatement(newIf(newId("b"), blockOf(newUnitLiteral()), NULL)));
+    CHECK(analyzeMainBody(body) == ERR_OK);
+}
+
+void testWhileLoop(void) {
+    /* var i = 0 ; while i < 10 do i = i + 1 */
+    BlockNode *loopBody = newBlock();
+    addCommand(loopBody, newAssign("i", newBinary(TOK_PLUS, newId("i"), newIntLiteral(1))));
+
+    BlockNode *body = newBlock();
+    addCommand(body, newVarDef("i", true, NULL, newIntLiteral(0)));
+    ASTNode *loop = newWhile(newBinary(TOK_LESS, newId("i"), newIntLiteral(10)),
+                             (ASTNode *)loopBody);
+    addCommand(body, loop);
+
+    ProgramNode *program = newProgram();
+    addMain(program, (ASTNode *)body);
+    CHECK(runAnalyze(program) == ERR_OK);
+    CHECK(loop->type == type_get_basic(TY_UNIT));
+    finishAnalyze(program);
+}
+
+void testWhileValueIsUnit(void) {
+    /* val x = while 1 < 2 do "a" -> výsledok cyklu je Unit */
+    ProgramNode *program;
+    ASTNode *expr = newWhile(lessThan(1, 2), blockOf(newStringLiteral("a")));
+    CHECK(expressionType(&program, &expr) == type_get_basic(TY_UNIT));
+    finishAnalyze(program);
+}
+
 int main(void) {
     testUndefinedVariable();
     testUseBeforeDefinition();
@@ -801,6 +993,24 @@ int main(void) {
     testUnaryKeepsType();
     testExpressionWithVariables();
     testAssignDoubleExpressionToInt();
+
+    testIfConditionInt();
+    testWhileConditionString();
+    testIfConditionUndefined();
+    testIfBranchesMismatch();
+    testIfBranchScope();
+    testSingleStatementBranchScope();
+    testWhileBodyScope();
+    testIfValueSameType();
+    testIfValueIntDouble();
+    testIfValueWithoutElse();
+    testIfUnitValueWithoutElse();
+    testElseIfChain();
+    testElseIfChainMismatch();
+    testIfStatementMixedBranches();
+    testBooleanVariableCondition();
+    testWhileLoop();
+    testWhileValueIsUnit();
 
     type_free_all();
 
