@@ -1780,6 +1780,188 @@ void testMemberOnUndefined(void) {
     CHECK(analyzeInitExpression(newMember(newId("y"), "toString")) == ERR_UNDEF);
 }
 
+/* testy: rozširujúce metódy (EXTKW) */
+
+ExtensionNode *newExtension(ProgramNode *program, const char *receiverName, Type *receiverType) {
+    ExtensionNode *extension = calloc(1, sizeof(ExtensionNode));
+    extension->node.kind = AST_EXTENSION;
+    extension->receiver.name = (char *)receiverName;
+    extension->receiver.type = receiverType;
+    extension->receiver.line = 1;
+    addItem(program, (ASTNode *)extension);
+    return extension;
+}
+
+/* metóda bez zoznamu parametrov, zoznamy sa pridajú cez addParamList */
+DefFuncNode *addMethod(ExtensionNode *extension, const char *name, Type *returnType,
+                       ASTNode *body) {
+    DefFuncNode *method = calloc(1, sizeof(DefFuncNode));
+    method->node.kind = AST_FUNCTION_DEF;
+    method->name = (char *)name;
+    method->returnType = returnType;
+    method->body = body;
+    extension->methods =
+        realloc(extension->methods, (extension->methodsCount + 1) * sizeof(ASTNode *));
+    extension->methods[extension->methodsCount++] = (ASTNode *)method;
+    return method;
+}
+
+/*
+ * extension (value: Int)
+ *   def twice: Int = value * 2
+ *   def foo(): String = "foo" + value.toString
+ *   def plus(other: Int): Int = value + other
+ *   def add(a: Int)(b: Int): Int = value + a + b
+ * @main def main(): Unit = mainBody
+ */
+ProgramNode *programWithIntExtension(BlockNode *mainBody) {
+    ProgramNode *program = newProgram();
+    ExtensionNode *extension = newExtension(program, "value", type_get_basic(TY_INT));
+
+    addMethod(extension, "twice", type_get_basic(TY_INT),
+              newBinary(TOK_MULTIPLY, newId("value"), newIntLiteral(2)));
+
+    DefFuncNode *foo = addMethod(
+        extension, "foo", type_get_basic(TY_STRING),
+        newBinary(TOK_PLUS, newStringLiteral("foo"), newMember(newId("value"), "toString")));
+    addParamList(foo);
+
+    DefFuncNode *plus = addMethod(extension, "plus", type_get_basic(TY_INT),
+                                  newBinary(TOK_PLUS, newId("value"), newId("other")));
+    addParamList(plus);
+    addParam(plus, "other", type_get_basic(TY_INT));
+
+    DefFuncNode *add = addMethod(
+        extension, "add", type_get_basic(TY_INT),
+        newBinary(TOK_PLUS, newBinary(TOK_PLUS, newId("value"), newId("a")), newId("b")));
+    addParamList(add);
+    addParam(add, "a", type_get_basic(TY_INT));
+    addParamList(add);
+    addParam(add, "b", type_get_basic(TY_INT));
+
+    addMain(program, (ASTNode *)mainBody);
+    return program;
+}
+
+/* val x: Int = 6 ; val y = init */
+BlockNode *bodyWithInit(ASTNode *init) {
+    BlockNode *body = newBlock();
+    addCommand(body, newVarDef("x", false, type_get_basic(TY_INT), newIntLiteral(6)));
+    addCommand(body, newVarDef("y", false, NULL, init));
+    return body;
+}
+
+ErrorCode analyzeWithExtension(ASTNode *init) {
+    return analyze(programWithIntExtension(bodyWithInit(init)));
+}
+
+void testExtensionWithoutParens(void) {
+    /* val y = x.twice -> Int, MEM_EXT_METHOD */
+    ASTNode *member = newMember(newId("x"), "twice");
+    ProgramNode *program = programWithIntExtension(bodyWithInit(member));
+
+    CHECK(runAnalyze(program) == ERR_OK);
+    CHECK(member->type == type_get_basic(TY_INT));
+    CHECK(((MemberNode *)member)->memberKind == MEM_EXT_METHOD);
+    CHECK(((MemberNode *)member)->symbol != NULL);
+    CHECK(((MemberNode *)member)->symbol->kind == SYM_EXTENSION);
+    finishAnalyze(program);
+}
+
+void testExtensionEmptyList(void) {
+    /* val y = x.foo() -> String, CALL_EXT_METHOD */
+    ASTNode *member = newMember(newId("x"), "foo");
+    ASTNode *call = newCall(member);
+    ProgramNode *program = programWithIntExtension(bodyWithInit(call));
+
+    CHECK(runAnalyze(program) == ERR_OK);
+    CHECK(call->type == type_get_basic(TY_STRING));
+    CHECK(((CallNode *)call)->callKind == CALL_EXT_METHOD);
+    CHECK(((CallNode *)call)->symbol == ((MemberNode *)member)->symbol);
+    CHECK(((MemberNode *)member)->memberKind == MEM_CALLEE);
+    finishAnalyze(program);
+}
+
+void testExtensionWithArg(void) {
+    /* val y = x.plus(12) */
+    CHECK(analyzeWithExtension(addArg(newCall(newMember(newId("x"), "plus")),
+                                      newIntLiteral(12))) == ERR_OK);
+}
+
+void testExtensionOnLiteral(void) {
+    /* val y = 3.twice + 1 */
+    CHECK(analyzeWithExtension(newBinary(TOK_PLUS, newMember(newIntLiteral(3), "twice"),
+                                         newIntLiteral(1))) == ERR_OK);
+}
+
+void testExtensionParamLists(void) {
+    /* val y = x.add(1)(2) je OK, x.add(1) chýba zoznam -> 5 */
+    ASTNode *inner = addArg(newCall(newMember(newId("x"), "add")), newIntLiteral(1));
+    CHECK(analyzeWithExtension(addArg(newCall(inner), newIntLiteral(2))) == ERR_OK);
+    CHECK(analyzeWithExtension(addArg(newCall(newMember(newId("x"), "add")),
+                                      newIntLiteral(1))) == ERR_PARAMS);
+}
+
+void testExtensionWrongArgType(void) {
+    /* val y = x.plus("a") */
+    CHECK(analyzeWithExtension(addArg(newCall(newMember(newId("x"), "plus")),
+                                      newStringLiteral("a"))) == ERR_PARAMS);
+}
+
+void testExtensionCalledWithParens(void) {
+    /* val y = x.twice() -> bezparametrická metóda */
+    CHECK(analyzeWithExtension(newCall(newMember(newId("x"), "twice"))) == ERR_PARAMS);
+}
+
+void testExtensionWithoutCall(void) {
+    /* val y = x.foo -> metóda s prázdnym zoznamom parametrov */
+    CHECK(analyzeWithExtension(newMember(newId("x"), "foo")) == ERR_PARAMS);
+}
+
+void testExtensionOtherType(void) {
+    /* val y = "a".twice -> twice je len pre Int */
+    CHECK(analyzeWithExtension(newMember(newStringLiteral("a"), "twice")) == ERR_UNDEF);
+}
+
+void testExtensionUnknownMethodCall(void) {
+    /* val y = x.bar() */
+    CHECK(analyzeWithExtension(newCall(newMember(newId("x"), "bar"))) == ERR_UNDEF);
+}
+
+void testBuiltinMemberCalledWithParens(void) {
+    /* val y = "abc".length() */
+    CHECK(analyzeWithExtension(newCall(newMember(newStringLiteral("abc"), "length"))) ==
+          ERR_PARAMS);
+}
+
+void testExtensionRecursion(void) {
+    /* extension (v: Int) def loop = v.loop -> rekurzia bez návratového typu */
+    ProgramNode *program = newProgram();
+    ExtensionNode *extension = newExtension(program, "v", type_get_basic(TY_INT));
+    addMethod(extension, "loop", NULL, newMember(newId("v"), "loop"));
+    addMain(program, (ASTNode *)newBlock());
+    CHECK(analyze(program) == ERR_TYPE);
+}
+
+void testExtensionOnAlias(void) {
+    /* type Number = Int ; extension (n: Number) def inc: Int = n + 1 ; val y = 1.inc */
+    ProgramNode *program = newProgram();
+    TypeAliasNode *alias = calloc(1, sizeof(TypeAliasNode));
+    alias->node.kind = AST_TYPE_ALIAS;
+    alias->name = "Number";
+    alias->aliased = type_get_basic(TY_INT);
+    addItem(program, (ASTNode *)alias);
+
+    ExtensionNode *extension = newExtension(program, "n", type_create_named("Number"));
+    addMethod(extension, "inc", type_get_basic(TY_INT),
+              newBinary(TOK_PLUS, newId("n"), newIntLiteral(1)));
+
+    BlockNode *body = newBlock();
+    addCommand(body, newVarDef("y", false, NULL, newMember(newIntLiteral(1), "inc")));
+    addMain(program, (ASTNode *)body);
+    CHECK(analyze(program) == ERR_OK);
+}
+
 int main(void) {
     testUndefinedVariable();
     testUseBeforeDefinition();
@@ -1922,6 +2104,20 @@ int main(void) {
     testToIntOnString();
     testLengthOnInt();
     testMemberOnUndefined();
+
+    testExtensionWithoutParens();
+    testExtensionEmptyList();
+    testExtensionWithArg();
+    testExtensionOnLiteral();
+    testExtensionParamLists();
+    testExtensionWrongArgType();
+    testExtensionCalledWithParens();
+    testExtensionWithoutCall();
+    testExtensionOtherType();
+    testExtensionUnknownMethodCall();
+    testBuiltinMemberCalledWithParens();
+    testExtensionRecursion();
+    testExtensionOnAlias();
 
     type_free_all();
 

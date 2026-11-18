@@ -1238,26 +1238,22 @@ Type *checkCall(Symtable *table, BodyContext *context, CallNode *call, ErrorCode
         caller = ((CallNode *)caller)->caller;
     }
 
-    // volat sa da len meno funkcie
-    if (caller->kind != AST_ID){
-        *error = ERR_TYPE;
-        return NULL;
-    }
+    Symbol *callee = NULL;
 
-    IDNode *calleeId = (IDNode *)caller;
-    Symbol *callee = lookupSymbol(table, calleeId->name);
+    if (caller->kind == AST_ID){
+        callee = checkFunctionCallee(table, (IDNode *)caller, error);
+    }
+    else if (caller->kind == AST_MEMBER){
+        callee = checkMethodCallee(table, context, (MemberNode *)caller, error);
+    }
+    else{
+        // volať sa da len meno funkcie alebo metóda
+        *error = ERR_TYPE;
+    }
 
     if (callee == NULL){
-        *error = ERR_UNDEF;
         return NULL;
     }
-    if (callee->kind != SYM_FUNCTION && callee->kind != SYM_BUILTIN){
-        *error = ERR_TYPE;
-        return NULL;
-    }
-
-    calleeId->symbol = callee;
-    calleeId->node.type = callee->type;
 
     // zoznamy volani od najvnutornejsieho, ten patri k prvemu zoznamu parametrov
     CallNode **calls = malloc(listCount * sizeof(CallNode *));
@@ -1273,6 +1269,9 @@ Type *checkCall(Symtable *table, BodyContext *context, CallNode *call, ErrorCode
         current->callKind = CALL_FUNC;
         if (callee->kind == SYM_BUILTIN){
             current->callKind = CALL_BUILTIN;
+        }
+        if (callee->kind == SYM_EXTENSION){
+            current->callKind = CALL_EXT_METHOD;
         }
         if (listIndex > 1){
             current = (CallNode *)current->caller;
@@ -1438,12 +1437,100 @@ Type *checkMember(Symtable *table, BodyContext *context, MemberNode *member, Err
 
     Type *memberType = getBuiltinMemberType(objectType, member->name);
 
+    if (memberType != NULL){
+        member->memberKind = MEM_BUILTIN;
+        return memberType;
+    }
+
+    Symbol *method = findExtensionMethod(table, objectType, member->name, error);
+
     // neznámy clen je ako nedefinovaná funkcia
-    if (memberType == NULL){
-        *error = ERR_UNDEF;
+    if (method == NULL){
+        if (*error == ERR_OK){
+            *error = ERR_UNDEF;
+        }
         return NULL;
     }
 
-    member->memberKind = MEM_BUILTIN;
-    return memberType;
+    // bez zátvoriek sa da volat len metoda bez zoznamu parametrov
+    if (((DefFuncNode *)method->definition)->paramListCount != 0){
+        *error = ERR_PARAMS;
+        return NULL;
+    }
+
+    member->memberKind = MEM_EXT_METHOD;
+    member->symbol = method;
+    return getFunctionReturnType(table, context, method, error);
+}
+
+Symbol *findExtensionMethod(Symtable *table, Type *receiverType, const char *name,
+                            ErrorCode *error){
+    const char *typeName = getTypeKeyName(receiverType);
+    char *key = malloc(strlen(typeName) + strlen(name) + 2);
+
+    if (key == NULL){
+        *error = ERR_INTERNAL;
+        return NULL;
+    }
+
+    // rovnaký klúč ako pri vkladaní metody, "Typ.meno"
+    strcpy(key, typeName);
+    strcat(key, ".");
+    strcat(key, name);
+
+    Symbol *method = lookupSymbolInTree(table->extensionTree, key);
+    free(key);
+    return method;
+}
+
+Symbol *checkFunctionCallee(Symtable *table, IDNode *calleeId, ErrorCode *error){
+    Symbol *callee = lookupSymbol(table, calleeId->name);
+
+    if (callee == NULL){
+        *error = ERR_UNDEF;
+        return NULL;
+    }
+    if (callee->kind != SYM_FUNCTION && callee->kind != SYM_BUILTIN){
+        *error = ERR_TYPE;
+        return NULL;
+    }
+
+    calleeId->symbol = callee;
+    calleeId->node.type = callee->type;
+    return callee;
+}
+
+Symbol *checkMethodCallee(Symtable *table, BodyContext *context, MemberNode *member,
+                          ErrorCode *error){
+    Type *objectType = getRealType(checkNode(table, context, &member->object, true, error));
+
+    if (*error != ERR_OK){
+        return NULL;
+    }
+    if (objectType == NULL){
+        *error = ERR_TYPE;
+        return NULL;
+    }
+
+    Symbol *method = findExtensionMethod(table, objectType, member->name, error);
+
+    if (method == NULL){
+        if (*error != ERR_OK){
+            return NULL;
+        }
+
+        // vstavany člen sa vola bez zatvoriek, neznamy člen je nedefinovaný
+        if (getBuiltinMemberType(objectType, member->name) != NULL){
+            *error = ERR_PARAMS;
+        }
+        else{
+            *error = ERR_UNDEF;
+        }
+        return NULL;
+    }
+
+    member->memberKind = MEM_CALLEE;
+    member->symbol = method;
+    member->node.type = method->type;
+    return method;
 }

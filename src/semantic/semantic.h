@@ -553,3 +553,34 @@ Type *getBuiltinMemberType(Type *objectType, const char *name);
  * @returns typ clena, pri chybe NULL
  */
 Type *checkMember(Symtable *table, BodyContext *context, MemberNode *member, ErrorCode *error);
+
+/**
+ * @brief funkcia na nájdenie rozširujúcej metódy pre typ príjemcu
+ * @param table je tabuľka symbolov
+ * @param receiverType je typ hodnoty pred bodkou
+ * @param name je meno metody
+ * @param error je pointer, cez ktorý si vrátim chybové hlásenie (ERR_INTERNAL)
+ * @returns symbol metódy, NULL ak pre dany typ taka metoda nie je
+ */
+Symbol *findExtensionMethod(Symtable *table, Type *receiverType, const char *name,
+                            ErrorCode *error);
+
+/**
+ * @brief funkcia na nájdenie volanej funkcie podľa mena
+ * @param table je tabuľka symbolov
+ * @param calleeId je identifikátor pred zátvorkou
+ * @param error je pointer, cez ktory si vrátim chybové hlasenie (3, 6)
+ * @returns symbol funkcie alebo vstavanej funkcie, pri chybe NULL
+ */
+Symbol *checkFunctionCallee(Symtable *table, IDNode *calleeId, ErrorCode *error);
+
+/**
+ * @brief funkcia na nájdenie volanej rozširujúcej metódy (x.foo())
+ * @param table je tabuľka symbolov
+ * @param context je kontext kontrolovanej funkcie
+ * @param member je pristup cez bodku pred zátvorkou
+ * @param error je pointer, cez ktorý si vrátim chybove hlásenie (3, 5, 6)
+ * @returns symbol metódy, pri chybe NULL
+ */
+Symbol *checkMethodCallee(Symtable *table, BodyContext *context, MemberNode *member,
+                          ErrorCode *error);
