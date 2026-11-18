@@ -328,7 +328,27 @@ Zapíšte, v ktorých miestach gramatiky sa odovzdáva riadenie na `<expr>`, pod
 parser pozná koniec výrazu a čo sa stane s volaním funkcie, členom alebo lambdou vo vnútri výrazu.
 
 ```
-TODO
+1.Miesta odovzdania riadenia na `<expr>`:
+    LL parser odovzdáva riadenie precedenčnej analýze (`parse_expr`/`expr.c`) v bodoch:
+    - telo jednoriadkovej funkcie za `=` (pravidlo 35),
+    - inicializácia v `val` / `var` za `=` (pravidlo 74) a pravá strana priradenia za `=`, `+=`, `-=`, `*=`, `/=` (pravidlo 67),
+    - návratova hodnota daná za `return` (pravidlo 80),
+    - podmienky nahcadz sa v `if <expr> then` (pravidlo 82), `while <expr> do` (pravidlo 87) a `if <expr>` pre `for` a `case` (pravidlá 97, 101, 110),
+    - zdroj rozsahu/zozn v `for` za `<-` a za `to`/`until`/`by` (pravidlá 92, 93, 95),
+    - sám ten výraz ako príkaz (pravidlá 66, 68), argumenti volaní (pravidlá 145, 149) a telo lambdy (pravidlo 140).
+2.Ukončenie výrazu (stop(ping)-tokeny):
+    Spracovávnie operandov a operátory dovtedy, až kým nenarazíme na token ktory nepatrí medzi bin/unárne operátory ani postfix pokračovanie (`.` / `(` / `match`) na aktuál úrovni  závoriek. Typicky s ukončovacím tokenmi vo `FOLLOW(<expr>)`:
+    - oddeľovače príkazov a konstruktov: `TOK_EOL`, `TOK_SEMICOLON`, `TOK_DEDENT`,
+    - kľúčové slová (KWcka) uvádzajúc ďalšiu časť konštrukcie: `TOK_KW_THEN`, `TOK_KW_DO`, `TOK_KW_ELSE`, `TOK_KW_IF` (stráž), `TOK_KW_CASE`, `TOK_ARROW` (`=>`),
+    - kontextové slová rozsahu v `for`: `TOK_IDENTIFIER` s lexémy `"to"`, `"until"` alebo `"by"`,
+    - oddeľovanie zoznamov a zátvorky: `TOK_COMMA`, `TOK_RPAREN`, `TOK_RBRACKET`.
+    Ukončovací token zostáva v prúde ako aktuálny token. Pre nadradenú LL funkciu.
+3.Komplexné konštrukcie vo vnútri výrazu (`FUNEXP`, `VALMEM`, `LAMBDAS`, `ALGEBDT`, `CONTROL`):
+    Keď čakávame primárny operand (alebo postfixové pokračovanie) (za operandom), zavoláme LL funkcie pre `<primary>` a `<postfix_tail>` (pravidlá 124–144). Tým si bez zmeny precedencnej tabuľky spracujeme:
+    - vnorené funkci /a volania `f(g(x))` a reťazové funkc /a volania `f(a)(b)` (`CallNode`),
+    - prístup k členom aj metódam `obj.field`, `(1 to 5).toList` (`MemberNode`, `CallNode`),
+    - lambdy `(x: Int) => x + 1` (`LambdaNode`), vnorené `if ... then ... else ...` (`IfNode`) a `x match ...` (`MatchNode`).
+    Pri `TOK_INTERP_STRING` sa tu text rozdelí na literál časti (`LiteralNode`) a vnútor `${...}`. Výrazy sa rekurzivne odovzdajú spat na `<expr>` potom výsledok sa zabalí do `InterpNode`.
 ```
 
 ## 4. Množiny FIRST, FOLLOW, PREDICT
