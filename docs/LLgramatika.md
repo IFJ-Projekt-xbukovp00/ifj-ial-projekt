@@ -277,7 +277,48 @@ Pokryť:
 - lambda `(a: T) => telo`, `() => telo`, telo ako výraz aj blok (LAMBDAS, §5.7)
 
 ```
-TODO
+124. <primary> → TOK_IDENTIFIER
+125. <primary> → <primary_non_id>
+126. <primary_non_id> → <literal>
+127. <primary_non_id> → TOK_INTERP_STRING
+128. <primary_non_id> → TOK_KW_LIST <list_ctor_tail>
+129. <primary_non_id> → <if_expr>   
+
+130. <list_ctor_tail> → TOK_LPAREN <arg_list_opt> TOK_RPAREN
+
+131. <list_ctor_tail> → TOK_DOT TOK_IDENTIFIER TOK_LPAREN <arg_list_opt> TOK_RPAREN
+
+132. <paren_or_lambda> → TOK_RPAREN TOK_ARROW <lambda_body>
+133. <paren_or_lambda> → TOK_IDENTIFIER <paren_id_tail>
+134. <paren_or_lambda> → <expr_non_id> <range_tail_opt> TOK_RPAREN
+
+135. <paren_id_tail> → TOK_COLON <type> <lambda_params_tail> TOK_RPAREN TOK_ARROW <lambda_body>
+136. <paren_id_tail> → <expr_after_id> <range_tail_opt> TOK_RPAREN
+
+137. <lambda_params_tail> → TOK_COMMA <param> <lambda_params_tail>
+138. <lambda_params_tail> → ε
+
+139. <lambda_body> → TOK_EOL <block>
+140. <lambda_body> → <expr>
+
+141. <postfix_tail> → TOK_DOT TOK_IDENTIFIER <postfix_tail>
+142. <postfix_tail> → TOK_LPAREN <arg_list_opt> TOK_RPAREN <postfix_tail>
+143. <postfix_tail> → <match_block>
+144. <postfix_tail> → ε
+
+145. <arg_list_opt> → <expr> <arg_list_tail>
+146. <arg_list_opt> → ε
+147. <arg_list_tail> → TOK_COMMA <arg_after_comma>
+148. <arg_list_tail> → ε
+149. <arg_after_comma> → <expr> <arg_list_tail>
+150. <arg_after_comma> → ε
+
+151. <literal> → <num_literal>
+153. <literal> → TOK_STRING_LIT
+154. <literal> → TOK_BOOL_LIT
+
+155. <num_literal> → TOK_INT_LIT
+156. <num_literal> → TOK_DOUBLE_LIT
 ```
 
 ### 3.9 Hranica s precedenčnou analýzou
