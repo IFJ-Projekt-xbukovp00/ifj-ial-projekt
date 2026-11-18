@@ -1,7 +1,7 @@
 /**
  * @file test_semantic_body.c
  * @brief Unit testy kontroly tiel funkcií v sémantike (premenné, rozsahy, priradenie, výrazy,
- *        podmienky, cykly)
+ *        podmienky, cykly, návratové typy)
  *
  * Použitie AI: tento súbor vygenerovala AI (Claude Opus 5.5).
  * Prompt: "Vyrob testy ako pre zvyšok semntickeho analyzatora, tentokrát ale na ich telá,
@@ -212,6 +212,13 @@ ASTNode *newWhile(ASTNode *condition, ASTNode *body) {
     return (ASTNode *)whileNode;
 }
 
+ASTNode *newReturn(ASTNode *returnValue) {
+    ReturnNode *returnNode = calloc(1, sizeof(ReturnNode));
+    returnNode->node.kind = AST_RETURN;
+    returnNode->returnValue = returnValue;
+    return (ASTNode *)returnNode;
+}
+
 /* uvoľnenie AST (aj ConvertNode, ktoré vložila sémantika) */
 
 void freeNode(ASTNode *node) {
@@ -245,6 +252,8 @@ void freeNode(ASTNode *node) {
     } else if (node->kind == AST_WHILE) {
         freeNode(((WhileNode *)node)->condition);
         freeNode(((WhileNode *)node)->body);
+    } else if (node->kind == AST_RETURN) {
+        freeNode(((ReturnNode *)node)->returnValue);
     }
 
     free(node);
@@ -945,6 +954,250 @@ void testWhileValueIsUnit(void) {
     finishAnalyze(program);
 }
 
+/* testy: návratové typy */
+
+/* def name() [: returnType] = body, k tomu prázdny @main */
+DefFuncNode *addFunctionWithMain(ProgramNode **program, const char *name, Type *returnType,
+                                 ASTNode *body) {
+    *program = newProgram();
+    DefFuncNode *function = newFunction(*program, name, false, returnType, body);
+    addParamList(function);
+    addMain(*program, (ASTNode *)newBlock());
+    return function;
+}
+
+/* skontroluje program s jednou funkciou a vráti chybu */
+ErrorCode analyzeFunction(Type *returnType, ASTNode *body) {
+    ProgramNode *program;
+    addFunctionWithMain(&program, "f", returnType, body);
+    return analyze(program);
+}
+
+/* def f(x: Int) [: returnType] = body */
+ErrorCode analyzeFunctionWithParam(Type *returnType, ASTNode *body) {
+    ProgramNode *program = newProgram();
+    DefFuncNode *function = newFunction(program, "f", false, returnType, body);
+    addParamList(function);
+    addParam(function, "x", type_get_basic(TY_INT));
+    addMain(program, (ASTNode *)newBlock());
+    return analyze(program);
+}
+
+void testReturnWithoutReturnType(void) {
+    /* def f(x: Int) = return x (err6_return_without_return_type) */
+    BlockNode *body = newBlock();
+    addCommand(body, newReturn(newId("x")));
+    CHECK(analyzeFunctionWithParam(NULL, (ASTNode *)body) == ERR_TYPE);
+}
+
+void testReturnTypeMismatch(void) {
+    /* def f(): Int = "a" (err6_return_type_mismatch) */
+    CHECK(analyzeFunction(type_get_basic(TY_INT), newStringLiteral("a")) == ERR_TYPE);
+}
+
+void testReturnValueMismatch(void) {
+    /* def f(): Int = { return "a" } */
+    BlockNode *body = newBlock();
+    addCommand(body, newReturn(newStringLiteral("a")));
+    CHECK(analyzeFunction(type_get_basic(TY_INT), (ASTNode *)body) == ERR_TYPE);
+}
+
+void testReturnUndefinedValue(void) {
+    /* def f(): Int = { return y } */
+    BlockNode *body = newBlock();
+    addCommand(body, newReturn(newId("y")));
+    CHECK(analyzeFunction(type_get_basic(TY_INT), (ASTNode *)body) == ERR_UNDEF);
+}
+
+void testFunctionEndsWithIfWithoutElse(void) {
+    /* def f(): Int = { if 1 < 2 then 1 } (err6_if_value_without_else) */
+    BlockNode *body = newBlock();
+    addCommand(body, newExprStatement(newIf(lessThan(1, 2), blockOf(newIntLiteral(1)), NULL)));
+    CHECK(analyzeFunction(type_get_basic(TY_INT), (ASTNode *)body) == ERR_TYPE);
+}
+
+void testBlockEndingWithVarDef(void) {
+    /* def f(): Int = { val a = 1 } -> výsledok bloku je () */
+    BlockNode *body = newBlock();
+    addCommand(body, newVarDef("a", false, NULL, newIntLiteral(1)));
+    CHECK(analyzeFunction(type_get_basic(TY_INT), (ASTNode *)body) == ERR_TYPE);
+}
+
+void testBareReturnInIntFunction(void) {
+    /* def f(): Int = { return } */
+    BlockNode *body = newBlock();
+    addCommand(body, newReturn(NULL));
+    CHECK(analyzeFunction(type_get_basic(TY_INT), (ASTNode *)body) == ERR_TYPE);
+}
+
+void testBareReturnInInferredFunction(void) {
+    /* def f() = { return } */
+    BlockNode *body = newBlock();
+    addCommand(body, newReturn(NULL));
+    CHECK(analyzeFunction(NULL, (ASTNode *)body) == ERR_TYPE);
+}
+
+void testUnreachableCodeChecked(void) {
+    /* def f(): Int = { return 1 ; y } -> kontroluje sa aj kód za return */
+    BlockNode *body = newBlock();
+    addCommand(body, newReturn(newIntLiteral(1)));
+    addCommand(body, newExprStatement(newId("y")));
+    CHECK(analyzeFunction(type_get_basic(TY_INT), (ASTNode *)body) == ERR_UNDEF);
+}
+
+void testAllBranchesReturn(void) {
+    /* def sign(x: Int): Int = if x < 0 then { return -1 } else { return 1 }
+       (ok_all_branches_return) */
+    BlockNode *thenBlock = newBlock();
+    addCommand(thenBlock, newReturn(newUnary(TOK_MINUS, newIntLiteral(1))));
+    BlockNode *elseBlock = newBlock();
+    addCommand(elseBlock, newReturn(newIntLiteral(1)));
+
+    BlockNode *body = newBlock();
+    addCommand(body, newExprStatement(newIf(newBinary(TOK_LESS, newId("x"), newIntLiteral(0)),
+                                            (ASTNode *)thenBlock, (ASTNode *)elseBlock)));
+    CHECK(analyzeFunctionWithParam(type_get_basic(TY_INT), (ASTNode *)body) == ERR_OK);
+}
+
+void testElseIfAllReturn(void) {
+    /* def f(x: Int): Int = if x < 0 then return -1 else if x == 0 then return 0 else return 1 */
+    ASTNode *innerIf = newIf(newBinary(TOK_EQUAL, newId("x"), newIntLiteral(0)),
+                             newReturn(newIntLiteral(0)), newReturn(newIntLiteral(1)));
+    ASTNode *outerIf = newIf(newBinary(TOK_LESS, newId("x"), newIntLiteral(0)),
+                             newReturn(newUnary(TOK_MINUS, newIntLiteral(1))), innerIf);
+    CHECK(analyzeFunctionWithParam(type_get_basic(TY_INT), outerIf) == ERR_OK);
+}
+
+void testOneBranchReturnsOtherValue(void) {
+    /* def f(x: Int): Int = if x < 0 then { return 0 } else { x } */
+    BlockNode *thenBlock = newBlock();
+    addCommand(thenBlock, newReturn(newIntLiteral(0)));
+
+    BlockNode *body = newBlock();
+    addCommand(body, newExprStatement(newIf(newBinary(TOK_LESS, newId("x"), newIntLiteral(0)),
+                                            (ASTNode *)thenBlock, blockOf(newId("x")))));
+    CHECK(analyzeFunctionWithParam(type_get_basic(TY_INT), (ASTNode *)body) == ERR_OK);
+}
+
+void testReturnInsideWhile(void) {
+    /* def f(): Int = { while 1 < 2 do { return 1 } ; 2 } */
+    BlockNode *loopBody = newBlock();
+    addCommand(loopBody, newReturn(newIntLiteral(1)));
+
+    BlockNode *body = newBlock();
+    addCommand(body, newWhile(lessThan(1, 2), (ASTNode *)loopBody));
+    addCommand(body, newExprStatement(newIntLiteral(2)));
+    CHECK(analyzeFunction(type_get_basic(TY_INT), (ASTNode *)body) == ERR_OK);
+}
+
+void testIfWithoutElseInMiddle(void) {
+    /* def f(): Int = { if 1 < 2 then () ; 1 } */
+    BlockNode *body = newBlock();
+    addCommand(body, newExprStatement(newIf(lessThan(1, 2), blockOf(newUnitLiteral()), NULL)));
+    addCommand(body, newExprStatement(newIntLiteral(1)));
+    CHECK(analyzeFunction(type_get_basic(TY_INT), (ASTNode *)body) == ERR_OK);
+}
+
+void testUnitDiscardsValue(void) {
+    /* def f(): Unit = 1 (ok_unit_discards_value) */
+    CHECK(analyzeFunction(type_get_basic(TY_UNIT), newIntLiteral(1)) == ERR_OK);
+}
+
+void testUnitDiscardsReturnValue(void) {
+    /* def f(): Unit = { return "a" } -> zahodí sa aj hodnota z return */
+    BlockNode *body = newBlock();
+    addCommand(body, newReturn(newStringLiteral("a")));
+    CHECK(analyzeFunction(type_get_basic(TY_UNIT), (ASTNode *)body) == ERR_OK);
+}
+
+void testUnitReturnValueStillChecked(void) {
+    /* def f(): Unit = { return y } -> hodnota sa zahodí, ale skontroluje */
+    BlockNode *body = newBlock();
+    addCommand(body, newReturn(newId("y")));
+    CHECK(analyzeFunction(type_get_basic(TY_UNIT), (ASTNode *)body) == ERR_UNDEF);
+}
+
+void testBareReturnInUnitFunction(void) {
+    /* def f(): Unit = { return } */
+    BlockNode *body = newBlock();
+    addCommand(body, newReturn(NULL));
+    CHECK(analyzeFunction(type_get_basic(TY_UNIT), (ASTNode *)body) == ERR_OK);
+}
+
+void testUnitMixedIfBranches(void) {
+    /* def f(): Unit = if 1 < 2 then 1 else "a" -> hodnota sa zahodí */
+    CHECK(analyzeFunction(type_get_basic(TY_UNIT),
+                          newIf(lessThan(1, 2), newIntLiteral(1), newStringLiteral("a"))) ==
+          ERR_OK);
+}
+
+void testInferredUnitIf(void) {
+    /* def f(x: Int) = if x < 0 then () else () -> odvodí sa Unit (ok_inferred_unit_if) */
+    ProgramNode *program = newProgram();
+    DefFuncNode *function =
+        newFunction(program, "f", false, NULL,
+                    newIf(newBinary(TOK_LESS, newId("x"), newIntLiteral(0)),
+                          blockOf(newUnitLiteral()), blockOf(newUnitLiteral())));
+    addParamList(function);
+    addParam(function, "x", type_get_basic(TY_INT));
+    addMain(program, (ASTNode *)newBlock());
+
+    CHECK(runAnalyze(program) == ERR_OK);
+    CHECK(function->returnType == NULL);
+    CHECK(function->symbol->type->func.ret == type_get_basic(TY_UNIT));
+    finishAnalyze(program);
+}
+
+void testInferredIntType(void) {
+    /* def f() = { val a = 1 ; a + 1 } -> odvodí sa Int */
+    BlockNode *body = newBlock();
+    addCommand(body, newVarDef("a", false, NULL, newIntLiteral(1)));
+    addCommand(body, newExprStatement(newBinary(TOK_PLUS, newId("a"), newIntLiteral(1))));
+
+    ProgramNode *program;
+    DefFuncNode *function = addFunctionWithMain(&program, "f", NULL, (ASTNode *)body);
+    CHECK(runAnalyze(program) == ERR_OK);
+    CHECK(function->symbol->type->func.ret == type_get_basic(TY_INT));
+    finishAnalyze(program);
+}
+
+void testReturnConvert(void) {
+    /* def f(): Double = 1 -> telo je ConvertNode */
+    ProgramNode *program;
+    DefFuncNode *function =
+        addFunctionWithMain(&program, "f", type_get_basic(TY_DOUBLE), newIntLiteral(1));
+    CHECK(runAnalyze(program) == ERR_OK);
+    CHECK(function->body->kind == AST_CONVERT);
+    finishAnalyze(program);
+}
+
+void testReturnValueConvert(void) {
+    /* def f(): Double = { return 1 } -> hodnota v return je ConvertNode */
+    BlockNode *body = newBlock();
+    ASTNode *returnNode = newReturn(newIntLiteral(1));
+    addCommand(body, returnNode);
+
+    ProgramNode *program;
+    addFunctionWithMain(&program, "f", type_get_basic(TY_DOUBLE), (ASTNode *)body);
+    CHECK(runAnalyze(program) == ERR_OK);
+    CHECK(((ReturnNode *)returnNode)->returnValue->kind == AST_CONVERT);
+    finishAnalyze(program);
+}
+
+void testBlockResultConvert(void) {
+    /* def f(): Double = { val a = 1 ; a } -> posledný výraz bloku je ConvertNode */
+    BlockNode *body = newBlock();
+    addCommand(body, newVarDef("a", false, NULL, newIntLiteral(1)));
+    ASTNode *lastStatement = newExprStatement(newId("a"));
+    addCommand(body, lastStatement);
+
+    ProgramNode *program;
+    addFunctionWithMain(&program, "f", type_get_basic(TY_DOUBLE), (ASTNode *)body);
+    CHECK(runAnalyze(program) == ERR_OK);
+    CHECK(((LonelyExprNode *)lastStatement)->expr->kind == AST_CONVERT);
+    finishAnalyze(program);
+}
+
 int main(void) {
     testUndefinedVariable();
     testUseBeforeDefinition();
@@ -1011,6 +1264,31 @@ int main(void) {
     testBooleanVariableCondition();
     testWhileLoop();
     testWhileValueIsUnit();
+
+    testReturnWithoutReturnType();
+    testReturnTypeMismatch();
+    testReturnValueMismatch();
+    testReturnUndefinedValue();
+    testFunctionEndsWithIfWithoutElse();
+    testBlockEndingWithVarDef();
+    testBareReturnInIntFunction();
+    testBareReturnInInferredFunction();
+    testUnreachableCodeChecked();
+    testAllBranchesReturn();
+    testElseIfAllReturn();
+    testOneBranchReturnsOtherValue();
+    testReturnInsideWhile();
+    testIfWithoutElseInMiddle();
+    testUnitDiscardsValue();
+    testUnitDiscardsReturnValue();
+    testUnitReturnValueStillChecked();
+    testBareReturnInUnitFunction();
+    testUnitMixedIfBranches();
+    testInferredUnitIf();
+    testInferredIntType();
+    testReturnConvert();
+    testReturnValueConvert();
+    testBlockResultConvert();
 
     type_free_all();
 

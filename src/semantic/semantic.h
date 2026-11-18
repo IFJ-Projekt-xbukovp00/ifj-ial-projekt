@@ -411,3 +411,46 @@ Type *checkIf(Symtable *table, BodyContext *context, IfNode *ifNode, bool isValu
  * @returns Unit, pri chybe NULL
  */
 Type *checkWhile(Symtable *table, BodyContext *context, WhileNode *whileNode, ErrorCode *error);
+
+/**
+ * @brief funkcia na zistenie, či je typ Unit (aj cez alias)
+ * @param type je zisťovaný typ, môže byť NULL
+ * @returns true, ak je typ Unit
+ */
+bool isUnitType(Type *type);
+
+/**
+ * @brief funkcia na kontrolu prikazu return
+ *
+ * Return je povolený len vo funkcii s uvedeným návratovým typom, holý return
+ * len pri Unit. Pri Unit sa hodnota skontroluje a zahodí.
+ * @param table je tabuľka symbolov
+ * @param context je kontext kontrolovanej funkcie
+ * @param returnNode je uzol return
+ * @param error je pointer, cez ktorý si vrátim chybové hlásenie (6)
+ * @returns vždy NULL (return nemá vysledok)
+ */
+Type *checkReturn(Symtable *table, BodyContext *context, ReturnNode *returnNode,
+                  ErrorCode *error);
+
+/**
+ * @brief funkcia na kontrolu, ci výsledok tela môže byť návratovou hodnotou
+ *
+ * Prejde výsledok až po posledné výrazy: posledný príkaz bloku, obe vetvy if
+ * (chýbajúce else je ()). Vetva, ktorá končí príkazom return, sa preskočí.
+ * @param expected je návratový typ funkcie
+ * @param node je pointer na miesto v AST, kde je výsledok
+ * @param error je pointer, cez ktorý si vrátim chybové hlásenie (len ERR_INTERNAL)
+ * @returns true, ak všetky výsledky sedia (chybu 6 nastavuje volajúci)
+ */
+bool acceptResult(Type *expected, ASTNode **node, ErrorCode *error);
+
+/**
+ * @brief funkcia na kontrolu výsledku tela funkcie podľa návratového typu
+ *
+ * Pri neuvedenom type ho odvodí z tela a uloží do typu symbolu.
+ * @param functionSymbol je symbol funkcie
+ * @param bodyType je typ výsledku tela
+ * @param error je pointer, cez ktorý si vrátim chybové hlásenie (6)
+ */
+void checkFunctionResult(Symbol *functionSymbol, Type *bodyType, ErrorCode *error);

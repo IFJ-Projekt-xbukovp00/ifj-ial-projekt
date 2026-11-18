@@ -761,6 +761,9 @@ Type *checkNode(Symtable *table, BodyContext *context, ASTNode **node, bool isVa
     else if (current->kind == AST_WHILE){
         nodeType = checkWhile(table, context, (WhileNode *)current, error);
     }
+    else if (current->kind == AST_RETURN){
+        nodeType = checkReturn(table, context, (ReturnNode *)current, error);
+    }
     else if (current->kind == AST_EXPR_STATEMENT){
         nodeType = checkNode(table, context, &((LonelyExprNode *)current)->expr, isValueUsed,
                              error);
@@ -821,8 +824,12 @@ void checkFunctionBody(Symtable *table, BodyContext *parent, Symbol *functionSym
 
     BodyContext context = {function, parent};
 
+    // pri explicitnom Unit sa vysledok tela zahodi
+    bool isUnitDeclared = isUnitType(function->returnType);
+
     defineParameters(table, functionSymbol, error);
-    checkNode(table, &context, &function->body, true, error);
+    Type *bodyType = checkNode(table, &context, &function->body, !isUnitDeclared, error);
+    checkFunctionResult(functionSymbol, bodyType, error);
 
     popScope(table);
     table->top = savedTop;
@@ -1050,4 +1057,96 @@ Type *checkWhile(Symtable *table, BodyContext *context, WhileNode *whileNode, Er
     }
 
     return type_get_basic(TY_UNIT);
+}
+
+bool isUnitType(Type *type){
+    type = getRealType(type);
+    return type != NULL && type->kind == TY_UNIT;
+}
+
+Type *checkReturn(Symtable *table, BodyContext *context, ReturnNode *returnNode,
+                  ErrorCode *error){
+    Type *returnType = context->function->returnType;
+
+    // return vyzaduje uvedeny navratovy typ
+    if (returnType == NULL){
+        *error = ERR_TYPE;
+        return NULL;
+    }
+
+    bool isUnitDeclared = isUnitType(returnType);
+
+    // holy return vracia () a smie byt len pri Unit
+    if (returnNode->returnValue == NULL){
+        if (!isUnitDeclared){
+            *error = ERR_TYPE;
+        }
+        return NULL;
+    }
+
+    checkNode(table, context, &returnNode->returnValue, true, error);
+    if (*error != ERR_OK){
+        return NULL;
+    }
+
+    if (!isUnitDeclared && !acceptValue(returnType, &returnNode->returnValue, error)){
+        *error = ERR_TYPE;
+    }
+
+    return NULL;
+}
+
+bool acceptResult(Type *expected, ASTNode **node, ErrorCode *error){
+    ASTNode *current = *node;
+
+    // vysledok, ktory konci returnom, sa kontroloval v return
+    if (current->type == NULL){
+        return true;
+    }
+
+    if (current->kind == AST_BLOCK){
+        BlockNode *block = (BlockNode *)current;
+
+        if (block->commandOrderCount == 0){
+            return type_accepts(expected, type_get_basic(TY_UNIT));
+        }
+        return acceptResult(expected, &block->commandOrder[block->commandOrderCount - 1], error);
+    }
+    if (current->kind == AST_EXPR_STATEMENT){
+        return acceptResult(expected, &((LonelyExprNode *)current)->expr, error);
+    }
+    if (current->kind == AST_IF){
+        IfNode *ifNode = (IfNode *)current;
+        bool isThenAccepted = acceptResult(expected, &ifNode->thenBranch, error);
+
+        // chýbajúce else je vetva s ()
+        if (ifNode->elseBranch == NULL){
+            return isThenAccepted && type_accepts(expected, type_get_basic(TY_UNIT));
+        }
+        return isThenAccepted && acceptResult(expected, &ifNode->elseBranch, error);
+    }
+
+    return acceptValue(expected, node, error);
+}
+
+void checkFunctionResult(Symbol *functionSymbol, Type *bodyType, ErrorCode *error){
+    if (*error != ERR_OK){
+        return;
+    }
+
+    DefFuncNode *function = (DefFuncNode *)functionSymbol->definition;
+
+    // neuvedeny typ sa odvodi z vysledku tela
+    if (function->returnType == NULL){
+        functionSymbol->type->func.ret = bodyType;
+        return;
+    }
+
+    if (isUnitType(function->returnType)){
+        return;
+    }
+
+    if (!acceptResult(function->returnType, &function->body, error) && *error == ERR_OK){
+        *error = ERR_TYPE;
+    }
 }
