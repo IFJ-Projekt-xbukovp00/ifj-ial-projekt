@@ -535,3 +535,21 @@ Type *checkRange(Symtable *table, BodyContext *context, RangeNode *range, ErrorC
  * @returns Unit, pri chybe NULL
  */
 Type *checkFor(Symtable *table, BodyContext *context, ForNode *forNode, ErrorCode *error);
+
+/**
+ * @brief funkcia na zistenie typu vstavaneho člena hodnoty (toString, toInt, floor, length)
+ * @param objectType je typ hodnoty pred bodkou, uz bez mien typov
+ * @param name je meno clena
+ * @returns typ vysledku, NULL ak taký člen pre dany typ neexistuje
+ */
+Type *getBuiltinMemberType(Type *objectType, const char *name);
+
+/**
+ * @brief funkcia na kontrolu pristupu cez bodku (vyraz.meno)
+ * @param table je tabuľka symbolov
+ * @param context je kontext kontrolovanej funkcie
+ * @param member je uzol prístupu cez bodku
+ * @param error je pointer, cez ktory si vrátim chybove hlásenie (3, 6)
+ * @returns typ clena, pri chybe NULL
+ */
+Type *checkMember(Symtable *table, BodyContext *context, MemberNode *member, ErrorCode *error);

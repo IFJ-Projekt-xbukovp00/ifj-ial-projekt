@@ -775,6 +775,9 @@ Type *checkNode(Symtable *table, BodyContext *context, ASTNode **node, bool isVa
     else if (current->kind == AST_FOR){
         nodeType = checkFor(table, context, (ForNode *)current, error);
     }
+    else if (current->kind == AST_MEMBER){
+        nodeType = checkMember(table, context, (MemberNode *)current, error);
+    }
     else if (current->kind == AST_CALL){
         nodeType = checkCall(table, context, (CallNode *)current, error);
     }
@@ -1400,4 +1403,47 @@ Type *checkFor(Symtable *table, BodyContext *context, ForNode *forNode, ErrorCod
     }
 
     return type_get_basic(TY_UNIT);
+}
+
+Type *getBuiltinMemberType(Type *objectType, const char *name){
+    // toString má kazda hodnota
+    if (strcmp(name, "toString") == 0){
+        return type_get_basic(TY_STRING);
+    }
+    if (objectType->kind == TY_DOUBLE && strcmp(name, "toInt") == 0){
+        return type_get_basic(TY_INT);
+    }
+    if (objectType->kind == TY_DOUBLE && strcmp(name, "floor") == 0){
+        return type_get_basic(TY_DOUBLE);
+    }
+    if (objectType->kind == TY_STRING && strcmp(name, "length") == 0){
+        return type_get_basic(TY_INT);
+    }
+
+    return NULL;
+}
+
+Type *checkMember(Symtable *table, BodyContext *context, MemberNode *member, ErrorCode *error){
+    Type *objectType = getRealType(checkNode(table, context, &member->object, true, error));
+
+    if (*error != ERR_OK){
+        return NULL;
+    }
+
+    // hodnota, ktorá konci returnom, nemá cleny
+    if (objectType == NULL){
+        *error = ERR_TYPE;
+        return NULL;
+    }
+
+    Type *memberType = getBuiltinMemberType(objectType, member->name);
+
+    // neznámy clen je ako nedefinovaná funkcia
+    if (memberType == NULL){
+        *error = ERR_UNDEF;
+        return NULL;
+    }
+
+    member->memberKind = MEM_BUILTIN;
+    return memberType;
 }

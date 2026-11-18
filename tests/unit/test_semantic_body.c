@@ -263,6 +263,14 @@ void addGuard(ASTNode *forNodeAst, ASTNode *guard) {
     forNode->guards[forNode->guardsCount++] = guard;
 }
 
+ASTNode *newMember(ASTNode *object, const char *name) {
+    MemberNode *member = calloc(1, sizeof(MemberNode));
+    member->node.kind = AST_MEMBER;
+    member->object = object;
+    member->name = (char *)name;
+    return (ASTNode *)member;
+}
+
 /* uvoľnenie AST (aj ConvertNode, ktoré vložila sémantika) */
 
 void freeNode(ASTNode *node) {
@@ -310,6 +318,8 @@ void freeNode(ASTNode *node) {
         }
         free(forNode->guards);
         freeNode(forNode->body);
+    } else if (node->kind == AST_MEMBER) {
+        freeNode(((MemberNode *)node)->object);
     } else if (node->kind == AST_CALL) {
         CallNode *call = (CallNode *)node;
         freeNode(call->caller);
@@ -1696,6 +1706,80 @@ void testForOk(void) {
     finishAnalyze(program);
 }
 
+/* testy: členy hodnôt (VALMEM) */
+
+void testMemberToString(void) {
+    /* val x = 5.toString je String, aj () má toString */
+    ProgramNode *program;
+    ASTNode *expr = newMember(newIntLiteral(5), "toString");
+    CHECK(expressionType(&program, &expr) == type_get_basic(TY_STRING));
+    CHECK(((MemberNode *)expr)->memberKind == MEM_BUILTIN);
+    finishAnalyze(program);
+
+    expr = newMember(newUnitLiteral(), "toString");
+    CHECK(expressionType(&program, &expr) == type_get_basic(TY_STRING));
+    finishAnalyze(program);
+}
+
+void testMemberFloor(void) {
+    /* val x = 2.5.floor je Double */
+    ProgramNode *program;
+    ASTNode *expr = newMember(newDoubleLiteral(2.5), "floor");
+    CHECK(expressionType(&program, &expr) == type_get_basic(TY_DOUBLE));
+    finishAnalyze(program);
+}
+
+void testMemberChain(void) {
+    /* val n = 2.5 ; val x = n.floor.toInt je Int */
+    BlockNode *body = newBlock();
+    addCommand(body, newVarDef("n", false, NULL, newDoubleLiteral(2.5)));
+    ASTNode *chain = newMember(newMember(newId("n"), "floor"), "toInt");
+    addCommand(body, newVarDef("x", false, NULL, chain));
+
+    ProgramNode *program = newProgram();
+    addMain(program, (ASTNode *)body);
+    CHECK(runAnalyze(program) == ERR_OK);
+    CHECK(chain->type == type_get_basic(TY_INT));
+    finishAnalyze(program);
+}
+
+void testMemberLength(void) {
+    /* val x = "abc".length je Int */
+    ProgramNode *program;
+    ASTNode *expr = newMember(newStringLiteral("abc"), "length");
+    CHECK(expressionType(&program, &expr) == type_get_basic(TY_INT));
+    finishAnalyze(program);
+}
+
+void testMemberInExpression(void) {
+    /* val x = "abc".length + 1 je Int */
+    ProgramNode *program;
+    ASTNode *expr =
+        newBinary(TOK_PLUS, newMember(newStringLiteral("abc"), "length"), newIntLiteral(1));
+    CHECK(expressionType(&program, &expr) == type_get_basic(TY_INT));
+    finishAnalyze(program);
+}
+
+void testUnknownMember(void) {
+    /* val x = 1.foo */
+    CHECK(analyzeInitExpression(newMember(newIntLiteral(1), "foo")) == ERR_UNDEF);
+}
+
+void testToIntOnString(void) {
+    /* val x = "a".toInt -> toInt je len na Double */
+    CHECK(analyzeInitExpression(newMember(newStringLiteral("a"), "toInt")) == ERR_UNDEF);
+}
+
+void testLengthOnInt(void) {
+    /* val x = 1.length -> length je len na String */
+    CHECK(analyzeInitExpression(newMember(newIntLiteral(1), "length")) == ERR_UNDEF);
+}
+
+void testMemberOnUndefined(void) {
+    /* val x = y.toString */
+    CHECK(analyzeInitExpression(newMember(newId("y"), "toString")) == ERR_UNDEF);
+}
+
 int main(void) {
     testUndefinedVariable();
     testUseBeforeDefinition();
@@ -1828,6 +1912,16 @@ int main(void) {
     testForGuardNotBool();
     testForVariableStep();
     testForOk();
+
+    testMemberToString();
+    testMemberFloor();
+    testMemberChain();
+    testMemberLength();
+    testMemberInExpression();
+    testUnknownMember();
+    testToIntOnString();
+    testLengthOnInt();
+    testMemberOnUndefined();
 
     type_free_all();
 
