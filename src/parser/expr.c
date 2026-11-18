@@ -395,18 +395,20 @@ static int takeArguments(StackItem *items, int count, CallNode *call) {
     }
     for (size_t i = 0; i < argsCount; i++) {
         call->args[i] = items[1 + 2 * i].node;
+        items[1 + 2 * i].node = NULL; // uz patri volaniu
     }
     call->argsCount = argsCount;
     return ERR_OK;
 }
 
-// zredukuje handle nad znackou < na AST uzol
+// zredukuje handle nad znackou < na AST uzol (pouzite uzly vynuluje proti double-free)
 static int reduceHandle(StackItem *handle, int count, ASTNode **result) {
     int line = handle[0].line;
 
     // E -> i
     if (count == 1 && isTerminal(&handle[0], PT_ID)) {
         *result = handle[0].node;
+        handle[0].node = NULL;
         return ERR_OK;
     }
 
@@ -419,6 +421,7 @@ static int reduceHandle(StackItem *handle, int count, ASTNode **result) {
         }
         un->operator = handle[0].tokenType;
         un->right = handle[1].node;
+        handle[1].node = NULL;
         *result = (ASTNode *)un;
         return ERR_OK;
     }
@@ -427,6 +430,7 @@ static int reduceHandle(StackItem *handle, int count, ASTNode **result) {
     if (count == 3 && isTerminal(&handle[0], PT_LPAR) && isExpr(&handle[1]) &&
         isTerminal(&handle[2], PT_RPAR)) {
         *result = handle[1].node;
+        handle[1].node = NULL;
         return ERR_OK;
     }
 
@@ -444,6 +448,7 @@ static int reduceHandle(StackItem *handle, int count, ASTNode **result) {
         mem->name = ((IDNode *)handle[2].node)->name;
         ((IDNode *)handle[2].node)->name = NULL;
         expr_free(handle[2].node);
+        handle[0].node = handle[2].node = NULL;
         *result = (ASTNode *)mem;
         return ERR_OK;
     }
@@ -483,6 +488,7 @@ static int reduceHandle(StackItem *handle, int count, ASTNode **result) {
             bin->right = handle[2].node;
             *result = (ASTNode *)bin;
         }
+        handle[0].node = handle[2].node = NULL;
         return ERR_OK;
     }
 
@@ -498,6 +504,7 @@ static int reduceHandle(StackItem *handle, int count, ASTNode **result) {
             return err;
         }
         call->caller = handle[0].node;
+        handle[0].node = NULL;
         *result = (ASTNode *)call;
         return ERR_OK;
     }
@@ -525,6 +532,7 @@ static int reduceHandle(StackItem *handle, int count, ASTNode **result) {
         mem->name = ((IDNode *)handle[2].node)->name;
         ((IDNode *)handle[2].node)->name = NULL;
         expr_free(handle[2].node);
+        handle[0].node = handle[2].node = NULL;
         call->caller = (ASTNode *)mem;
         *result = (ASTNode *)call;
         return ERR_OK;
@@ -555,15 +563,20 @@ static int reduce(TAStack *stack) {
     return ERR_OK;
 }
 
-static void freeStack(TAStack *stack) {
+static void freeStack(TAStack *stack, PsaState *state) {
     for (int i = 0; i < stack->top; i++) {
         expr_free(stack->dataArray[i].node);
     }
     stack->top = 0;
+    if (state->hasLookahead) {
+        dynstr_free(&state->lookahead.lexeme);
+        state->hasLookahead = false;
+    }
 }
 
 int expr_parse(Token *token, ASTNode *first, ASTNode **output) {
     if (token == NULL || output == NULL) {
+        expr_free(first);
         return ERR_INTERNAL;
     }
 
@@ -637,6 +650,10 @@ int expr_parse(Token *token, ASTNode *first, ASTNode **output) {
             }
             *output = stack.dataArray[1].node;
             stack.top = 0;
+            if (state.hasLookahead) {
+                dynstr_free(&state.lookahead.lexeme);
+                state.hasLookahead = false;
+            }
             return ERR_OK;
         } else {
             err = ERR_SYNTAX;
@@ -645,6 +662,6 @@ int expr_parse(Token *token, ASTNode *first, ASTNode **output) {
     }
 
 fail:
-    freeStack(&stack);
+    freeStack(&stack, &state);
     return err;
 }
