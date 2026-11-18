@@ -1,6 +1,6 @@
 /**
  * @file test_semantic_body.c
- * @brief Unit testy kontroly tiel funkcií v sémantike (premenné, rozsahy, priradenie)
+ * @brief Unit testy kontroly tiel funkcií v sémantike (premenné, rozsahy, priradenie, výrazy)
  *
  * Použitie AI: tento súbor vygenerovala AI (Claude Opus 5.5).
  * Prompt: "Vyrob testy ako pre zvyšok semntickeho analyzatora, tentokrát ale na ich telá,
@@ -177,6 +177,23 @@ ASTNode *newExprStatement(ASTNode *expr) {
     return (ASTNode *)statement;
 }
 
+ASTNode *newBinary(TokenType operator, ASTNode *left, ASTNode *right) {
+    BinaryNode *binary = calloc(1, sizeof(BinaryNode));
+    binary->node.kind = AST_BINARY;
+    binary->operator = operator;
+    binary->left = left;
+    binary->right = right;
+    return (ASTNode *)binary;
+}
+
+ASTNode *newUnary(TokenType operator, ASTNode *right) {
+    UnaryNode *unary = calloc(1, sizeof(UnaryNode));
+    unary->node.kind = AST_UNARY;
+    unary->operator = operator;
+    unary->right = right;
+    return (ASTNode *)unary;
+}
+
 /* uvoľnenie AST (aj ConvertNode, ktoré vložila sémantika) */
 
 void freeNode(ASTNode *node) {
@@ -198,6 +215,11 @@ void freeNode(ASTNode *node) {
         freeNode(((LonelyExprNode *)node)->expr);
     } else if (node->kind == AST_CONVERT) {
         freeNode(((ConvertNode *)node)->operand);
+    } else if (node->kind == AST_BINARY) {
+        freeNode(((BinaryNode *)node)->left);
+        freeNode(((BinaryNode *)node)->right);
+    } else if (node->kind == AST_UNARY) {
+        freeNode(((UnaryNode *)node)->right);
     }
 
     free(node);
@@ -530,6 +552,207 @@ void testBodyNotSeenByOtherFunction(void) {
     CHECK(analyze(program) == ERR_UNDEF);
 }
 
+/* testy: výrazy a operátory */
+
+/* program s @main, ktorý má jediný príkaz val x = expr */
+ErrorCode analyzeInitExpression(ASTNode *expr) {
+    BlockNode *body = newBlock();
+    addCommand(body, newVarDef("x", false, NULL, expr));
+    return analyzeMainBody(body);
+}
+
+void testAndOnInt(void) {
+    /* val x = 1 && 2 */
+    CHECK(analyzeInitExpression(newBinary(TOK_AND, newIntLiteral(1), newIntLiteral(2))) ==
+          ERR_TYPE);
+}
+
+void testBoolArithmetic(void) {
+    /* val x = true + 1 */
+    CHECK(analyzeInitExpression(newBinary(TOK_PLUS, newBoolLiteral(true), newIntLiteral(1))) ==
+          ERR_TYPE);
+}
+
+void testCompareStringInt(void) {
+    /* val x = "a" < 1 */
+    CHECK(analyzeInitExpression(newBinary(TOK_LESS, newStringLiteral("a"), newIntLiteral(1))) ==
+          ERR_TYPE);
+}
+
+void testUnaryMinusString(void) {
+    /* val x = -"a" */
+    CHECK(analyzeInitExpression(newUnary(TOK_MINUS, newStringLiteral("a"))) == ERR_TYPE);
+}
+
+void testConcatStringInt(void) {
+    /* val x = "a" + 1 (err_type_concat) */
+    CHECK(analyzeInitExpression(newBinary(TOK_PLUS, newStringLiteral("a"), newIntLiteral(1))) ==
+          ERR_TYPE);
+}
+
+void testEqualsDifferentTypes(void) {
+    /* val x = "a" == 1 */
+    CHECK(analyzeInitExpression(newBinary(TOK_EQUAL, newStringLiteral("a"), newIntLiteral(1))) ==
+          ERR_TYPE);
+}
+
+void testNotOnInt(void) {
+    /* val x = !1 */
+    CHECK(analyzeInitExpression(newUnary(TOK_NOT, newIntLiteral(1))) == ERR_TYPE);
+}
+
+void testStringMinus(void) {
+    /* val x = "a" - "b" (konkatenácia je len +) */
+    CHECK(analyzeInitExpression(newBinary(TOK_MINUS, newStringLiteral("a"),
+                                          newStringLiteral("b"))) == ERR_TYPE);
+}
+
+void testUndefinedInExpression(void) {
+    /* val x = 1 + y */
+    CHECK(analyzeInitExpression(newBinary(TOK_PLUS, newIntLiteral(1), newId("y"))) == ERR_UNDEF);
+}
+
+/* spustí analýzu val x = expr a vráti typ výrazu (AST ostane na kontrolu) */
+Type *expressionType(ProgramNode **program, ASTNode **expr) {
+    BlockNode *body = newBlock();
+    ASTNode *varDef = newVarDef("x", false, NULL, *expr);
+    addCommand(body, varDef);
+    *program = newProgram();
+    addMain(*program, (ASTNode *)body);
+
+    if (runAnalyze(*program) != ERR_OK) {
+        return NULL;
+    }
+
+    *expr = ((VarOrValNode *)varDef)->init;
+    return (*expr)->type;
+}
+
+void testIntArithmetic(void) {
+    /* 7 / 2 * 3 - 1 je Int */
+    ProgramNode *program;
+    ASTNode *expr = newBinary(
+        TOK_MINUS,
+        newBinary(TOK_MULTIPLY, newBinary(TOK_DIVIDE, newIntLiteral(7), newIntLiteral(2)),
+                  newIntLiteral(3)),
+        newIntLiteral(1));
+    CHECK(expressionType(&program, &expr) == type_get_basic(TY_INT));
+    finishAnalyze(program);
+}
+
+void testIntPlusDouble(void) {
+    /* 1 + 2.5 je Double, ľavý operand sa prevedie */
+    ProgramNode *program;
+    ASTNode *expr = newBinary(TOK_PLUS, newIntLiteral(1), newDoubleLiteral(2.5));
+    CHECK(expressionType(&program, &expr) == type_get_basic(TY_DOUBLE));
+    CHECK(((BinaryNode *)expr)->left->kind == AST_CONVERT);
+    CHECK(((BinaryNode *)expr)->right->kind == AST_LIT);
+    finishAnalyze(program);
+}
+
+void testConvertInserted(void) {
+    /* val d: Double = 3 ; val e = d + 1 -> pravý operand sa prevedie (ok_int_to_double) */
+    BlockNode *body = newBlock();
+    addCommand(body, newVarDef("d", false, type_get_basic(TY_DOUBLE), newIntLiteral(3)));
+    ASTNode *sum = newBinary(TOK_PLUS, newId("d"), newIntLiteral(1));
+    ASTNode *varDef = newVarDef("e", false, NULL, sum);
+    addCommand(body, varDef);
+
+    ProgramNode *program = newProgram();
+    addMain(program, (ASTNode *)body);
+    CHECK(runAnalyze(program) == ERR_OK);
+    CHECK(sum->type == type_get_basic(TY_DOUBLE));
+    CHECK(((BinaryNode *)sum)->left->kind == AST_ID);
+    CHECK(((BinaryNode *)sum)->right->kind == AST_CONVERT);
+    CHECK(((VarOrValNode *)varDef)->symbol->type == type_get_basic(TY_DOUBLE));
+    finishAnalyze(program);
+}
+
+void testStringConcat(void) {
+    /* "a" + "b" je String */
+    ProgramNode *program;
+    ASTNode *expr = newBinary(TOK_PLUS, newStringLiteral("a"), newStringLiteral("b"));
+    CHECK(expressionType(&program, &expr) == type_get_basic(TY_STRING));
+    finishAnalyze(program);
+}
+
+void testRelationalOperators(void) {
+    /* 1 <= 2.5 aj "a" > "b" sú Boolean */
+    ProgramNode *program;
+    ASTNode *expr = newBinary(TOK_LESS_EQUAL, newIntLiteral(1), newDoubleLiteral(2.5));
+    CHECK(expressionType(&program, &expr) == type_get_basic(TY_BOOL));
+    CHECK(((BinaryNode *)expr)->left->kind == AST_CONVERT);
+    finishAnalyze(program);
+
+    expr = newBinary(TOK_GREATER, newStringLiteral("a"), newStringLiteral("b"));
+    CHECK(expressionType(&program, &expr) == type_get_basic(TY_BOOL));
+    finishAnalyze(program);
+}
+
+void testEqualsMixedNumbers(void) {
+    /* 1 != 1.0 je Boolean, Int sa prevedie */
+    ProgramNode *program;
+    ASTNode *expr = newBinary(TOK_NOT_EQUAL, newIntLiteral(1), newDoubleLiteral(1.0));
+    CHECK(expressionType(&program, &expr) == type_get_basic(TY_BOOL));
+    CHECK(((BinaryNode *)expr)->left->kind == AST_CONVERT);
+    finishAnalyze(program);
+}
+
+void testEqualsSameType(void) {
+    /* "a" == "b" aj () == () sú Boolean */
+    ProgramNode *program;
+    ASTNode *expr = newBinary(TOK_EQUAL, newStringLiteral("a"), newStringLiteral("b"));
+    CHECK(expressionType(&program, &expr) == type_get_basic(TY_BOOL));
+    finishAnalyze(program);
+
+    expr = newBinary(TOK_EQUAL, newUnitLiteral(), newUnitLiteral());
+    CHECK(expressionType(&program, &expr) == type_get_basic(TY_BOOL));
+    finishAnalyze(program);
+}
+
+void testBooleanOperators(void) {
+    /* !true && 1 < 2 || false je Boolean (BOOLTHEN) */
+    ProgramNode *program;
+    ASTNode *expr = newBinary(
+        TOK_OR,
+        newBinary(TOK_AND, newUnary(TOK_NOT, newBoolLiteral(true)),
+                  newBinary(TOK_LESS, newIntLiteral(1), newIntLiteral(2))),
+        newBoolLiteral(false));
+    CHECK(expressionType(&program, &expr) == type_get_basic(TY_BOOL));
+    finishAnalyze(program);
+}
+
+void testUnaryKeepsType(void) {
+    /* -1.5 je Double, -1 je Int */
+    ProgramNode *program;
+    ASTNode *expr = newUnary(TOK_MINUS, newDoubleLiteral(1.5));
+    CHECK(expressionType(&program, &expr) == type_get_basic(TY_DOUBLE));
+    finishAnalyze(program);
+
+    expr = newUnary(TOK_MINUS, newIntLiteral(1));
+    CHECK(expressionType(&program, &expr) == type_get_basic(TY_INT));
+    finishAnalyze(program);
+}
+
+void testExpressionWithVariables(void) {
+    /* var x = 1 ; x = x * 2 + 1 */
+    BlockNode *body = newBlock();
+    addCommand(body, newVarDef("x", true, NULL, newIntLiteral(1)));
+    addCommand(body,
+               newAssign("x", newBinary(TOK_PLUS,
+                                        newBinary(TOK_MULTIPLY, newId("x"), newIntLiteral(2)),
+                                        newIntLiteral(1))));
+    CHECK(analyzeMainBody(body) == ERR_OK);
+}
+
+void testAssignDoubleExpressionToInt(void) {
+    /* var x = 1 ; x = x + 0.5 */
+    BlockNode *body = newBlock();
+    addCommand(body, newVarDef("x", true, NULL, newIntLiteral(1)));
+    addCommand(body, newAssign("x", newBinary(TOK_PLUS, newId("x"), newDoubleLiteral(0.5))));
+    CHECK(analyzeMainBody(body) == ERR_TYPE);
+}
+
 int main(void) {
     testUndefinedVariable();
     testUseBeforeDefinition();
@@ -556,6 +779,28 @@ int main(void) {
     testParamSymbolFilled();
     testExtensionReceiverVisible();
     testBodyNotSeenByOtherFunction();
+
+    testAndOnInt();
+    testBoolArithmetic();
+    testCompareStringInt();
+    testUnaryMinusString();
+    testConcatStringInt();
+    testEqualsDifferentTypes();
+    testNotOnInt();
+    testStringMinus();
+    testUndefinedInExpression();
+
+    testIntArithmetic();
+    testIntPlusDouble();
+    testConvertInserted();
+    testStringConcat();
+    testRelationalOperators();
+    testEqualsMixedNumbers();
+    testEqualsSameType();
+    testBooleanOperators();
+    testUnaryKeepsType();
+    testExpressionWithVariables();
+    testAssignDoubleExpressionToInt();
 
     type_free_all();
 

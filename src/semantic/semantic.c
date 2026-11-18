@@ -749,6 +749,12 @@ Type *checkNode(Symtable *table, BodyContext *context, ASTNode **node, bool isVa
     else if (current->kind == AST_ASSIGN){
         nodeType = checkAssign(table, context, (AssignNode *)current, error);
     }
+    else if (current->kind == AST_BINARY){
+        nodeType = checkBinary(table, context, (BinaryNode *)current, error);
+    }
+    else if (current->kind == AST_UNARY){
+        nodeType = checkUnary(table, context, (UnaryNode *)current, error);
+    }
     else if (current->kind == AST_EXPR_STATEMENT){
         nodeType = checkNode(table, context, &((LonelyExprNode *)current)->expr, isValueUsed,
                              error);
@@ -837,4 +843,110 @@ void checkFunctionBodies(Symtable *table, ProgramNode *program, ErrorCode *error
             return;
         }
     }
+}
+
+bool isNumericType(Type *type){
+    return type != NULL && (type->kind == TY_INT || type->kind == TY_DOUBLE);
+}
+
+Type *convertNumericOperands(BinaryNode *binary, Type *leftType, Type *rightType,
+                             ErrorCode *error){
+    if (leftType->kind == TY_INT && rightType->kind == TY_INT){
+        return type_get_basic(TY_INT);
+    }
+
+    // jediná implicitná konverzia, prevedie sa ta strana, ktora je Int
+    if (leftType->kind == TY_INT){
+        ASTNode *convert = createConvertNode(binary->left, error);
+        if (convert != NULL){
+            binary->left = convert;
+        }
+    }
+    else if (rightType->kind == TY_INT){
+        ASTNode *convert = createConvertNode(binary->right, error);
+        if (convert != NULL){
+            binary->right = convert;
+        }
+    }
+
+    return type_get_basic(TY_DOUBLE);
+}
+
+Type *checkBinary(Symtable *table, BodyContext *context, BinaryNode *binary, ErrorCode *error){
+    // operandy sa vyhodnocuju zlava doprava
+    Type *leftType = getRealType(checkNode(table, context, &binary->left, true, error));
+    Type *rightType = getRealType(checkNode(table, context, &binary->right, true, error));
+
+    if (*error != ERR_OK){
+        return NULL;
+    }
+
+    // operand bez hodnoty (konci returnom) nemoze byt vo vyraze
+    if (leftType == NULL || rightType == NULL){
+        *error = ERR_TYPE;
+        return NULL;
+    }
+
+    TokenType operator = binary->operator;
+    bool bothNumeric = isNumericType(leftType) && isNumericType(rightType);
+    bool bothString = leftType->kind == TY_STRING && rightType->kind == TY_STRING;
+
+    if (operator == TOK_PLUS || operator == TOK_MINUS || operator == TOK_MULTIPLY
+        || operator == TOK_DIVIDE){
+        if (bothNumeric){
+            return convertNumericOperands(binary, leftType, rightType, error);
+        }
+        // konkatenacia, ine typy sa na retazec automaticky neprevadzaju
+        if (operator == TOK_PLUS && bothString){
+            return type_get_basic(TY_STRING);
+        }
+    }
+    else if (operator == TOK_LESS || operator == TOK_LESS_EQUAL || operator == TOK_GREATER
+             || operator == TOK_GREATER_EQUAL){
+        if (bothNumeric){
+            convertNumericOperands(binary, leftType, rightType, error);
+            return type_get_basic(TY_BOOL);
+        }
+        if (bothString){
+            return type_get_basic(TY_BOOL);
+        }
+    }
+    else if (operator == TOK_EQUAL || operator == TOK_NOT_EQUAL){
+        if (bothNumeric){
+            convertNumericOperands(binary, leftType, rightType, error);
+            return type_get_basic(TY_BOOL);
+        }
+        if (type_equals(leftType, rightType)){
+            return type_get_basic(TY_BOOL);
+        }
+    }
+    else if (operator == TOK_AND || operator == TOK_OR){
+        if (leftType->kind == TY_BOOL && rightType->kind == TY_BOOL){
+            return type_get_basic(TY_BOOL);
+        }
+    }
+
+    // nesulad typov alebo nepodporovany operator
+    *error = ERR_TYPE;
+    return NULL;
+}
+
+Type *checkUnary(Symtable *table, BodyContext *context, UnaryNode *unary, ErrorCode *error){
+    Type *operandType = getRealType(checkNode(table, context, &unary->right, true, error));
+
+    if (*error != ERR_OK){
+        return NULL;
+    }
+
+    // unarne - a + nemenia typ cisla
+    if ((unary->operator == TOK_MINUS || unary->operator == TOK_PLUS)
+        && isNumericType(operandType)){
+        return operandType;
+    }
+    if (unary->operator == TOK_NOT && operandType != NULL && operandType->kind == TY_BOOL){
+        return operandType;
+    }
+
+    *error = ERR_TYPE;
+    return NULL;
 }

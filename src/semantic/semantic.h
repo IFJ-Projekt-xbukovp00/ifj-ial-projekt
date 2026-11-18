@@ -326,3 +326,41 @@ void checkFunctionBody(Symtable *table, BodyContext *parent, Symbol *functionSym
  * @param error je pointer, cez ktorý si vrátim prvú chybu
  */
 void checkFunctionBodies(Symtable *table, ProgramNode *program, ErrorCode *error);
+
+/**
+ * @brief funkcia na zistenie, či je typ číselný (Int alebo Double)
+ * @param type je typ, uz bez mien typov
+ * @returns true pre Int a Double
+ */
+bool isNumericType(Type *type);
+
+/**
+ * @brief funkcia na prevod Int operandu na Double, ak je druhý operand Double
+ * @param binary je uzol binárnej operácie
+ * @param leftType je typ ľavého operandu
+ * @param rightType je typ pravého operandu
+ * @param error je pointer, cez ktorý si vrátim chybové hlásenie (ERR_INTERNAL)
+ * @returns Double, ak je aspoň jeden operand Double, inak Int
+ */
+Type *convertNumericOperands(BinaryNode *binary, Type *leftType, Type *rightType,
+                             ErrorCode *error);
+
+/**
+ * @brief funkcia na kontrolu binárnej operácie
+ * @param table je tabuľka symbolov
+ * @param context je kontext kontrolovanej funkcie
+ * @param binary je uzol binarnej operacie
+ * @param error je pointer, cez ktorý si vrátim chybové hlásenie (6)
+ * @returns typ výsledku, pri chybe NULL
+ */
+Type *checkBinary(Symtable *table, BodyContext *context, BinaryNode *binary, ErrorCode *error);
+
+/**
+ * @brief funkcia na kontrolu unárnej operácie (-, +, !)
+ * @param table je tabuľka symbolov
+ * @param context je kontext kontrolovanej funkcie
+ * @param unary je uzol unarnej operacie
+ * @param error je pointer, cez ktorý si vrátim chybové hlásenie (6)
+ * @returns typ výsledku, pri chybe NULL
+ */
+Type *checkUnary(Symtable *table, BodyContext *context, UnaryNode *unary, ErrorCode *error);
