@@ -244,12 +244,15 @@ Scope *getGlobalScope(Symtable *table);
 
 /**
  * @brief funkcia na kontrolu identifikátora vo výraze
+ *
+ * Meno funkcie bez zoznamu parametrov (def answer: Int) je jej volanie bez zátvoriek.
  * @param table je tabuľka symbolov
+ * @param context je kontext kontrolovanej funkcie
  * @param id je uzol identifikatora
- * @param error je pointer, cez ktorý si vrátim chybové hlásenie (3)
+ * @param error je pointer, cez ktorý si vrátim chybové hlásenie (3, 6)
  * @returns typ identifikátora, pri chybe NULL
  */
-Type *checkId(Symtable *table, IDNode *id, ErrorCode *error);
+Type *checkId(Symtable *table, BodyContext *context, IDNode *id, ErrorCode *error);
 
 /**
  * @brief funkcia na kontrolu bloku, blok je vlastny rozsah platnosti
@@ -454,3 +457,43 @@ bool acceptResult(Type *expected, ASTNode **node, ErrorCode *error);
  * @param error je pointer, cez ktorý si vrátim chybové hlásenie (6)
  */
 void checkFunctionResult(Symbol *functionSymbol, Type *bodyType, ErrorCode *error);
+
+/**
+ * @brief funkcia na zistenie návratového typu volanej funkcie
+ *
+ * Telo funkcie, ktoré ešte nebolo skontrolované, sa skontroluje hneď. Ak sa
+ * funkcia práve kontroluje, ide o rekurziu a všetky funkcie v kruhu volaní
+ * musia mať uvedený návratový typ.
+ * @param table je tabuľka symbolov
+ * @param context je kontext volajúcej funkcie
+ * @param functionSymbol je symbol volanej funkcie
+ * @param error je pointer, cez ktorý si vrátim chybové hlásenie (6)
+ * @returns návratový typ (uvedený alebo odvodený), pri chybe NULL
+ */
+Type *getFunctionReturnType(Symtable *table, BodyContext *context, Symbol *functionSymbol,
+                            ErrorCode *error);
+
+/**
+ * @brief funkcia na kontrolu argumentov jedného volania podľa typov parametrov
+ * @param table je tabuľka symbolov
+ * @param context je kontext volajúcej funkcie
+ * @param call je uzol volania s argumentmi
+ * @param paramTypes je pole typov parametrov
+ * @param paramCount je počet parametrov
+ * @param error je pointer, cez ktorý si vrátim chybové hlásenie (5)
+ */
+void checkArguments(Symtable *table, BodyContext *context, CallNode *call, Type **paramTypes,
+                    size_t paramCount, ErrorCode *error);
+
+/**
+ * @brief funkcia na kontrolu volania funkcie
+ *
+ * Volanie s viacerými zoznamami argumentov f(a)(b) sú vnorené uzly volania,
+ * kontroluje sa od najvonkajšieho, vnútorné dostanú rovnaký symbol.
+ * @param table je tabuľka symbolov
+ * @param context je kontext volajúcej funkcie
+ * @param call je najvonkajšie volanie
+ * @param error je pointer, cez ktorý si vrátim chybové hlásenie (3, 5, 6)
+ * @returns návratový typ volanej funkcie, pri chybe NULL
+ */
+Type *checkCall(Symtable *table, BodyContext *context, CallNode *call, ErrorCode *error);

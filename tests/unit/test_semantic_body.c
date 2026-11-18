@@ -1,7 +1,7 @@
 /**
  * @file test_semantic_body.c
  * @brief Unit testy kontroly tiel funkcií v sémantike (premenné, rozsahy, priradenie, výrazy,
- *        podmienky, cykly, návratové typy)
+ *        podmienky, cykly, návratové typy, volania)
  *
  * Použitie AI: tento súbor vygenerovala AI (Claude Opus 5.5).
  * Prompt: "Vyrob testy ako pre zvyšok semntickeho analyzatora, tentokrát ale na ich telá,
@@ -219,6 +219,25 @@ ASTNode *newReturn(ASTNode *returnValue) {
     return (ASTNode *)returnNode;
 }
 
+ASTNode *newCall(ASTNode *caller) {
+    CallNode *call = calloc(1, sizeof(CallNode));
+    call->node.kind = AST_CALL;
+    call->caller = caller;
+    return (ASTNode *)call;
+}
+
+ASTNode *addArg(ASTNode *callNode, ASTNode *arg) {
+    CallNode *call = (CallNode *)callNode;
+    call->args = realloc(call->args, (call->argsCount + 1) * sizeof(ASTNode *));
+    call->args[call->argsCount++] = arg;
+    return callNode;
+}
+
+/* volanie name(arg) s jedným argumentom */
+ASTNode *callWithArg(const char *name, ASTNode *arg) {
+    return addArg(newCall(newId(name)), arg);
+}
+
 /* uvoľnenie AST (aj ConvertNode, ktoré vložila sémantika) */
 
 void freeNode(ASTNode *node) {
@@ -254,6 +273,13 @@ void freeNode(ASTNode *node) {
         freeNode(((WhileNode *)node)->body);
     } else if (node->kind == AST_RETURN) {
         freeNode(((ReturnNode *)node)->returnValue);
+    } else if (node->kind == AST_CALL) {
+        CallNode *call = (CallNode *)node;
+        freeNode(call->caller);
+        for (size_t argIndex = 0; argIndex < call->argsCount; argIndex++) {
+            freeNode(call->args[argIndex]);
+        }
+        free(call->args);
     }
 
     free(node);
@@ -1198,6 +1224,334 @@ void testBlockResultConvert(void) {
     finishAnalyze(program);
 }
 
+/* testy: volania funkcií */
+
+/* def name(a: Int, b: Int, ...) : returnType = body s paramCount parametrami Int */
+DefFuncNode *addIntFunction(ProgramNode *program, const char *name, size_t paramCount,
+                            Type *returnType, ASTNode *body) {
+    const char *paramNames[] = {"a", "b", "c"};
+    DefFuncNode *function = newFunction(program, name, false, returnType, body);
+    addParamList(function);
+    for (size_t paramIndex = 0; paramIndex < paramCount; paramIndex++) {
+        addParam(function, paramNames[paramIndex], type_get_basic(TY_INT));
+    }
+    return function;
+}
+
+/* @main s jediným príkazom val x = init a k tomu funkcia f(a: Int): Int = a */
+ErrorCode analyzeCallOfF(ASTNode *init) {
+    ProgramNode *program = newProgram();
+    addIntFunction(program, "f", 1, type_get_basic(TY_INT), newId("a"));
+    BlockNode *body = newBlock();
+    addCommand(body, newVarDef("x", false, NULL, init));
+    addMain(program, (ASTNode *)body);
+    return analyze(program);
+}
+
+void testUndefinedFunction(void) {
+    /* foo() (err3_undefined_function) */
+    BlockNode *body = newBlock();
+    addCommand(body, newExprStatement(newCall(newId("foo"))));
+    CHECK(analyzeMainBody(body) == ERR_UNDEF);
+}
+
+void testTooFewArgs(void) {
+    /* def f(a: Int, b: Int): Int = a ; val x = f(1) (err5_too_few_args) */
+    ProgramNode *program = newProgram();
+    addIntFunction(program, "f", 2, type_get_basic(TY_INT), newId("a"));
+    BlockNode *body = newBlock();
+    addCommand(body, newVarDef("x", false, NULL, callWithArg("f", newIntLiteral(1))));
+    addMain(program, (ASTNode *)body);
+    CHECK(analyze(program) == ERR_PARAMS);
+}
+
+void testTooManyArgs(void) {
+    /* val x = f(1, 2) (err5_too_many_args) */
+    CHECK(analyzeCallOfF(addArg(callWithArg("f", newIntLiteral(1)), newIntLiteral(2))) ==
+          ERR_PARAMS);
+}
+
+void testWrongArgType(void) {
+    /* val x = f("a") (err5_wrong_arg_type) */
+    CHECK(analyzeCallOfF(callWithArg("f", newStringLiteral("a"))) == ERR_PARAMS);
+}
+
+void testDoubleToIntArg(void) {
+    /* val x = f(1.5) (err5_double_to_int_arg) */
+    CHECK(analyzeCallOfF(callWithArg("f", newDoubleLiteral(1.5))) == ERR_PARAMS);
+}
+
+void testUndefinedArgument(void) {
+    /* val x = f(y) */
+    CHECK(analyzeCallOfF(callWithArg("f", newId("y"))) == ERR_UNDEF);
+}
+
+void testBuiltinWrongCount(void) {
+    /* val s = subStr("abc", 1) (err5_builtin_wrong_count) */
+    CHECK(analyzeInitExpression(addArg(callWithArg("subStr", newStringLiteral("abc")),
+                                       newIntLiteral(1))) == ERR_PARAMS);
+}
+
+void testBuiltinWrongType(void) {
+    /* val n = strLength(5) (err5_builtin_wrong_type) */
+    CHECK(analyzeInitExpression(callWithArg("strLength", newIntLiteral(5))) == ERR_PARAMS);
+}
+
+void testCallVariable(void) {
+    /* val a = 1 ; a() */
+    BlockNode *body = newBlock();
+    addCommand(body, newVarDef("a", false, NULL, newIntLiteral(1)));
+    addCommand(body, newExprStatement(newCall(newId("a"))));
+    CHECK(analyzeMainBody(body) == ERR_TYPE);
+}
+
+/* program s def add(a: Int)(b: Int): Int = a + b a @main s val x = init */
+ProgramNode *programWithAdd(ASTNode *init) {
+    ProgramNode *program = newProgram();
+    DefFuncNode *add = newFunction(program, "add", false, type_get_basic(TY_INT),
+                                   newBinary(TOK_PLUS, newId("a"), newId("b")));
+    addParamList(add);
+    addParam(add, "a", type_get_basic(TY_INT));
+    addParamList(add);
+    addParam(add, "b", type_get_basic(TY_INT));
+
+    BlockNode *body = newBlock();
+    addCommand(body, newVarDef("x", false, NULL, init));
+    addMain(program, (ASTNode *)body);
+    return program;
+}
+
+void testParamListsMissingList(void) {
+    /* val x = add(1) (err5_paramlists_missing_list) */
+    CHECK(analyze(programWithAdd(callWithArg("add", newIntLiteral(1)))) == ERR_PARAMS);
+}
+
+void testParamListsTooMany(void) {
+    /* val x = add(1)(2)(3) */
+    ASTNode *call = addArg(newCall(addArg(newCall(callWithArg("add", newIntLiteral(1))),
+                                          newIntLiteral(2))),
+                           newIntLiteral(3));
+    CHECK(analyze(programWithAdd(call)) == ERR_PARAMS);
+}
+
+void testParamListsWrongCountInList(void) {
+    /* val x = add(1, 2)(3) */
+    ASTNode *inner = addArg(callWithArg("add", newIntLiteral(1)), newIntLiteral(2));
+    CHECK(analyze(programWithAdd(addArg(newCall(inner), newIntLiteral(3)))) == ERR_PARAMS);
+}
+
+void testParamListsOk(void) {
+    /* val x = add(1)(2) je Int, obe volania majú vyplnený symbol */
+    ASTNode *inner = callWithArg("add", newIntLiteral(1));
+    ASTNode *outer = addArg(newCall(inner), newIntLiteral(2));
+    ProgramNode *program = programWithAdd(outer);
+
+    CHECK(runAnalyze(program) == ERR_OK);
+    CHECK(outer->type == type_get_basic(TY_INT));
+    CHECK(((CallNode *)outer)->callKind == CALL_FUNC);
+    CHECK(((CallNode *)outer)->symbol != NULL);
+    CHECK(((CallNode *)inner)->symbol == ((CallNode *)outer)->symbol);
+    CHECK(((CallNode *)inner)->callKind == CALL_FUNC);
+    finishAnalyze(program);
+}
+
+void testCallFillsFields(void) {
+    /* val x = f(1) a print(x): CALL_FUNC s typom Int, CALL_BUILTIN s typom Unit */
+    ProgramNode *program = newProgram();
+    DefFuncNode *function = addIntFunction(program, "f", 1, type_get_basic(TY_INT), newId("a"));
+    ASTNode *call = callWithArg("f", newIntLiteral(1));
+    ASTNode *printCall = callWithArg("print", newId("x"));
+    BlockNode *body = newBlock();
+    addCommand(body, newVarDef("x", false, NULL, call));
+    addCommand(body, newExprStatement(printCall));
+    addMain(program, (ASTNode *)body);
+
+    CHECK(runAnalyze(program) == ERR_OK);
+    CHECK(call->type == type_get_basic(TY_INT));
+    CHECK(((CallNode *)call)->callKind == CALL_FUNC);
+    CHECK(((CallNode *)call)->symbol == function->symbol);
+    CHECK(printCall->type->kind == TY_UNIT);
+    CHECK(((CallNode *)printCall)->callKind == CALL_BUILTIN);
+    finishAnalyze(program);
+}
+
+void testBuiltinCallsOk(void) {
+    /* print("a") ; val s = subStr("abc", 0, 1) ; val n = strLength(s) ; print(toStr(n)) */
+    BlockNode *body = newBlock();
+    addCommand(body, newExprStatement(callWithArg("print", newStringLiteral("a"))));
+    ASTNode *subStrCall = addArg(addArg(callWithArg("subStr", newStringLiteral("abc")),
+                                        newIntLiteral(0)),
+                                 newIntLiteral(1));
+    addCommand(body, newVarDef("s", false, NULL, subStrCall));
+    addCommand(body, newVarDef("n", false, NULL, callWithArg("strLength", newId("s"))));
+    addCommand(body,
+               newExprStatement(callWithArg("print", callWithArg("toStr", newId("n")))));
+    CHECK(analyzeMainBody(body) == ERR_OK);
+}
+
+void testUnionAcceptsInt(void) {
+    /* def foo(x: Double | String): String = toStr(x) ; val s = foo(5) (ok_union_accepts_int) */
+    ProgramNode *program = newProgram();
+    TypeList members = {0};
+    type_list_append(&members, type_get_basic(TY_DOUBLE));
+    type_list_append(&members, type_get_basic(TY_STRING));
+    DefFuncNode *foo = newFunction(program, "foo", false, type_get_basic(TY_STRING),
+                                   callWithArg("toStr", newId("x")));
+    addParamList(foo);
+    addParam(foo, "x", type_create_union(members));
+
+    ASTNode *call = callWithArg("foo", newIntLiteral(5));
+    BlockNode *body = newBlock();
+    addCommand(body, newVarDef("s", false, NULL, call));
+    addMain(program, (ASTNode *)body);
+
+    CHECK(runAnalyze(program) == ERR_OK);
+    CHECK(((CallNode *)call)->args[0]->kind == AST_CONVERT);
+    finishAnalyze(program);
+}
+
+void testCallBeforeDefinition(void) {
+    /* @main volá f, ktorá je v zdrojáku až za ním */
+    ProgramNode *program = newProgram();
+    BlockNode *body = newBlock();
+    addCommand(body, newVarDef("x", false, NULL, callWithArg("f", newIntLiteral(1))));
+    addMain(program, (ASTNode *)body);
+    addIntFunction(program, "f", 1, type_get_basic(TY_INT), newId("a"));
+    CHECK(analyze(program) == ERR_OK);
+}
+
+void testInferredReturnFromCallee(void) {
+    /* @main = { val x: Int = g() } ; def g() = 1 -> typ g sa odvodí pri volaní */
+    ProgramNode *program = newProgram();
+    BlockNode *body = newBlock();
+    addCommand(body, newVarDef("x", false, type_get_basic(TY_INT), newCall(newId("g"))));
+    addMain(program, (ASTNode *)body);
+    addIntFunction(program, "g", 0, NULL, newIntLiteral(1));
+    CHECK(analyze(program) == ERR_OK);
+}
+
+void testInferredReturnMismatch(void) {
+    /* @main = { val x: Int = g() } ; def g() = "a" */
+    ProgramNode *program = newProgram();
+    BlockNode *body = newBlock();
+    addCommand(body, newVarDef("x", false, type_get_basic(TY_INT), newCall(newId("g"))));
+    addMain(program, (ASTNode *)body);
+    addIntFunction(program, "g", 0, NULL, newStringLiteral("a"));
+    CHECK(analyze(program) == ERR_TYPE);
+}
+
+void testUnitResultStored(void) {
+    /* def f(): Unit = 1 ; val u = f() ; print(u) (ok_unit_discards_value) */
+    ProgramNode *program = newProgram();
+    addIntFunction(program, "f", 0, type_get_basic(TY_UNIT), newIntLiteral(1));
+    BlockNode *body = newBlock();
+    addCommand(body, newVarDef("u", false, NULL, newCall(newId("f"))));
+    addCommand(body, newExprStatement(callWithArg("print", newId("u"))));
+    addMain(program, (ASTNode *)body);
+    CHECK(analyze(program) == ERR_OK);
+}
+
+void testRecursionWithoutReturnType(void) {
+    /* def f(a: Int) = if a == 0 then 0 else f(a - 1) (err6_recursion_without_return_type) */
+    ProgramNode *program = newProgram();
+    ASTNode *recursiveCall =
+        callWithArg("f", newBinary(TOK_MINUS, newId("a"), newIntLiteral(1)));
+    addIntFunction(program, "f", 1, NULL,
+                   newIf(newBinary(TOK_EQUAL, newId("a"), newIntLiteral(0)), newIntLiteral(0),
+                         recursiveCall));
+    addMain(program, (ASTNode *)newBlock());
+    CHECK(analyze(program) == ERR_TYPE);
+}
+
+void testRecursionWithReturnType(void) {
+    /* def fact(a: Int): Int = if a < 2 then 1 else a * fact(a - 1) */
+    ProgramNode *program = newProgram();
+    ASTNode *recursiveCall =
+        callWithArg("fact", newBinary(TOK_MINUS, newId("a"), newIntLiteral(1)));
+    addIntFunction(program, "fact", 1, type_get_basic(TY_INT),
+                   newIf(newBinary(TOK_LESS, newId("a"), newIntLiteral(2)), newIntLiteral(1),
+                         newBinary(TOK_MULTIPLY, newId("a"), recursiveCall)));
+    BlockNode *body = newBlock();
+    addCommand(body, newVarDef("x", false, NULL, callWithArg("fact", newIntLiteral(5))));
+    addMain(program, (ASTNode *)body);
+    CHECK(analyze(program) == ERR_OK);
+}
+
+/* def f(): Int = g() a def g() = f() v zadanom poradí */
+ErrorCode analyzeIndirectRecursion(bool isFFirst, Type *gReturnType) {
+    ProgramNode *program = newProgram();
+    if (isFFirst) {
+        addIntFunction(program, "f", 0, type_get_basic(TY_INT), newCall(newId("g")));
+        addIntFunction(program, "g", 0, gReturnType, newCall(newId("f")));
+    } else {
+        addIntFunction(program, "g", 0, gReturnType, newCall(newId("f")));
+        addIntFunction(program, "f", 0, type_get_basic(TY_INT), newCall(newId("g")));
+    }
+    addMain(program, (ASTNode *)newBlock());
+    return analyze(program);
+}
+
+void testIndirectRecursion(void) {
+    /* g nemá uvedený typ -> chyba pri oboch poradiach */
+    CHECK(analyzeIndirectRecursion(true, NULL) == ERR_TYPE);
+    CHECK(analyzeIndirectRecursion(false, NULL) == ERR_TYPE);
+}
+
+void testMutualRecursionDeclared(void) {
+    /* obe funkcie majú uvedený typ -> v poriadku */
+    CHECK(analyzeIndirectRecursion(true, type_get_basic(TY_INT)) == ERR_OK);
+    CHECK(analyzeIndirectRecursion(false, type_get_basic(TY_INT)) == ERR_OK);
+}
+
+void testCalleeDoesNotSeeCallerLocals(void) {
+    /* @main = { val x = 1 ; g() } ; def g(): Int = x -> 3 */
+    ProgramNode *program = newProgram();
+    BlockNode *body = newBlock();
+    addCommand(body, newVarDef("x", false, NULL, newIntLiteral(1)));
+    addCommand(body, newExprStatement(newCall(newId("g"))));
+    addMain(program, (ASTNode *)body);
+    addIntFunction(program, "g", 0, type_get_basic(TY_INT), newId("x"));
+    CHECK(analyze(program) == ERR_UNDEF);
+}
+
+void testCallerLocalsAfterCall(void) {
+    /* @main = { val x = 1 ; g() ; x } ; def g(): Int = 2 -> x je po volaní stále viditeľné */
+    ProgramNode *program = newProgram();
+    BlockNode *body = newBlock();
+    addCommand(body, newVarDef("x", false, NULL, newIntLiteral(1)));
+    addCommand(body, newExprStatement(newCall(newId("g"))));
+    addCommand(body, newExprStatement(newId("x")));
+    addMain(program, (ASTNode *)body);
+    addIntFunction(program, "g", 0, type_get_basic(TY_INT), newIntLiteral(2));
+    CHECK(analyze(program) == ERR_OK);
+}
+
+void testFunctionWithoutParens(void) {
+    /* def answer: Int = 42 ; val x = answer -> volanie bez zátvoriek */
+    ProgramNode *program = newProgram();
+    newFunction(program, "answer", false, type_get_basic(TY_INT), newIntLiteral(42));
+    ASTNode *use = newId("answer");
+    BlockNode *body = newBlock();
+    addCommand(body, newVarDef("x", false, NULL, use));
+    addMain(program, (ASTNode *)body);
+
+    CHECK(runAnalyze(program) == ERR_OK);
+    CHECK(use->type == type_get_basic(TY_INT));
+    CHECK(((IDNode *)use)->idKind == ID_FUNC_CALL);
+    CHECK(((IDNode *)use)->symbol != NULL);
+    finishAnalyze(program);
+}
+
+void testParenlessCalledWithParens(void) {
+    /* def answer: Int = 42 ; val x = answer() */
+    ProgramNode *program = newProgram();
+    newFunction(program, "answer", false, type_get_basic(TY_INT), newIntLiteral(42));
+    BlockNode *body = newBlock();
+    addCommand(body, newVarDef("x", false, NULL, newCall(newId("answer"))));
+    addMain(program, (ASTNode *)body);
+    CHECK(analyze(program) == ERR_PARAMS);
+}
+
 int main(void) {
     testUndefinedVariable();
     testUseBeforeDefinition();
@@ -1289,6 +1643,35 @@ int main(void) {
     testReturnConvert();
     testReturnValueConvert();
     testBlockResultConvert();
+
+    testUndefinedFunction();
+    testTooFewArgs();
+    testTooManyArgs();
+    testWrongArgType();
+    testDoubleToIntArg();
+    testUndefinedArgument();
+    testBuiltinWrongCount();
+    testBuiltinWrongType();
+    testCallVariable();
+    testParamListsMissingList();
+    testParamListsTooMany();
+    testParamListsWrongCountInList();
+    testParamListsOk();
+    testCallFillsFields();
+    testBuiltinCallsOk();
+    testUnionAcceptsInt();
+    testCallBeforeDefinition();
+    testInferredReturnFromCallee();
+    testInferredReturnMismatch();
+    testUnitResultStored();
+    testRecursionWithoutReturnType();
+    testRecursionWithReturnType();
+    testIndirectRecursion();
+    testMutualRecursionDeclared();
+    testCalleeDoesNotSeeCallerLocals();
+    testCallerLocalsAfterCall();
+    testFunctionWithoutParens();
+    testParenlessCalledWithParens();
 
     type_free_all();
 

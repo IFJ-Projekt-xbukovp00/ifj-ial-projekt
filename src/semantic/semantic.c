@@ -608,7 +608,7 @@ Scope *getGlobalScope(Symtable *table){
     return scope;
 }
 
-Type *checkId(Symtable *table, IDNode *id, ErrorCode *error){
+Type *checkId(Symtable *table, BodyContext *context, IDNode *id, ErrorCode *error){
     Symbol *symbol = lookupSymbol(table, id->name);
 
     if (symbol == NULL){
@@ -616,7 +616,15 @@ Type *checkId(Symtable *table, IDNode *id, ErrorCode *error){
         return NULL;
     }
 
-    // funkcie a konštruktory ako hodnotu zatial nepodporujeme
+    // funkcia bez zoznamu parametrov sa vola bez zatvoriek
+    if (symbol->kind == SYM_FUNCTION
+        && ((DefFuncNode *)symbol->definition)->paramListCount == 0){
+        id->idKind = ID_FUNC_CALL;
+        id->symbol = symbol;
+        return getFunctionReturnType(table, context, symbol, error);
+    }
+
+    // ine funkcie a konštruktory ako hodnotu nepodporujeme
     if (symbol->kind != SYM_VARIABLE && symbol->kind != SYM_PARAMETER){
         *error = ERR_TYPE;
         return NULL;
@@ -738,7 +746,7 @@ Type *checkNode(Symtable *table, BodyContext *context, ASTNode **node, bool isVa
         nodeType = getLiteralType((LiteralNode *)current);
     }
     else if (current->kind == AST_ID){
-        nodeType = checkId(table, (IDNode *)current, error);
+        nodeType = checkId(table, context, (IDNode *)current, error);
     }
     else if (current->kind == AST_BLOCK){
         nodeType = checkBlock(table, context, (BlockNode *)current, isValueUsed, error);
@@ -760,6 +768,9 @@ Type *checkNode(Symtable *table, BodyContext *context, ASTNode **node, bool isVa
     }
     else if (current->kind == AST_WHILE){
         nodeType = checkWhile(table, context, (WhileNode *)current, error);
+    }
+    else if (current->kind == AST_CALL){
+        nodeType = checkCall(table, context, (CallNode *)current, error);
     }
     else if (current->kind == AST_RETURN){
         nodeType = checkReturn(table, context, (ReturnNode *)current, error);
@@ -1149,4 +1160,149 @@ void checkFunctionResult(Symbol *functionSymbol, Type *bodyType, ErrorCode *erro
     if (!acceptResult(function->returnType, &function->body, error) && *error == ERR_OK){
         *error = ERR_TYPE;
     }
+}
+
+Type *getFunctionReturnType(Symtable *table, BodyContext *context, Symbol *functionSymbol,
+                            ErrorCode *error){
+    if (functionSymbol->kind == SYM_BUILTIN){
+        return functionSymbol->type->func.ret;
+    }
+
+    DefFuncNode *function = (DefFuncNode *)functionSymbol->definition;
+
+    if (functionSymbol->checkState == FUNC_IN_PROGRESS){
+        // rekurzia, kazda funkcia v kruhu volani musi mat uvedeny typ
+        for (BodyContext *current = context; current != NULL; current = current->parent){
+            if (current->function->returnType == NULL){
+                *error = ERR_TYPE;
+                return NULL;
+            }
+            if (current->function == function){
+                break;
+            }
+        }
+    }
+    else{
+        // telo sa skontroluje hned, aj ked typ je uvedeny (kvoli nepriamej rekurzii)
+        checkFunctionBody(table, context, functionSymbol, error);
+    }
+
+    if (*error != ERR_OK){
+        return NULL;
+    }
+
+    if (function->returnType != NULL){
+        return function->returnType;
+    }
+    return functionSymbol->type->func.ret;
+}
+
+void checkArguments(Symtable *table, BodyContext *context, CallNode *call, Type **paramTypes,
+                    size_t paramCount, ErrorCode *error){
+    if (call->argsCount != paramCount){
+        *error = ERR_PARAMS;
+        return;
+    }
+
+    for (size_t argIndex = 0; argIndex < call->argsCount; argIndex++){
+        checkNode(table, context, &call->args[argIndex], true, error);
+        if (*error != ERR_OK){
+            return;
+        }
+
+        if (!acceptValue(paramTypes[argIndex], &call->args[argIndex], error)){
+            *error = ERR_PARAMS;
+        }
+        if (*error != ERR_OK){
+            return;
+        }
+    }
+}
+
+Type *checkCall(Symtable *table, BodyContext *context, CallNode *call, ErrorCode *error){
+    // pocet zoznamov argumentov f(a)(b)
+    size_t listCount = 1;
+    ASTNode *caller = call->caller;
+
+    while (caller->kind == AST_CALL){
+        listCount++;
+        caller = ((CallNode *)caller)->caller;
+    }
+
+    // volat sa da len meno funkcie
+    if (caller->kind != AST_ID){
+        *error = ERR_TYPE;
+        return NULL;
+    }
+
+    IDNode *calleeId = (IDNode *)caller;
+    Symbol *callee = lookupSymbol(table, calleeId->name);
+
+    if (callee == NULL){
+        *error = ERR_UNDEF;
+        return NULL;
+    }
+    if (callee->kind != SYM_FUNCTION && callee->kind != SYM_BUILTIN){
+        *error = ERR_TYPE;
+        return NULL;
+    }
+
+    calleeId->symbol = callee;
+    calleeId->node.type = callee->type;
+
+    // zoznamy volani od najvnutornejsieho, ten patri k prvemu zoznamu parametrov
+    CallNode **calls = malloc(listCount * sizeof(CallNode *));
+    if (calls == NULL){
+        *error = ERR_INTERNAL;
+        return NULL;
+    }
+
+    CallNode *current = call;
+    for (size_t listIndex = listCount; listIndex > 0; listIndex--){
+        calls[listIndex - 1] = current;
+        current->symbol = callee;
+        current->callKind = CALL_FUNC;
+        if (callee->kind == SYM_BUILTIN){
+            current->callKind = CALL_BUILTIN;
+        }
+        if (listIndex > 1){
+            current = (CallNode *)current->caller;
+        }
+    }
+
+    if (callee->kind == SYM_BUILTIN){
+        // vstavane funkcie maju jeden zoznam parametrov
+        if (listCount != 1){
+            *error = ERR_PARAMS;
+        }
+        else{
+            checkArguments(table, context, call, callee->type->func.params.items,
+                           callee->type->func.params.len, error);
+        }
+    }
+    else{
+        DefFuncNode *function = (DefFuncNode *)callee->definition;
+
+        if (listCount != function->paramListCount){
+            *error = ERR_PARAMS;
+        }
+
+        // typy parametrov su v type funkcie za sebou, zoznam po zozname
+        size_t firstParamIndex = 0;
+
+        for (size_t listIndex = 0; listIndex < listCount && *error == ERR_OK; listIndex++){
+            size_t paramCount = function->paramList[listIndex].params_count;
+            checkArguments(table, context, calls[listIndex],
+                           callee->type->func.params.items + firstParamIndex, paramCount, error);
+            firstParamIndex += paramCount;
+        }
+    }
+
+    free(calls);
+
+    if (*error != ERR_OK){
+        return NULL;
+    }
+
+    return getFunctionReturnType(table, context, callee, error);
 }
