@@ -208,6 +208,7 @@ typedef struct {
     Token *token;
     Token lookahead;   // lookahead na rozlisenie f( od i
     bool hasLookahead;
+    int parenDepth;    // pocet otvorenych ( v ramci vyrazu
     bool afterOperand; // posledny bol i alebo ), takze - je binarne
 } PsaState;
 
@@ -320,11 +321,12 @@ static int classifyToken(PsaState *state, PtIndex *column) {
     case TOK_LPAREN:
         *column = PT_LPAR;
         break;
+    // ) a , mimo nasich zatvoriek uz patria parseru
     case TOK_RPAREN:
-        *column = PT_RPAR;
+        *column = state->parenDepth > 0 ? PT_RPAR : PT_DOLLAR;
         break;
     case TOK_COMMA:
-        *column = PT_COMMA;
+        *column = state->parenDepth > 0 ? PT_COMMA : PT_DOLLAR;
         break;
     default:
         *column = PT_DOLLAR;
@@ -560,7 +562,7 @@ static void freeStack(TAStack *stack) {
     stack->top = 0;
 }
 
-int expr_parse(Token *token, ASTNode **output) {
+int expr_parse(Token *token, ASTNode *first, ASTNode **output) {
     if (token == NULL || output == NULL) {
         return ERR_INTERNAL;
     }
@@ -572,6 +574,12 @@ int expr_parse(Token *token, ASTNode **output) {
     A_InitStack(&stack);
     StackItem dollar = {.kind = SYM_TERM, .ptIndex = PT_DOLLAR, .line = token->line};
     A_Push(&stack, dollar);
+
+    if (first != NULL) { // LL parser uz nacital prvy operand
+        StackItem expr = {.kind = SYM_EXPR, .node = first, .line = first->line};
+        A_Push(&stack, expr);
+        state.afterOperand = true;
+    }
 
     PtIndex input;
     if ((err = classifyToken(&state, &input)) != ERR_OK) {
@@ -603,7 +611,14 @@ int expr_parse(Token *token, ASTNode **output) {
             }
             A_Push(&stack, term);
 
-            state.afterOperand = (input == PT_ID);
+            if (input == PT_LPAR) {
+                state.parenDepth++;
+            }
+            if (input == PT_RPAR) {
+                state.parenDepth--;
+            }
+            state.afterOperand = (input == PT_ID || input == PT_RPAR);
+
             if ((err = nextToken(&state)) != ERR_OK) {
                 goto fail;
             }
