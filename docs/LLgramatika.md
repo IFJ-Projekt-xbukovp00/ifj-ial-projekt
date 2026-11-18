@@ -263,6 +263,8 @@ Pokryť:
 121. <ctor_binders_tail> → TOK_COMMA <ctor_binder> <ctor_binders_tail>
 122. <ctor_binders_tail> → ε
 123. <ctor_binder> → TOK_IDENTIFIER
+
+158. <ctor_binder> → TOK_UNDERSCORE
 ```
 
 ### 3.8 Volania, argumenty a členy
