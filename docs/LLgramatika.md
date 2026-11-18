@@ -227,6 +227,10 @@ Pokryť:
 100. <for_guards_ml> → ε
 101. <for_guard_ml_opt> → TOK_KW_IF <expr> <for_guards_ml>
 102. <for_guard_ml_opt> → ε
+
+159. <else_part> → TOK_EOL <eol_else_tail>
+160. <eol_else_tail> → TOK_KW_ELSE <branch_body>
+161. <eol_else_tail> → TOK_INDENT TOK_KW_ELSE <branch_body> <opt_eol> TOK_DEDENT
 ```
 
 ### 3.7 `match` (ALGEBDT, §5.5)
