@@ -249,6 +249,20 @@ Pokryť:
 
 110. <guard_opt> → TOK_KW_IF <expr>
 111. <guard_opt> → ε
+
+112. <pattern> → TOK_UNDERSCORE
+113. <pattern> → <literal>
+114. <pattern> → TOK_MINUS <num_literal>
+115. <pattern> → TOK_IDENTIFIER <id_pattern_tail>
+
+116. <id_pattern_tail> → TOK_COLON <type>
+117. <id_pattern_tail> → TOK_LPAREN <ctor_binders_opt> TOK_RPAREN
+
+119. <ctor_binders_opt> → <ctor_binder> <ctor_binders_tail>
+120. <ctor_binders_opt> → ε
+121. <ctor_binders_tail> → TOK_COMMA <ctor_binder> <ctor_binders_tail>
+122. <ctor_binders_tail> → ε
+123. <ctor_binder> → TOK_IDENTIFIER
 ```
 
 ### 3.8 Volania, argumenty a členy
