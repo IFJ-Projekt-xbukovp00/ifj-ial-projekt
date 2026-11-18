@@ -237,7 +237,18 @@ Pokryť:
 - nepovinná stráž `if …`
 
 ```
-TODO
+103. <match_block> → TOK_KW_MATCH TOK_EOL TOK_INDENT <case_list> TOK_DEDENT
+
+104. <case_list> → <case_branch> <case_list_tail>
+105. <case_list_tail> → <case_branch> <case_list_tail>
+106. <case_list_tail> → ε
+
+107. <case_branch> → TOK_KW_CASE <pattern> <guard_opt> TOK_ARROW <branch_body> <case_sep_opt>
+108. <case_sep_opt> → TOK_EOL
+109. <case_sep_opt> → ε
+
+110. <guard_opt> → TOK_KW_IF <expr>
+111. <guard_opt> → ε
 ```
 
 ### 3.8 Volania, argumenty a členy
