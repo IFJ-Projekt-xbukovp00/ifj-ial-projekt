@@ -497,3 +497,41 @@ void checkArguments(Symtable *table, BodyContext *context, CallNode *call, Type 
  * @returns návratový typ volanej funkcie, pri chybe NULL
  */
 Type *checkCall(Symtable *table, BodyContext *context, CallNode *call, ErrorCode *error);
+
+/**
+ * @brief funkcia na zistenie, či je krok rozsahu literál 0 (aj -0 alebo +0)
+ * @param step je výraz kroku
+ * @returns true pre nulový literál
+ */
+bool isZeroLiteral(ASTNode *step);
+
+/**
+ * @brief funkcia na kontrolu jednej hranice alebo kroku rozsahu, musí byť Int
+ * @param table je tabuľka symbolov
+ * @param context je kontext kontrolovanej funkcie
+ * @param bound je pointer na miesto v AST, kde je výraz
+ * @param error je pointer, cez ktorý si vrátim chybové hlásenie (6)
+ */
+void checkRangeBound(Symtable *table, BodyContext *context, ASTNode **bound, ErrorCode *error);
+
+/**
+ * @brief funkcia na kontrolu rozsahu from to/until to [by step]
+ * @param table je tabuľka symbolov
+ * @param context je kontext kontrolovanej funkcie
+ * @param range je uzol rozsahu
+ * @param error je pointer, cez ktorý si vrátim chybové hlásenie (6, 10 pri nulovom kroku)
+ * @returns typ TY_RANGE, pri chybe NULL
+ */
+Type *checkRange(Symtable *table, BodyContext *context, RangeNode *range, ErrorCode *error);
+
+/**
+ * @brief funkcia na kontrolu cyklu for s jedným generátorom a strážami
+ *
+ * Riadiaca premenná je nová nemodifikovateľná premenná typu Int, platí v strážach aj v tele.
+ * @param table je tabuľka symbolov
+ * @param context je kontext kontrolovanej funkcie
+ * @param forNode je uzol cyklu
+ * @param error je pointer, cez ktorý si vrátim chybové hlásenie (6, 10)
+ * @returns Unit, pri chybe NULL
+ */
+Type *checkFor(Symtable *table, BodyContext *context, ForNode *forNode, ErrorCode *error);

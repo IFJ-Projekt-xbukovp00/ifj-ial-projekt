@@ -769,6 +769,12 @@ Type *checkNode(Symtable *table, BodyContext *context, ASTNode **node, bool isVa
     else if (current->kind == AST_WHILE){
         nodeType = checkWhile(table, context, (WhileNode *)current, error);
     }
+    else if (current->kind == AST_RANGE){
+        nodeType = checkRange(table, context, (RangeNode *)current, error);
+    }
+    else if (current->kind == AST_FOR){
+        nodeType = checkFor(table, context, (ForNode *)current, error);
+    }
     else if (current->kind == AST_CALL){
         nodeType = checkCall(table, context, (CallNode *)current, error);
     }
@@ -1305,4 +1311,93 @@ Type *checkCall(Symtable *table, BodyContext *context, CallNode *call, ErrorCode
     }
 
     return getFunctionReturnType(table, context, callee, error);
+}
+
+bool isZeroLiteral(ASTNode *step){
+    // -0 a +0 su unarne operacie nad literalom
+    while (step->kind == AST_UNARY){
+        step = ((UnaryNode *)step)->right;
+    }
+
+    if (step->kind != AST_LIT){
+        return false;
+    }
+
+    LiteralNode *literal = (LiteralNode *)step;
+    return literal->litType == LIT_INT && literal->litValue.int_value == 0;
+}
+
+void checkRangeBound(Symtable *table, BodyContext *context, ASTNode **bound, ErrorCode *error){
+    Type *boundType = getRealType(checkNode(table, context, bound, true, error));
+
+    if (*error != ERR_OK){
+        return;
+    }
+
+    if (boundType == NULL || boundType->kind != TY_INT){
+        *error = ERR_TYPE;
+    }
+}
+
+Type *checkRange(Symtable *table, BodyContext *context, RangeNode *range, ErrorCode *error){
+    checkRangeBound(table, context, &range->from, error);
+    checkRangeBound(table, context, &range->to, error);
+
+    if (range->step != NULL){
+        checkRangeBound(table, context, &range->step, error);
+
+        // nenulovost kroku sa da overit len pri literali, inak az za behu
+        if (*error == ERR_OK && isZeroLiteral(range->step)){
+            *error = ERR_SEM_OTHER;
+        }
+    }
+
+    if (*error != ERR_OK){
+        return NULL;
+    }
+
+    return type_get_basic(TY_RANGE);
+}
+
+Type *checkFor(Symtable *table, BodyContext *context, ForNode *forNode, ErrorCode *error){
+    Type *sourceType = getRealType(checkNode(table, context, &forNode->source, true, error));
+
+    if (*error != ERR_OK){
+        return NULL;
+    }
+
+    if (sourceType == NULL || sourceType->kind != TY_RANGE){
+        *error = ERR_TYPE;
+        return NULL;
+    }
+
+    // riadiaca premenna plati v strazach aj v tele, nie za cyklom
+    pushScope(table, error);
+    if (*error != ERR_OK){
+        return NULL;
+    }
+
+    Symbol *loopSymbol = defineSymbol(table, forNode->varName, SYM_VARIABLE,
+                                      type_get_basic(TY_INT), false, error);
+    if (loopSymbol != NULL){
+        forNode->symbol = loopSymbol;
+        addLocal(context->function, loopSymbol, error);
+    }
+
+    for (size_t guardIndex = 0; guardIndex < forNode->guardsCount; guardIndex++){
+        if (*error != ERR_OK){
+            break;
+        }
+        checkCondition(table, context, &forNode->guards[guardIndex], error);
+    }
+
+    checkBranch(table, context, &forNode->body, false, error);
+
+    popScope(table);
+
+    if (*error != ERR_OK){
+        return NULL;
+    }
+
+    return type_get_basic(TY_UNIT);
 }

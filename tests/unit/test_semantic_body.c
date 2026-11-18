@@ -1,7 +1,7 @@
 /**
  * @file test_semantic_body.c
  * @brief Unit testy kontroly tiel funkcií v sémantike (premenné, rozsahy, priradenie, výrazy,
- *        podmienky, cykly, návratové typy, volania)
+ *        podmienky, cykly, návratové typy, volania, rozšírenia)
  *
  * Použitie AI: tento súbor vygenerovala AI (Claude Opus 5.5).
  * Prompt: "Vyrob testy ako pre zvyšok semntickeho analyzatora, tentokrát ale na ich telá,
@@ -238,6 +238,31 @@ ASTNode *callWithArg(const char *name, ASTNode *arg) {
     return addArg(newCall(newId(name)), arg);
 }
 
+ASTNode *newRange(ASTNode *from, ASTNode *to, ASTNode *step, bool inclusive) {
+    RangeNode *range = calloc(1, sizeof(RangeNode));
+    range->node.kind = AST_RANGE;
+    range->from = from;
+    range->to = to;
+    range->step = step;
+    range->inclusive = inclusive;
+    return (ASTNode *)range;
+}
+
+ASTNode *newFor(const char *varName, ASTNode *source, ASTNode *body) {
+    ForNode *forNode = calloc(1, sizeof(ForNode));
+    forNode->node.kind = AST_FOR;
+    forNode->varName = (char *)varName;
+    forNode->source = source;
+    forNode->body = body;
+    return (ASTNode *)forNode;
+}
+
+void addGuard(ASTNode *forNodeAst, ASTNode *guard) {
+    ForNode *forNode = (ForNode *)forNodeAst;
+    forNode->guards = realloc(forNode->guards, (forNode->guardsCount + 1) * sizeof(ASTNode *));
+    forNode->guards[forNode->guardsCount++] = guard;
+}
+
 /* uvoľnenie AST (aj ConvertNode, ktoré vložila sémantika) */
 
 void freeNode(ASTNode *node) {
@@ -273,6 +298,18 @@ void freeNode(ASTNode *node) {
         freeNode(((WhileNode *)node)->body);
     } else if (node->kind == AST_RETURN) {
         freeNode(((ReturnNode *)node)->returnValue);
+    } else if (node->kind == AST_RANGE) {
+        freeNode(((RangeNode *)node)->from);
+        freeNode(((RangeNode *)node)->to);
+        freeNode(((RangeNode *)node)->step);
+    } else if (node->kind == AST_FOR) {
+        ForNode *forNode = (ForNode *)node;
+        freeNode(forNode->source);
+        for (size_t guardIndex = 0; guardIndex < forNode->guardsCount; guardIndex++) {
+            freeNode(forNode->guards[guardIndex]);
+        }
+        free(forNode->guards);
+        freeNode(forNode->body);
     } else if (node->kind == AST_CALL) {
         CallNode *call = (CallNode *)node;
         freeNode(call->caller);
@@ -1552,6 +1589,113 @@ void testParenlessCalledWithParens(void) {
     CHECK(analyze(program) == ERR_PARAMS);
 }
 
+/* testy: cyklus for (CONTROL) */
+
+/* @main = { for i <- source do body } */
+ErrorCode analyzeForLoop(ASTNode *source, ASTNode *body) {
+    BlockNode *mainBody = newBlock();
+    addCommand(mainBody, newFor("i", source, body));
+    return analyzeMainBody(mainBody);
+}
+
+void testForRangeDouble(void) {
+    /* for i <- 1 to 2.5 do print(i) (err6_for_range_double) */
+    CHECK(analyzeForLoop(newRange(newIntLiteral(1), newDoubleLiteral(2.5), NULL, true),
+                         blockOf(callWithArg("print", newId("i")))) == ERR_TYPE);
+}
+
+void testZeroStepLiteral(void) {
+    /* for i <- 1 to 5 by 0 do print(i) (err10_zero_step) */
+    CHECK(analyzeForLoop(newRange(newIntLiteral(1), newIntLiteral(5), newIntLiteral(0), true),
+                         blockOf(callWithArg("print", newId("i")))) == ERR_SEM_OTHER);
+}
+
+void testNegativeZeroStep(void) {
+    /* for i <- 1 to 5 by -0 do () */
+    CHECK(analyzeForLoop(newRange(newIntLiteral(1), newIntLiteral(5),
+                                  newUnary(TOK_MINUS, newIntLiteral(0)), true),
+                         blockOf(newUnitLiteral())) == ERR_SEM_OTHER);
+}
+
+void testForStepNotInt(void) {
+    /* for i <- 1 to 5 by 1.5 do () */
+    CHECK(analyzeForLoop(newRange(newIntLiteral(1), newIntLiteral(5), newDoubleLiteral(1.5),
+                                  true),
+                         blockOf(newUnitLiteral())) == ERR_TYPE);
+}
+
+void testForSourceNotRange(void) {
+    /* for i <- 5 do () */
+    CHECK(analyzeForLoop(newIntLiteral(5), blockOf(newUnitLiteral())) == ERR_TYPE);
+}
+
+void testForBoundUndefined(void) {
+    /* for i <- 1 to n do () */
+    CHECK(analyzeForLoop(newRange(newIntLiteral(1), newId("n"), NULL, true),
+                         blockOf(newUnitLiteral())) == ERR_UNDEF);
+}
+
+void testAssignForVariable(void) {
+    /* for i <- 1 to 3 do i = 5 (err7_assign_for_variable) */
+    BlockNode *loopBody = newBlock();
+    addCommand(loopBody, newAssign("i", newIntLiteral(5)));
+    CHECK(analyzeForLoop(newRange(newIntLiteral(1), newIntLiteral(3), NULL, true),
+                         (ASTNode *)loopBody) == ERR_IMMUTABLE);
+}
+
+void testForVariableScope(void) {
+    /* for i <- 1 to 3 do () ; i */
+    BlockNode *body = newBlock();
+    addCommand(body, newFor("i", newRange(newIntLiteral(1), newIntLiteral(3), NULL, true),
+                            blockOf(newUnitLiteral())));
+    addCommand(body, newExprStatement(newId("i")));
+    CHECK(analyzeMainBody(body) == ERR_UNDEF);
+}
+
+void testForGuardNotBool(void) {
+    /* for i <- 1 to 3 if 1 do () */
+    BlockNode *body = newBlock();
+    ASTNode *loop = newFor("i", newRange(newIntLiteral(1), newIntLiteral(3), NULL, true),
+                           blockOf(newUnitLiteral()));
+    addGuard(loop, newIntLiteral(1));
+    addCommand(body, loop);
+    CHECK(analyzeMainBody(body) == ERR_TYPE);
+}
+
+void testForVariableStep(void) {
+    /* val n = 2 ; for i <- 1 to 9 by n do print(i) -> krok nie je literál, kontrola za behu */
+    BlockNode *body = newBlock();
+    addCommand(body, newVarDef("n", false, NULL, newIntLiteral(2)));
+    addCommand(body, newFor("i", newRange(newIntLiteral(1), newIntLiteral(9), newId("n"), true),
+                            blockOf(callWithArg("print", newId("i")))));
+    CHECK(analyzeMainBody(body) == ERR_OK);
+}
+
+void testForOk(void) {
+    /* for i <- 0 until 10 by 2 if i != 3 if i < 8 do print(i) */
+    ASTNode *loop =
+        newFor("i", newRange(newIntLiteral(0), newIntLiteral(10), newIntLiteral(2), false),
+               blockOf(callWithArg("print", newId("i"))));
+    addGuard(loop, newBinary(TOK_NOT_EQUAL, newId("i"), newIntLiteral(3)));
+    addGuard(loop, newBinary(TOK_LESS, newId("i"), newIntLiteral(8)));
+    BlockNode *body = newBlock();
+    addCommand(body, loop);
+
+    ProgramNode *program = newProgram();
+    DefFuncNode *mainFunction = addMain(program, (ASTNode *)body);
+    CHECK(runAnalyze(program) == ERR_OK);
+
+    Symbol *loopSymbol = ((ForNode *)loop)->symbol;
+    CHECK(loopSymbol != NULL);
+    CHECK(loopSymbol->type == type_get_basic(TY_INT));
+    CHECK(!loopSymbol->isMutable);
+    CHECK(mainFunction->localsCount == 1);
+    CHECK(mainFunction->locals[0] == loopSymbol);
+    CHECK(loop->type == type_get_basic(TY_UNIT));
+    CHECK(((ForNode *)loop)->source->type->kind == TY_RANGE);
+    finishAnalyze(program);
+}
+
 int main(void) {
     testUndefinedVariable();
     testUseBeforeDefinition();
@@ -1672,6 +1816,18 @@ int main(void) {
     testCallerLocalsAfterCall();
     testFunctionWithoutParens();
     testParenlessCalledWithParens();
+
+    testForRangeDouble();
+    testZeroStepLiteral();
+    testNegativeZeroStep();
+    testForStepNotInt();
+    testForSourceNotRange();
+    testForBoundUndefined();
+    testAssignForVariable();
+    testForVariableScope();
+    testForGuardNotBool();
+    testForVariableStep();
+    testForOk();
 
     type_free_all();
 
