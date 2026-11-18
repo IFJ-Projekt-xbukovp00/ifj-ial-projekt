@@ -103,7 +103,24 @@ Pokryť:
 - bezparametrické metódy v `extension` (EXTKW, §5.9)
 
 ```
-TODO
+22. <func_def> → TOK_KW_DEF TOK_IDENTIFIER <param_lists> <ret_type_opt> TOK_ASSIGN <func_body>
+
+23. <param_lists> → TOK_LPAREN <param_list_opt> TOK_RPAREN <param_lists>
+24. <param_lists> → ε
+
+25. <param_list_opt> → <param> <param_list_tail>
+26. <param_list_opt> → ε
+27. <param_list_tail> → TOK_COMMA <param_after_comma>
+28. <param_list_tail> → ε
+29. <param_after_comma> → <param> <param_list_tail>
+30. <param_after_comma> → ε
+
+31. <param> → TOK_IDENTIFIER TOK_COLON <type>
+32. <ret_type_opt> → TOK_COLON <type>
+33. <ret_type_opt> → ε
+
+34. <func_body> → TOK_EOL <block>
+35. <func_body> → <expr> TOK_EOL
 ```
 
 ### 3.3 Typy
