@@ -319,6 +319,8 @@ Pokryť:
 
 155. <num_literal> → TOK_INT_LIT
 156. <num_literal> → TOK_DOUBLE_LIT
+
+157. <primary_non_id> → TOK_LPAREN <paren_or_lambda>
 ```
 
 ### 3.9 Hranica s precedenčnou analýzou
