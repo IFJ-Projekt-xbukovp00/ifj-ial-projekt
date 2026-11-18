@@ -54,10 +54,10 @@ static const PtRel precTable[PT_COUNT][PT_COUNT] = {
     [PT_ADD]    = {R_LT , R_LT , R_LT , R_LT , R_LT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_LT , R_GT , R_LT , R_GT , R_LT , R_GT},
     [PT_SUB]    = {R_LT , R_LT , R_LT , R_LT , R_LT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_LT , R_GT , R_LT , R_GT , R_LT , R_GT},
     [PT_CONCAT] = {R_LT , R_LT , R_LT , R_LT , R_LT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_LT , R_GT , R_LT , R_GT , R_LT , R_GT},
-    [PT_LT]     = {R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_LT , R_GT , R_LT , R_GT , R_LT , R_GT},
-    [PT_LE]     = {R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_LT , R_GT , R_LT , R_GT , R_LT , R_GT},
-    [PT_GT]     = {R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_LT , R_GT , R_LT , R_GT , R_LT , R_GT},
-    [PT_GE]     = {R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_LT , R_GT , R_LT , R_GT , R_LT , R_GT},
+    [PT_LT]     = {R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_ERR, R_ERR, R_ERR, R_ERR, R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_LT , R_GT , R_LT , R_GT , R_LT , R_GT},
+    [PT_LE]     = {R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_ERR, R_ERR, R_ERR, R_ERR, R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_LT , R_GT , R_LT , R_GT , R_LT , R_GT},
+    [PT_GT]     = {R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_ERR, R_ERR, R_ERR, R_ERR, R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_LT , R_GT , R_LT , R_GT , R_LT , R_GT},
+    [PT_GE]     = {R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_ERR, R_ERR, R_ERR, R_ERR, R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_LT , R_GT , R_LT , R_GT , R_LT , R_GT},
     [PT_EQ]     = {R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_ERR, R_ERR, R_GT , R_GT , R_GT , R_GT , R_GT , R_LT , R_GT , R_LT , R_GT , R_LT , R_GT},
     [PT_NEQ]    = {R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_ERR, R_ERR, R_GT , R_GT , R_GT , R_GT , R_GT , R_LT , R_GT , R_LT , R_GT , R_LT , R_GT},
     [PT_AND]    = {R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_GT , R_GT , R_GT , R_GT , R_GT , R_LT , R_GT , R_LT , R_GT , R_LT , R_GT},
@@ -630,6 +630,11 @@ int expr_parse(Token *token, ASTNode *first, ASTNode **output) {
                 goto fail;
             }
         } else if (rel == R_END) {
+            // na zasobniku musi ostat len $ E
+            if (stack.top != 2 || !isExpr(&stack.dataArray[1])) {
+                err = ERR_SYNTAX;
+                goto fail;
+            }
             *output = stack.dataArray[1].node;
             stack.top = 0;
             return ERR_OK;
