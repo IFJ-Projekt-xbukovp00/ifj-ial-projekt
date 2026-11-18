@@ -213,7 +213,7 @@ void testValidProgram(void) {
     if (addSymbol != NULL) {
         CHECK(addSymbol->kind == SYM_FUNCTION);
         CHECK(addSymbol->definition == (ASTNode *)add);
-        CHECK(addSymbol->checkState == FUNC_NOT_STARTED);
+        CHECK(addSymbol->checkState == FUNC_DONE);
         CHECK(addSymbol->type->kind == TY_FUNC);
         CHECK(addSymbol->type->func.params.len == 2);
         CHECK(addSymbol->type->func.params.items[0]->kind == TY_INT);

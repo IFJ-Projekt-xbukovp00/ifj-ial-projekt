@@ -257,7 +257,6 @@ void collectGlobalDefinitions(Symtable *table, ProgramNode *program, ErrorCode *
             collectTypeAlias(table, (TypeAliasNode *)item, error);
         }
         else if (item->kind == AST_EXTENSION){
-            // metódy zaregistrujeme až po rozlísení typov, tu len parametre
             ExtensionNode *extension = (ExtensionNode *)item;
 
             for (size_t methodIndex = 0; methodIndex < extension->methodsCount; methodIndex++){
@@ -500,5 +499,342 @@ void semanticAnalyze(ASTNode *program, Symtable *table, ErrorCode *error){
     }
     if (*error == ERR_OK){
         checkMainReturnType(programNode, error);
+    }
+    if (*error == ERR_OK){
+        checkFunctionBodies(table, programNode, error);
+    }
+}
+
+Type *getLiteralType(LiteralNode *literal){
+    if (literal->litType == LIT_INT){
+        return type_get_basic(TY_INT);
+    }
+    if (literal->litType == LIT_DOUBLE){
+        return type_get_basic(TY_DOUBLE);
+    }
+    if (literal->litType == LIT_STRING){
+        return type_get_basic(TY_STRING);
+    }
+    if (literal->litType == LIT_BOOLEAN){
+        return type_get_basic(TY_BOOL);
+    }
+
+    return type_get_basic(TY_UNIT);
+}
+
+bool needsIntToDouble(Type *expected, Type *actual){
+    expected = getRealType(expected);
+    actual = getRealType(actual);
+
+    if (expected == NULL || actual == NULL || actual->kind != TY_INT){
+        return false;
+    }
+    if (expected->kind == TY_DOUBLE){
+        return true;
+    }
+    if (expected->kind != TY_UNION){
+        return false;
+    }
+
+    // zjednotenie, ktore Int obsahuje, hodnotu prijme bez prevodu
+    bool hasDouble = false;
+
+    for (size_t memberIndex = 0; memberIndex < expected->members.len; memberIndex++){
+        Type *member = getRealType(expected->members.items[memberIndex]);
+
+        if (member->kind == TY_INT){
+            return false;
+        }
+        if (member->kind == TY_DOUBLE){
+            hasDouble = true;
+        }
+    }
+
+    return hasDouble;
+}
+
+ASTNode *createConvertNode(ASTNode *operand, ErrorCode *error){
+    ConvertNode *convert = calloc(1, sizeof(ConvertNode));
+
+    if (convert == NULL){
+        *error = ERR_INTERNAL;
+        return NULL;
+    }
+
+    convert->node.kind = AST_CONVERT;
+    convert->node.line = operand->line;
+    convert->node.type = type_get_basic(TY_DOUBLE);
+    convert->operand = operand;
+    return (ASTNode *)convert;
+}
+
+bool acceptValue(Type *expected, ASTNode **value, ErrorCode *error){
+    if (!type_accepts(expected, (*value)->type)){
+        return false;
+    }
+
+    if (needsIntToDouble(expected, (*value)->type)){
+        ASTNode *convert = createConvertNode(*value, error);
+
+        if (convert != NULL){
+            *value = convert;
+        }
+    }
+
+    return true;
+}
+
+void addLocal(DefFuncNode *function, Symbol *local, ErrorCode *error){
+    Symbol **newLocals = realloc(function->locals, (function->localsCount + 1) * sizeof(Symbol *));
+
+    if (newLocals == NULL){
+        *error = ERR_INTERNAL;
+        return;
+    }
+
+    function->locals = newLocals;
+    function->locals[function->localsCount] = local;
+    function->localsCount++;
+}
+
+Scope *getGlobalScope(Symtable *table){
+    Scope *scope = table->top;
+
+    // najspodnejsi rozsah su vstavane funkcie, nad nim je globalny
+    while (scope != NULL && scope->parent != NULL && scope->parent->parent != NULL){
+        scope = scope->parent;
+    }
+
+    return scope;
+}
+
+Type *checkId(Symtable *table, IDNode *id, ErrorCode *error){
+    Symbol *symbol = lookupSymbol(table, id->name);
+
+    if (symbol == NULL){
+        *error = ERR_UNDEF;
+        return NULL;
+    }
+
+    // funkcie a konštruktory ako hodnotu zatial nepodporujeme
+    if (symbol->kind != SYM_VARIABLE && symbol->kind != SYM_PARAMETER){
+        *error = ERR_TYPE;
+        return NULL;
+    }
+
+    id->idKind = ID_VAR;
+    id->symbol = symbol;
+    return symbol->type;
+}
+
+Type *checkBlock(Symtable *table, BodyContext *context, BlockNode *block, bool isValueUsed,
+                 ErrorCode *error){
+    pushScope(table, error);
+    if (*error != ERR_OK){
+        return NULL;
+    }
+
+    Type *blockType = type_get_basic(TY_UNIT);
+
+    for (size_t commandIndex = 0; commandIndex < block->commandOrderCount; commandIndex++){
+        // hodnota sa pouziva len z posledneho prikazu bloku
+        bool isLastCommand = commandIndex + 1 == block->commandOrderCount;
+        blockType = checkNode(table, context, &block->commandOrder[commandIndex],
+                              isLastCommand && isValueUsed, error);
+
+        if (*error != ERR_OK){
+            break;
+        }
+    }
+
+    // rozsah sa zrusi aj pri chybe, aby sa dal uvolnit cez symtableFree
+    popScope(table);
+    return blockType;
+}
+
+Type *checkVarDef(Symtable *table, BodyContext *context, VarOrValNode *varDef, ErrorCode *error){
+    // inicializacia sa kontroluje pred definiciou, premenna v nej este nie je vidno
+    Type *variableType = checkNode(table, context, &varDef->init, true, error);
+    if (*error != ERR_OK){
+        return NULL;
+    }
+
+    if (varDef->declaredType != NULL){
+        resolveType(table, varDef->declaredType, error);
+        if (*error != ERR_OK){
+            return NULL;
+        }
+
+        if (!acceptValue(varDef->declaredType, &varDef->init, error)){
+            *error = ERR_TYPE;
+        }
+        if (*error != ERR_OK){
+            return NULL;
+        }
+
+        variableType = varDef->declaredType;
+    }
+    else if (variableType == NULL){
+        // typ sa neda odvodit
+        *error = ERR_TYPE;
+        return NULL;
+    }
+
+    Symbol *variableSymbol = defineSymbol(table, varDef->name, SYM_VARIABLE, variableType,
+                                          varDef->isMutable, error);
+    if (variableSymbol == NULL){
+        return NULL;
+    }
+
+    varDef->symbol = variableSymbol;
+    addLocal(context->function, variableSymbol, error);
+    return type_get_basic(TY_UNIT);
+}
+
+Type *checkAssign(Symtable *table, BodyContext *context, AssignNode *assign, ErrorCode *error){
+    Symbol *targetSymbol = lookupSymbol(table, assign->name);
+
+    if (targetSymbol == NULL){
+        *error = ERR_UNDEF;
+        return NULL;
+    }
+
+    // do val, parametra ani funkcie sa priradit neda
+    if (targetSymbol->kind != SYM_VARIABLE || !targetSymbol->isMutable){
+        *error = ERR_IMMUTABLE;
+        return NULL;
+    }
+
+    assign->symbol = targetSymbol;
+
+    checkNode(table, context, &assign->value, true, error);
+    if (*error != ERR_OK){
+        return NULL;
+    }
+
+    if (!acceptValue(targetSymbol->type, &assign->value, error)){
+        *error = ERR_TYPE;
+    }
+    if (*error != ERR_OK){
+        return NULL;
+    }
+
+    return type_get_basic(TY_UNIT);
+}
+
+Type *checkNode(Symtable *table, BodyContext *context, ASTNode **node, bool isValueUsed,
+                ErrorCode *error){
+    if (*error != ERR_OK){
+        return NULL;
+    }
+    if (*node == NULL){
+        return type_get_basic(TY_UNIT);
+    }
+
+    ASTNode *current = *node;
+    Type *nodeType = type_get_basic(TY_UNIT);
+
+    if (current->kind == AST_LIT){
+        nodeType = getLiteralType((LiteralNode *)current);
+    }
+    else if (current->kind == AST_ID){
+        nodeType = checkId(table, (IDNode *)current, error);
+    }
+    else if (current->kind == AST_BLOCK){
+        nodeType = checkBlock(table, context, (BlockNode *)current, isValueUsed, error);
+    }
+    else if (current->kind == AST_VAR_DEF){
+        nodeType = checkVarDef(table, context, (VarOrValNode *)current, error);
+    }
+    else if (current->kind == AST_ASSIGN){
+        nodeType = checkAssign(table, context, (AssignNode *)current, error);
+    }
+    else if (current->kind == AST_EXPR_STATEMENT){
+        nodeType = checkNode(table, context, &((LonelyExprNode *)current)->expr, isValueUsed,
+                             error);
+    }
+
+    current->type = nodeType;
+    return nodeType;
+}
+
+void defineParameters(Symtable *table, Symbol *functionSymbol, ErrorCode *error){
+    DefFuncNode *function = (DefFuncNode *)functionSymbol->definition;
+    Param *receiver = functionSymbol->receiver;
+
+    if (receiver != NULL){
+        receiver->symbol = defineSymbol(table, receiver->name, SYM_PARAMETER, receiver->type,
+                                        false, error);
+    }
+
+    for (size_t listIndex = 0; listIndex < function->paramListCount; listIndex++){
+        ParamList *paramList = &function->paramList[listIndex];
+
+        for (size_t paramIndex = 0; paramIndex < paramList->params_count; paramIndex++){
+            Param *param = &paramList->params[paramIndex];
+
+            if (*error == ERR_OK){
+                param->symbol = defineSymbol(table, param->name, SYM_PARAMETER, param->type,
+                                             false, error);
+            }
+        }
+    }
+}
+
+void checkFunctionBody(Symtable *table, BodyContext *parent, Symbol *functionSymbol,
+                       ErrorCode *error){
+    if (*error != ERR_OK || functionSymbol->checkState == FUNC_DONE){
+        return;
+    }
+
+    DefFuncNode *function = (DefFuncNode *)functionSymbol->definition;
+
+    // funkcia bez tela je len v rucne poskladanych AST
+    if (function->body == NULL){
+        functionSymbol->checkState = FUNC_DONE;
+        return;
+    }
+
+    functionSymbol->checkState = FUNC_IN_PROGRESS;
+
+    // telo nesmie vidiet lokalne premenne volajucej funkcie
+    Scope *savedTop = table->top;
+    table->top = getGlobalScope(table);
+
+    pushScope(table, error);
+    if (*error != ERR_OK){
+        table->top = savedTop;
+        return;
+    }
+
+    BodyContext context = {function, parent};
+
+    defineParameters(table, functionSymbol, error);
+    checkNode(table, &context, &function->body, true, error);
+
+    popScope(table);
+    table->top = savedTop;
+    functionSymbol->checkState = FUNC_DONE;
+}
+
+void checkFunctionBodies(Symtable *table, ProgramNode *program, ErrorCode *error){
+    for (size_t itemIndex = 0; itemIndex < program->itemsCount; itemIndex++){
+        ASTNode *item = program->items[itemIndex];
+
+        if (item->kind == AST_FUNCTION_DEF){
+            checkFunctionBody(table, NULL, ((DefFuncNode *)item)->symbol, error);
+        }
+        else if (item->kind == AST_EXTENSION){
+            ExtensionNode *extension = (ExtensionNode *)item;
+
+            for (size_t methodIndex = 0; methodIndex < extension->methodsCount; methodIndex++){
+                checkFunctionBody(table, NULL,
+                                  ((DefFuncNode *)extension->methods[methodIndex])->symbol, error);
+            }
+        }
+
+        if (*error != ERR_OK){
+            return;
+        }
     }
 }

@@ -32,6 +32,17 @@
 #include "symtable.h"
 
 /**
+ * @brief kontext kontroly tela jednej funkcie
+ *
+ * Telo funkcie sa môže kontrolovat aj na poziadanie (z volania v inom tele),
+ * vtedy parent ukazuje na kontext volajúcej funkcie.
+ */
+typedef struct BodyContext{
+    DefFuncNode *function;      // funkcia, ktorej telo sa kontroluje
+    struct BodyContext *parent; // kontext, z ktoreho sa kontrola spustila, inak NULL
+}BodyContext;
+
+/**
  * @brief funkcia na vloženie vstavaných funkcií do aktuálneho (globálneho) rozsahu
  *
  * Vloží vstavané funkcie zo základného zadania aj z rozšírení BOOLTHEN
@@ -181,3 +192,137 @@ void checkMainReturnType(ProgramNode *program, ErrorCode *error);
  * @param error je pointer, cez ktorý si vrátim prvú chybu
  */
 void semanticAnalyze(ASTNode *program, Symtable *table, ErrorCode *error);
+
+/**
+ * @brief funkcia na zistenie typu literálu
+ * @param literal je uzol literalu
+ * @returns typ literálu
+ */
+Type *getLiteralType(LiteralNode *literal);
+
+/**
+ * @brief funkcia na zistenie, ci treba hodnotu previest z Int na Double
+ * @param expected je typ, ktory na danom mieste čakáme
+ * @param actual je typ hodnoty
+ * @returns true, ak hodnota je Int a miesto čaká Double (aj vo zjednoteni bez Int)
+ */
+bool needsIntToDouble(Type *expected, Type *actual);
+
+/**
+ * @brief funkcia na vytvorenie uzla prevodu Int na Double
+ * @param operand je výraz typu Int
+ * @param error je pointer, cez ktorý si vrátim chybové hlasenie (ERR_INTERNAL)
+ * @returns nový uzol, pri chybe NULL
+ */
+ASTNode *createConvertNode(ASTNode *operand, ErrorCode *error);
+
+/**
+ * @brief funkcia na kontrolu, či hodnota môže byť na mieste s daným typom
+ *
+ * Ak treba, nahradí hodnotu v AST uzlom prevodu Int na Double.
+ * @param expected je typ, ktory na danom mieste čakáme
+ * @param value je pointer na miesto v AST, kde je skontrolovaná hodnota
+ * @param error je pointer, cez ktorý si vrátim chybové hlásenie (len ERR_INTERNAL)
+ * @returns true, ak typ hodnoty sedí (chybu 5 alebo 6 nastavuje volajúci)
+ */
+bool acceptValue(Type *expected, ASTNode **value, ErrorCode *error);
+
+/**
+ * @brief funkcia na pridanie lokálnej premennej do zoznamu premenných funkcie
+ * @param function je funkcia, v ktorej tele je premenná
+ * @param local je symbol premennej
+ * @param error je pointer, cez ktorý si vrátim chybove hlásenie (ERR_INTERNAL)
+ */
+void addLocal(DefFuncNode *function, Symbol *local, ErrorCode *error);
+
+/**
+ * @brief funkcia na nájdenie globálneho rozsahu (pod rozsahom vstavaných funkcií)
+ * @param table je tabuľka symbolov
+ * @returns globálny rozsah
+ */
+Scope *getGlobalScope(Symtable *table);
+
+/**
+ * @brief funkcia na kontrolu identifikátora vo výraze
+ * @param table je tabuľka symbolov
+ * @param id je uzol identifikatora
+ * @param error je pointer, cez ktorý si vrátim chybové hlásenie (3)
+ * @returns typ identifikátora, pri chybe NULL
+ */
+Type *checkId(Symtable *table, IDNode *id, ErrorCode *error);
+
+/**
+ * @brief funkcia na kontrolu bloku, blok je vlastny rozsah platnosti
+ * @param table je tabuľka symbolov
+ * @param context je kontext kontrolovanej funkcie
+ * @param block je uzol bloku
+ * @param isValueUsed je true, ak sa výsledok bloku dalej použije
+ * @param error je pointer, cez ktorý si vrátim chybové hlásenie
+ * @returns typ posledného príkazu (prazdny blok Unit)
+ */
+Type *checkBlock(Symtable *table, BodyContext *context, BlockNode *block, bool isValueUsed,
+                 ErrorCode *error);
+
+/**
+ * @brief funkcia na kontrolu definície premennej (val / var)
+ * @param table je tabuľka symbolov
+ * @param context je kontext kontrolovanej funkcie
+ * @param varDef je uzol definicie
+ * @param error je pointer, cez ktorý si vrátim chybové hlásenie (3, 4, 6)
+ * @returns Unit, pri chybe NULL
+ */
+Type *checkVarDef(Symtable *table, BodyContext *context, VarOrValNode *varDef, ErrorCode *error);
+
+/**
+ * @brief funkcia na kontrolu priradenia do premennej
+ * @param table je tabuľka symbolov
+ * @param context je kontext kontrolovanej funkcie
+ * @param assign je uzol priradenia
+ * @param error je pointer, cez ktorý si vrátim chybové hlásenie (3, 6, 7)
+ * @returns Unit, pri chybe NULL
+ */
+Type *checkAssign(Symtable *table, BodyContext *context, AssignNode *assign, ErrorCode *error);
+
+/**
+ * @brief funkcia na kontrolu jedného uzla v tele funkcie (príkazu alebo výrazu)
+ *
+ * Nastaví typ uzla a vráti ho. Typ NULL bez chyby znamená, že uzol končí
+ * príkazom return (nemá výsledok).
+ * @param table je tabuľka symbolov
+ * @param context je kontext kontrolovanej funkcie
+ * @param node je pointer na miesto v AST, uzol sa môže nahradiť (prevod Int na Double)
+ * @param isValueUsed je true, ak sa výsledok uzla dalej použije
+ * @param error je pointer, cez ktorý si vrátim chybové hlásenie
+ * @returns typ uzla
+ */
+Type *checkNode(Symtable *table, BodyContext *context, ASTNode **node, bool isValueUsed,
+                ErrorCode *error);
+
+/**
+ * @brief funkcia na definovanie príjemcu a parametrov funkcie v aktuálnom rozsahu
+ * @param table je tabuľka symbolov
+ * @param functionSymbol je symbol funkcie
+ * @param error je pointer, cez ktorý si vrátim chybové hlásenie (ERR_INTERNAL)
+ */
+void defineParameters(Symtable *table, Symbol *functionSymbol, ErrorCode *error);
+
+/**
+ * @brief funkcia na kontrolu tela jednej funkcie
+ *
+ * Telo sa kontroluje v rozsahu globálny + parametre, takze nevidí lokálne
+ * premenné volajúcej funkcie. Hotová funkcia sa znova nekontroluje.
+ * @param table je tabuľka symbolov
+ * @param parent je kontext funkcie, z ktorej sa kontrola spustila, inak NULL
+ * @param functionSymbol je symbol kontrolovanej funkcie
+ * @param error je pointer, cez ktorý si vrátim chybové hlásenie
+ */
+void checkFunctionBody(Symtable *table, BodyContext *parent, Symbol *functionSymbol,
+                       ErrorCode *error);
+
+/**
+ * @brief funkcia na tretí prechod, skontroluje telá všetkých funkcií a metod
+ * @param table je tabuľka symbolov
+ * @param program je koreň AST
+ * @param error je pointer, cez ktorý si vrátim prvú chybu
+ */
+void checkFunctionBodies(Symtable *table, ProgramNode *program, ErrorCode *error);
