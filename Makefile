@@ -50,6 +50,8 @@ UNIT_BUILTINS_OBJ := src/semantic/semantic.o src/symtable/symtable.o src/symtabl
                      src/common/types.o src/common/error.o
 UNIT_SEMANTIC_GLOBAL     := tests/unit/test_semantic_global
 UNIT_SEMANTIC_GLOBAL_OBJ := $(UNIT_BUILTINS_OBJ)
+UNIT_TYPES     := tests/unit/test_types
+UNIT_TYPES_OBJ := src/common/types.o src/common/error.o
 
 PACK_DIR := pack
 PACK_ZIP := xbukovp00.zip
@@ -97,11 +99,15 @@ $(UNIT_BUILTINS): tests/unit/test_builtins.c $(UNIT_BUILTINS_OBJ)
 $(UNIT_SEMANTIC_GLOBAL): tests/unit/test_semantic_global.c $(UNIT_SEMANTIC_GLOBAL_OBJ)
 	$(CC) $(CFLAGS) -o $@ $^
 
-test-unit: $(UNIT_BST) $(UNIT_SYMTABLE) $(UNIT_BUILTINS) $(UNIT_SEMANTIC_GLOBAL)
+$(UNIT_TYPES): tests/unit/test_types.c $(UNIT_TYPES_OBJ)
+	$(CC) $(CFLAGS) -o $@ $^
+
+test-unit: $(UNIT_BST) $(UNIT_SYMTABLE) $(UNIT_BUILTINS) $(UNIT_SEMANTIC_GLOBAL) $(UNIT_TYPES)
 	./$(UNIT_BST)
 	./$(UNIT_SYMTABLE)
 	./$(UNIT_BUILTINS)
 	./$(UNIT_SEMANTIC_GLOBAL)
+	./$(UNIT_TYPES)
 
 pack:
 	rm -rf $(PACK_DIR) $(PACK_ZIP)
@@ -116,5 +122,5 @@ pack:
 
 clean:
 	rm -f $(TARGET) $(OBJ) $(LEXDUMP) $(UNIT_BST) $(UNIT_SYMTABLE) $(UNIT_BUILTINS) \
-	      $(UNIT_SEMANTIC_GLOBAL)
+	      $(UNIT_SEMANTIC_GLOBAL) $(UNIT_TYPES)
 	rm -rf docs/doxygen $(PACK_DIR) $(PACK_ZIP) tests/tmp

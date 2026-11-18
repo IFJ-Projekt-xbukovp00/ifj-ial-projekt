@@ -135,6 +135,191 @@ void type_list_append(TypeList *list, Type *t){
     list->len++;
 }
 
+/**
+ * @brief funkcia na preskocenie mien typov (TY_NAMED) až po skutocny typ
+ * @param type je typ, ktory môže byt meno
+ * @returns skutočný typ, alebo samotne meno, ak este nie je rozlíšené
+ */
+const Type *skipNamedType(const Type *type){
+    while (type != NULL && type->kind == TY_NAMED && type->named.resolved != NULL){
+        type = type->named.resolved;
+    }
+
+    return type;
+}
+
+/**
+ * @brief funkcia na zistenie, ci zjednotenie obsahuje rovnaky typ
+ * @param members je zoznam členov zjednotenia
+ * @param type je hladaný typ
+ * @returns true, ak niektory člen je rovnaky ako type
+ */
+bool typeListContains(const TypeList *members, const Type *type){
+    for (size_t memberIndex = 0; memberIndex < members->len; memberIndex++){
+        if (type_equals(members->items[memberIndex], type)){
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool type_equals(const Type *a, const Type *b){
+    a = skipNamedType(a);
+    b = skipNamedType(b);
+
+    if (a == NULL || b == NULL){
+        return false;
+    }
+    if (a == b){
+        return true;
+    }
+    if (a->kind != b->kind){
+        return false;
+    }
+
+    if (a->kind == TY_LIST){
+        return type_equals(a->elem, b->elem);
+    }
+    if (a->kind == TY_FUNC){
+        if (a->func.params.len != b->func.params.len){
+            return false;
+        }
+        for (size_t paramIndex = 0; paramIndex < a->func.params.len; paramIndex++){
+            if (!type_equals(a->func.params.items[paramIndex], b->func.params.items[paramIndex])){
+                return false;
+            }
+        }
+        return type_equals(a->func.ret, b->func.ret);
+    }
+    if (a->kind == TY_UNION){
+        if (a->members.len != b->members.len){
+            return false;
+        }
+        // poradie clenov nerozhoduje
+        for (size_t memberIndex = 0; memberIndex < a->members.len; memberIndex++){
+            if (!typeListContains(&b->members, a->members.items[memberIndex])){
+                return false;
+            }
+        }
+        return true;
+    }
+    if (a->kind == TY_CLASS){
+        return a->cls == b->cls;
+    }
+    if (a->kind == TY_NAMED){
+        // obe mena ešte nerozlisene
+        return strcmp(a->named.name, b->named.name) == 0;
+    }
+
+    // jednoduché typy
+    return true;
+}
+
+bool type_accepts(const Type *expected, const Type *actual){
+    expected = skipNamedType(expected);
+    actual = skipNamedType(actual);
+
+    if (expected == NULL || actual == NULL){
+        return false;
+    }
+    if (expected->kind == TY_ANY){
+        return true;
+    }
+    if (type_equals(expected, actual)){
+        return true;
+    }
+    // jedina implicitná konverzia
+    if (expected->kind == TY_DOUBLE && actual->kind == TY_INT){
+        return true;
+    }
+
+    // hodnota typu zjednotenie: musi sediet každý jej clen
+    if (actual->kind == TY_UNION){
+        for (size_t memberIndex = 0; memberIndex < actual->members.len; memberIndex++){
+            if (!type_accepts(expected, actual->members.items[memberIndex])){
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // ocakavane zjednotenie: stačí jeden člen
+    if (expected->kind == TY_UNION){
+        for (size_t memberIndex = 0; memberIndex < expected->members.len; memberIndex++){
+            if (type_accepts(expected->members.items[memberIndex], actual)){
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+/**
+ * @brief funkcia na vypisanie zoznamu typov oddelenych oddeľovačom
+ * @param list je zoznam typov
+ * @param separator je oddelovac medzi typmi
+ * @param out je subor, do ktoreho sa vypisuje
+ */
+void printTypeList(const TypeList *list, const char *separator, FILE *out){
+    for (size_t typeIndex = 0; typeIndex < list->len; typeIndex++){
+        if (typeIndex > 0){
+            fputs(separator, out);
+        }
+        type_print(list->items[typeIndex], out);
+    }
+}
+
+void type_print(const Type *t, FILE *out){
+    if (t == NULL){
+        fputs("?", out);
+        return;
+    }
+
+    if (t->kind == TY_INT){
+        fputs("Int", out);
+    }
+    else if (t->kind == TY_DOUBLE){
+        fputs("Double", out);
+    }
+    else if (t->kind == TY_STRING){
+        fputs("String", out);
+    }
+    else if (t->kind == TY_UNIT){
+        fputs("Unit", out);
+    }
+    else if (t->kind == TY_BOOL){
+        fputs("Boolean", out);
+    }
+    else if (t->kind == TY_LIST){
+        fputs("List[", out);
+        type_print(t->elem, out);
+        fputs("]", out);
+    }
+    else if (t->kind == TY_FUNC){
+        fputs("(", out);
+        printTypeList(&t->func.params, ", ", out);
+        fputs(") => ", out);
+        type_print(t->func.ret, out);
+    }
+    else if (t->kind == TY_UNION){
+        printTypeList(&t->members, " | ", out);
+    }
+    else if (t->kind == TY_CLASS){
+        fputs("case class", out);
+    }
+    else if (t->kind == TY_NAMED){
+        fputs(t->named.name, out);
+    }
+    else if (t->kind == TY_RANGE){
+        fputs("Range", out);
+    }
+    else{
+        fputs("Any", out);
+    }
+}
+
 void type_free_all(void){
     for (size_t index = 0; index < allTypesCount; index++){
         Type *type = allTypes[index];
