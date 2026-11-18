@@ -49,7 +49,7 @@ typedef enum{
 }SymbolKind;
 
 /**
- * @brief stav kontroly tela funkcie
+ * @brief stav kontroly tela funkcie (pri aliase stav rozlisenia typu)
  */
 typedef enum{
     FUNC_NOT_STARTED,   // ešte nekontrolovaná
@@ -66,6 +66,7 @@ typedef struct Symbol{
     bool isMutable;             // true pre var, inak false
     ASTNode *definition;        // uzol definície funkcie, inak NULL
     FunctionCheckState checkState; // stav kontroly tela
+    Param *receiver;            // príjemca rozširujúcej metódy, inak NULL
     struct Symbol *nextAllocated; // zoznam všetkých symbolov, aby sa dali na konci uvoľniť
 }Symbol;
 
@@ -83,6 +84,8 @@ typedef struct Scope{
 typedef struct Symtable{
     Scope *top;             // aktuálny (najvnútornejší) rozsah
     Symbol *allSymbols;     // všetky vytvorené symboly
+    Node *typeTree;         // mená typov (type, case class)
+    Node *extensionTree;    // rozširujúce metody, kľúč "Typ.meno"
 }Symtable;
 
 /**
@@ -124,6 +127,28 @@ void popScope(Symtable *table);
  */
 Symbol *defineSymbol(Symtable *table, const char *name, SymbolKind kind, Type *type,
                      bool isMutable, ErrorCode *error);
+
+/**
+ * @brief funkcia na definovanie mena v zadanom strome (napr. typeTree)
+ * @param table je tabuľka symbolov
+ * @param tree je strom, do ktorého meno vkladám
+ * @param name je definované meno
+ * @param kind je druh symbolu
+ * @param type je typ symbolu (moze byt NULL)
+ * @param isMutable je true pre var
+ * @param error je pointer, cez ktory si vrátim chybove hlasenie (ERR_REDEF, ERR_INTERNAL)
+ * @returns nový symbol, pri chybe NULL
+ */
+Symbol *defineSymbolInTree(Symtable *table, Node **tree, const char *name, SymbolKind kind,
+                           Type *type, bool isMutable, ErrorCode *error);
+
+/**
+ * @brief funkcia na hľadanie mena v jednom strome
+ * @param tree je prehľadávaný strom
+ * @param name je hladane meno
+ * @returns symbol, alebo NULL ak tam meno nie je
+ */
+Symbol *lookupSymbolInTree(Node *tree, const char *name);
 
 /**
  * @brief funkcia na hľadanie mena od aktuálneho rozsahu po globálny

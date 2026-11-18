@@ -31,6 +31,7 @@
 #include "error.h"
 
 #include <stdlib.h>
+#include <string.h>
 
 Type basicTypes[TY_ANY + 1]; // jednoduché typy, nealokujú sa
 
@@ -94,6 +95,25 @@ Type *type_create_function(TypeList params, Type *ret){
 Type *type_create_union(TypeList members){
     Type *type = newType(TY_UNION);
     type->members = members;
+    return type;
+}
+
+Type *type_create_named(const char *name){
+    Type *type = newType(TY_NAMED);
+    type->named.name = malloc(strlen(name) + 1);
+
+    if (type->named.name == NULL){
+        error_exit(ERR_INTERNAL, "nedostatok pamate pre meno typu");
+    }
+
+    strcpy(type->named.name, name);
+    type->named.resolved = NULL;
+    return type;
+}
+
+Type *type_create_class(struct Symbol *cls){
+    Type *type = newType(TY_CLASS);
+    type->cls = cls;
     return type;
 }
 

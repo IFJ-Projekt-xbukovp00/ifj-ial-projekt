@@ -30,6 +30,8 @@
 #include "semantic.h"
 
 #include <stdarg.h>
+#include <stdlib.h>
+#include <string.h>
 
 /**
  * @brief funkcia na vloženie jednej vstavanej funkcie
@@ -98,11 +100,7 @@ void addBuiltins(Symtable *table, ErrorCode *error){
                intType);
 }
 
-void collectFunction(Symtable *table, DefFuncNode *function, int *mainCount, ErrorCode *error){
-    if (*error != ERR_OK){
-        return;
-    }
-
+Type *createFunctionType(DefFuncNode *function){
     // parametre zo všetkých zoznamov dáme za sebou
     TypeList paramTypes = {NULL, 0, 0};
 
@@ -114,23 +112,21 @@ void collectFunction(Symtable *table, DefFuncNode *function, int *mainCount, Err
         }
     }
 
-    Type *functionType = type_create_function(paramTypes, function->returnType);
-    Symbol *functionSymbol = defineSymbol(table, function->name, SYM_FUNCTION, functionType,
-                                          false, error);
-    if (functionSymbol == NULL){
-        return;
-    }
+    return type_create_function(paramTypes, function->returnType);
+}
 
-    functionSymbol->definition = (ASTNode *)function;
-    function->symbol = functionSymbol;
+bool checkParamNames(Symtable *table, DefFuncNode *function, Param *receiver, ErrorCode *error){
+    bool hasParameter = false;
 
     // rovnaké meno parametra aj v inom zozname je chyba 4
     pushScope(table, error);
     if (*error != ERR_OK){
-        return;
+        return false;
     }
 
-    bool hasParameter = false;
+    if (receiver != NULL){
+        defineSymbol(table, receiver->name, SYM_PARAMETER, receiver->type, false, error);
+    }
 
     for (size_t listIndex = 0; listIndex < function->paramListCount; listIndex++){
         ParamList *paramList = &function->paramList[listIndex];
@@ -139,16 +135,33 @@ void collectFunction(Symtable *table, DefFuncNode *function, int *mainCount, Err
             Param *param = &paramList->params[paramIndex];
             hasParameter = true;
 
-            if (defineSymbol(table, param->name, SYM_PARAMETER, param->type, false, error) == NULL){
-                popScope(table);
-                return;
+            if (*error == ERR_OK){
+                defineSymbol(table, param->name, SYM_PARAMETER, param->type, false, error);
             }
         }
     }
 
     popScope(table);
+    return hasParameter;
+}
 
-    if (!function->isMain){
+void collectFunction(Symtable *table, DefFuncNode *function, int *mainCount, ErrorCode *error){
+    if (*error != ERR_OK){
+        return;
+    }
+
+    Symbol *functionSymbol = defineSymbol(table, function->name, SYM_FUNCTION,
+                                          createFunctionType(function), false, error);
+    if (functionSymbol == NULL){
+        return;
+    }
+
+    functionSymbol->definition = (ASTNode *)function;
+    function->symbol = functionSymbol;
+
+    bool hasParameter = checkParamNames(table, function, NULL, error);
+
+    if (*error != ERR_OK || !function->isMain){
         return;
     }
 
@@ -171,6 +184,59 @@ void collectFunction(Symtable *table, DefFuncNode *function, int *mainCount, Err
     }
 }
 
+void collectClass(Symtable *table, ClassDefNode *classDef, ErrorCode *error){
+    if (*error != ERR_OK){
+        return;
+    }
+
+    Symbol *classSymbol = defineSymbolInTree(table, &table->typeTree, classDef->name, SYM_CLASS,
+                                             NULL, false, error);
+    if (classSymbol == NULL){
+        return;
+    }
+
+    classSymbol->type = type_create_class(classSymbol);
+    classSymbol->definition = (ASTNode *)classDef;
+    classDef->symbol = classSymbol;
+
+    // meno triedy je aj konstruktor, takže nesmie byť rovnaké ako funkcia
+    table->top->tree = insertNode(table->top->tree, classDef->name, classSymbol, error);
+    if (*error != ERR_OK){
+        return;
+    }
+
+    // rovnake meno atributu je chyba 4
+    pushScope(table, error);
+    if (*error != ERR_OK){
+        return;
+    }
+
+    for (size_t fieldIndex = 0; fieldIndex < classDef->fields.params_count; fieldIndex++){
+        Param *field = &classDef->fields.params[fieldIndex];
+
+        if (*error == ERR_OK){
+            defineSymbol(table, field->name, SYM_PARAMETER, field->type, false, error);
+        }
+    }
+
+    popScope(table);
+}
+
+void collectTypeAlias(Symtable *table, TypeAliasNode *alias, ErrorCode *error){
+    if (*error != ERR_OK){
+        return;
+    }
+
+    Symbol *aliasSymbol = defineSymbolInTree(table, &table->typeTree, alias->name, SYM_ALIAS,
+                                             alias->aliased, false, error);
+    if (aliasSymbol == NULL){
+        return;
+    }
+
+    aliasSymbol->definition = (ASTNode *)alias;
+    alias->symbol = aliasSymbol;
+}
+
 void collectGlobalDefinitions(Symtable *table, ProgramNode *program, ErrorCode *error){
     int mainCount = 0;
 
@@ -184,10 +250,222 @@ void collectGlobalDefinitions(Symtable *table, ProgramNode *program, ErrorCode *
         if (item->kind == AST_FUNCTION_DEF){
             collectFunction(table, (DefFuncNode *)item, &mainCount, error);
         }
+        else if (item->kind == AST_CLASS_DEF){
+            collectClass(table, (ClassDefNode *)item, error);
+        }
+        else if (item->kind == AST_TYPE_ALIAS){
+            collectTypeAlias(table, (TypeAliasNode *)item, error);
+        }
+        else if (item->kind == AST_EXTENSION){
+            // metódy zaregistrujeme až po rozlísení typov, tu len parametre
+            ExtensionNode *extension = (ExtensionNode *)item;
+
+            for (size_t methodIndex = 0; methodIndex < extension->methodsCount; methodIndex++){
+                if (*error == ERR_OK){
+                    checkParamNames(table, (DefFuncNode *)extension->methods[methodIndex],
+                                    &extension->receiver, error);
+                }
+            }
+        }
     }
 
     if (*error == ERR_OK && mainCount == 0){
         *error = ERR_UNDEF;
+    }
+}
+
+Type *getRealType(Type *type){
+    while (type != NULL && type->kind == TY_NAMED && type->named.resolved != NULL){
+        type = type->named.resolved;
+    }
+
+    return type;
+}
+
+void resolveAlias(Symtable *table, Symbol *aliasSymbol, ErrorCode *error){
+    if (aliasSymbol->checkState == FUNC_DONE){
+        return;
+    }
+
+    // alias, ktory sa odkazuje sam na seba
+    if (aliasSymbol->checkState == FUNC_IN_PROGRESS){
+        *error = ERR_TYPE;
+        return;
+    }
+
+    aliasSymbol->checkState = FUNC_IN_PROGRESS;
+    resolveType(table, aliasSymbol->type, error);
+    aliasSymbol->checkState = FUNC_DONE;
+}
+
+void resolveType(Symtable *table, Type *type, ErrorCode *error){
+    if (*error != ERR_OK || type == NULL){
+        return;
+    }
+
+    if (type->kind == TY_LIST){
+        resolveType(table, type->elem, error);
+    }
+    else if (type->kind == TY_FUNC){
+        for (size_t paramIndex = 0; paramIndex < type->func.params.len; paramIndex++){
+            resolveType(table, type->func.params.items[paramIndex], error);
+        }
+        resolveType(table, type->func.ret, error);
+    }
+    else if (type->kind == TY_UNION){
+        for (size_t memberIndex = 0; memberIndex < type->members.len; memberIndex++){
+            resolveType(table, type->members.items[memberIndex], error);
+        }
+    }
+    else if (type->kind == TY_NAMED && type->named.resolved == NULL){
+        Symbol *typeSymbol = lookupSymbolInTree(table->typeTree, type->named.name);
+
+        if (typeSymbol == NULL){
+            *error = ERR_UNDEF;
+            return;
+        }
+
+        if (typeSymbol->kind == SYM_ALIAS){
+            resolveAlias(table, typeSymbol, error);
+        }
+
+        type->named.resolved = getRealType(typeSymbol->type);
+    }
+}
+
+void resolveParamList(Symtable *table, ParamList *paramList, ErrorCode *error){
+    for (size_t paramIndex = 0; paramIndex < paramList->params_count; paramIndex++){
+        resolveType(table, paramList->params[paramIndex].type, error);
+    }
+}
+
+void resolveFunctionTypes(Symtable *table, DefFuncNode *function, ErrorCode *error){
+    for (size_t listIndex = 0; listIndex < function->paramListCount; listIndex++){
+        resolveParamList(table, &function->paramList[listIndex], error);
+    }
+
+    resolveType(table, function->returnType, error);
+}
+
+void resolveGlobalTypes(Symtable *table, ProgramNode *program, ErrorCode *error){
+    for (size_t itemIndex = 0; itemIndex < program->itemsCount; itemIndex++){
+        ASTNode *item = program->items[itemIndex];
+
+        if (item->kind == AST_FUNCTION_DEF){
+            resolveFunctionTypes(table, (DefFuncNode *)item, error);
+        }
+        else if (item->kind == AST_CLASS_DEF){
+            resolveParamList(table, &((ClassDefNode *)item)->fields, error);
+        }
+        else if (item->kind == AST_TYPE_ALIAS){
+            resolveAlias(table, ((TypeAliasNode *)item)->symbol, error);
+        }
+        else if (item->kind == AST_EXTENSION){
+            ExtensionNode *extension = (ExtensionNode *)item;
+            resolveType(table, extension->receiver.type, error);
+
+            for (size_t methodIndex = 0; methodIndex < extension->methodsCount; methodIndex++){
+                resolveFunctionTypes(table, (DefFuncNode *)extension->methods[methodIndex], error);
+            }
+        }
+
+        if (*error != ERR_OK){
+            return;
+        }
+    }
+}
+
+const char *getTypeKeyName(Type *type){
+    type = getRealType(type);
+
+    if (type == NULL){
+        return "?";
+    }
+    if (type->kind == TY_INT){
+        return "Int";
+    }
+    if (type->kind == TY_DOUBLE){
+        return "Double";
+    }
+    if (type->kind == TY_STRING){
+        return "String";
+    }
+    if (type->kind == TY_BOOL){
+        return "Boolean";
+    }
+    if (type->kind == TY_UNIT){
+        return "Unit";
+    }
+    if (type->kind == TY_CLASS){
+        return ((ClassDefNode *)type->cls->definition)->name;
+    }
+    if (type->kind == TY_LIST){
+        return "List";
+    }
+    // zjednotenia a funkcie ako príjemcu nepodporujeme presne
+    return "?";
+}
+
+void collectExtensionMethod(Symtable *table, Param *receiver, DefFuncNode *method,
+                            ErrorCode *error){
+    const char *typeName = getTypeKeyName(receiver->type);
+    char *key = malloc(strlen(typeName) + strlen(method->name) + 2);
+
+    if (key == NULL){
+        *error = ERR_INTERNAL;
+        return;
+    }
+
+    strcpy(key, typeName);
+    strcat(key, ".");
+    strcat(key, method->name);
+
+    Symbol *methodSymbol = defineSymbolInTree(table, &table->extensionTree, key, SYM_EXTENSION,
+                                              createFunctionType(method), false, error);
+    free(key);
+
+    if (methodSymbol == NULL){
+        return;
+    }
+
+    methodSymbol->definition = (ASTNode *)method;
+    methodSymbol->receiver = receiver;
+    method->symbol = methodSymbol;
+}
+
+void collectExtensions(Symtable *table, ProgramNode *program, ErrorCode *error){
+    for (size_t itemIndex = 0; itemIndex < program->itemsCount; itemIndex++){
+        if (program->items[itemIndex]->kind != AST_EXTENSION){
+            continue;
+        }
+
+        ExtensionNode *extension = (ExtensionNode *)program->items[itemIndex];
+
+        for (size_t methodIndex = 0; methodIndex < extension->methodsCount; methodIndex++){
+            if (*error != ERR_OK){
+                return;
+            }
+
+            collectExtensionMethod(table, &extension->receiver,
+                                   (DefFuncNode *)extension->methods[methodIndex], error);
+        }
+    }
+}
+
+void checkMainReturnType(ProgramNode *program, ErrorCode *error){
+    for (size_t itemIndex = 0; itemIndex < program->itemsCount; itemIndex++){
+        if (program->items[itemIndex]->kind != AST_FUNCTION_DEF){
+            continue;
+        }
+
+        DefFuncNode *function = (DefFuncNode *)program->items[itemIndex];
+        Type *returnType = getRealType(function->returnType);
+
+        // @main s aliasom, ktorý nie je Unit
+        if (function->isMain && returnType != NULL && returnType->kind != TY_UNIT){
+            *error = ERR_TYPE;
+            return;
+        }
     }
 }
 
@@ -210,5 +488,17 @@ void semanticAnalyze(ASTNode *program, Symtable *table, ErrorCode *error){
         return;
     }
 
-    collectGlobalDefinitions(table, (ProgramNode *)program, error);
+    ProgramNode *programNode = (ProgramNode *)program;
+
+    collectGlobalDefinitions(table, programNode, error);
+
+    if (*error == ERR_OK){
+        resolveGlobalTypes(table, programNode, error);
+    }
+    if (*error == ERR_OK){
+        collectExtensions(table, programNode, error);
+    }
+    if (*error == ERR_OK){
+        checkMainReturnType(programNode, error);
+    }
 }

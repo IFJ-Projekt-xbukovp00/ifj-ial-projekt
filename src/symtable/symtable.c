@@ -34,12 +34,19 @@
 void symtableInit(Symtable *table){
     table->top = NULL;
     table->allSymbols = NULL;
+    table->typeTree = NULL;
+    table->extensionTree = NULL;
 }
 
 void symtableFree(Symtable *table){
     while (table->top != NULL){
         popScope(table);
     }
+
+    destroyTree(table->typeTree);
+    destroyTree(table->extensionTree);
+    table->typeTree = NULL;
+    table->extensionTree = NULL;
 
     Symbol *symbol = table->allSymbols;
 
@@ -84,6 +91,11 @@ Symbol *defineSymbol(Symtable *table, const char *name, SymbolKind kind, Type *t
         return NULL;
     }
 
+    return defineSymbolInTree(table, &table->top->tree, name, kind, type, isMutable, error);
+}
+
+Symbol *defineSymbolInTree(Symtable *table, Node **tree, const char *name, SymbolKind kind,
+                           Type *type, bool isMutable, ErrorCode *error){
     Symbol *symbol = malloc(sizeof(Symbol));
     if (symbol == NULL){
         *error = ERR_INTERNAL;
@@ -95,10 +107,11 @@ Symbol *defineSymbol(Symtable *table, const char *name, SymbolKind kind, Type *t
     symbol->isMutable = isMutable;
     symbol->definition = NULL;
     symbol->checkState = FUNC_NOT_STARTED;
+    symbol->receiver = NULL;
 
     ErrorCode insertError = ERR_OK;
 
-    table->top->tree = insertNode(table->top->tree, name, symbol, &insertError);
+    *tree = insertNode(*tree, name, symbol, &insertError);
 
     if (insertError != ERR_OK){
         free(symbol);
@@ -109,6 +122,17 @@ Symbol *defineSymbol(Symtable *table, const char *name, SymbolKind kind, Type *t
     symbol->nextAllocated = table->allSymbols;
     table->allSymbols = symbol;
     return symbol;
+}
+
+Symbol *lookupSymbolInTree(Node *tree, const char *name){
+    ErrorCode findError = ERR_OK;
+    Node *foundNode = findNode(tree, name, &findError);
+
+    if (foundNode == NULL){
+        return NULL;
+    }
+
+    return foundNode->symbol;
 }
 
 Symbol *lookupSymbol(Symtable *table, const char *name){

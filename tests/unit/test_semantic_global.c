@@ -1,6 +1,6 @@
 /**
  * @file test_semantic_global.c
- * @brief Unit testy prvého prechodu sémantiky (funkcie, parametre, @main)
+ * @brief Unit testy globálnych definícií v sémantike (funkcie, @main, typy, extension)
  *
  * Použitie AI: tento súbor vygenerovala AI (Claude Opus 5.5).
  * Prompt: "Prosím vytvor nám unit testy podľa predlohy na sémantický analyzátor, zadanie
@@ -90,6 +90,61 @@ void addParam(DefFuncNode *function, const char *name, Type *type) {
     param->symbol = NULL;
 }
 
+/* metóda rozširenia, do programu sa nepridáva */
+DefFuncNode *newMethod(ExtensionNode *extension, const char *name, Type *returnType) {
+    DefFuncNode *method = calloc(1, sizeof(DefFuncNode));
+    method->node.kind = AST_FUNCTION_DEF;
+    method->name = (char *)name;
+    method->returnType = returnType;
+    extension->methods = realloc(extension->methods,
+                                 (extension->methodsCount + 1) * sizeof(ASTNode *));
+    extension->methods[extension->methodsCount++] = (ASTNode *)method;
+    return method;
+}
+
+ExtensionNode *newExtension(ProgramNode *program, const char *receiverName, Type *receiverType) {
+    ExtensionNode *extension = calloc(1, sizeof(ExtensionNode));
+    extension->node.kind = AST_EXTENSION;
+    extension->receiver.name = (char *)receiverName;
+    extension->receiver.type = receiverType;
+    addItem(program, (ASTNode *)extension);
+    return extension;
+}
+
+ClassDefNode *newClass(ProgramNode *program, const char *name) {
+    ClassDefNode *classDef = calloc(1, sizeof(ClassDefNode));
+    classDef->node.kind = AST_CLASS_DEF;
+    classDef->name = (char *)name;
+    addItem(program, (ASTNode *)classDef);
+    return classDef;
+}
+
+void addField(ClassDefNode *classDef, const char *name, Type *type) {
+    ParamList *fields = &classDef->fields;
+    fields->params = realloc(fields->params, (fields->params_count + 1) * sizeof(Param));
+    Param *field = &fields->params[fields->params_count++];
+    field->name = (char *)name;
+    field->type = type;
+    field->line = 0;
+    field->symbol = NULL;
+}
+
+TypeAliasNode *newAlias(ProgramNode *program, const char *name, Type *aliased) {
+    TypeAliasNode *alias = calloc(1, sizeof(TypeAliasNode));
+    alias->node.kind = AST_TYPE_ALIAS;
+    alias->name = (char *)name;
+    alias->aliased = aliased;
+    addItem(program, (ASTNode *)alias);
+    return alias;
+}
+
+Type *unionOfTwo(Type *first, Type *second) {
+    TypeList members = {NULL, 0, 0};
+    type_list_append(&members, first);
+    type_list_append(&members, second);
+    return type_create_union(members);
+}
+
 /* @main def main(): Unit */
 DefFuncNode *addMain(ProgramNode *program) {
     DefFuncNode *mainFunction = newFunction(program, "main", true, type_get_basic(TY_UNIT));
@@ -97,16 +152,29 @@ DefFuncNode *addMain(ProgramNode *program) {
     return mainFunction;
 }
 
+void freeFunction(DefFuncNode *function) {
+    for (size_t listIndex = 0; listIndex < function->paramListCount; listIndex++) {
+        free(function->paramList[listIndex].params);
+    }
+    free(function->paramList);
+}
+
 void freeProgram(ProgramNode *program) {
     for (size_t itemIndex = 0; itemIndex < program->itemsCount; itemIndex++) {
-        if (program->items[itemIndex]->kind == AST_FUNCTION_DEF) {
-            DefFuncNode *function = (DefFuncNode *)program->items[itemIndex];
-            for (size_t listIndex = 0; listIndex < function->paramListCount; listIndex++) {
-                free(function->paramList[listIndex].params);
+        ASTNode *item = program->items[itemIndex];
+        if (item->kind == AST_FUNCTION_DEF) {
+            freeFunction((DefFuncNode *)item);
+        } else if (item->kind == AST_CLASS_DEF) {
+            free(((ClassDefNode *)item)->fields.params);
+        } else if (item->kind == AST_EXTENSION) {
+            ExtensionNode *extension = (ExtensionNode *)item;
+            for (size_t methodIndex = 0; methodIndex < extension->methodsCount; methodIndex++) {
+                freeFunction((DefFuncNode *)extension->methods[methodIndex]);
+                free(extension->methods[methodIndex]);
             }
-            free(function->paramList);
+            free(extension->methods);
         }
-        free(program->items[itemIndex]);
+        free(item);
     }
     free(program->items);
     free(program);
@@ -264,10 +332,236 @@ void testRedefinitions(void) {
     CHECK(analyze(program) == ERR_OK);
 }
 
+void testValidTypes(void) {
+    /* def f(p: Point, s: Scalar): Scalar ; case class Point(x: Int, y: Int)
+       type Scalar = Int | Point ; type Number = Scalar ; @main */
+    ProgramNode *program = newProgram();
+    DefFuncNode *function = newFunction(program, "f", false, type_create_named("Scalar"));
+    addParamList(function);
+    addParam(function, "p", type_create_named("Point"));
+    addParam(function, "s", type_create_named("Number"));
+    ClassDefNode *point = newClass(program, "Point");
+    addField(point, "x", type_get_basic(TY_INT));
+    addField(point, "y", type_get_basic(TY_INT));
+    newAlias(program, "Scalar", unionOfTwo(type_get_basic(TY_INT), type_create_named("Point")));
+    newAlias(program, "Number", type_create_named("Scalar"));
+    addMain(program);
+
+    Symtable table;
+    symtableInit(&table);
+    ErrorCode error = ERR_OK;
+    semanticAnalyze((ASTNode *)program, &table, &error);
+    CHECK(error == ERR_OK);
+
+    /* trieda je v tabuľke typov aj ako konštruktor */
+    Symbol *pointSymbol = lookupSymbolInTree(table.typeTree, "Point");
+    CHECK(pointSymbol != NULL && pointSymbol == point->symbol);
+    CHECK(lookupSymbol(&table, "Point") == pointSymbol);
+    if (pointSymbol != NULL) {
+        CHECK(pointSymbol->kind == SYM_CLASS);
+        CHECK(pointSymbol->type->kind == TY_CLASS && pointSymbol->type->cls == pointSymbol);
+    }
+
+    /* alias nie je v rozsahu hodnôt */
+    CHECK(lookupSymbol(&table, "Scalar") == NULL);
+    CHECK(lookupSymbolInTree(table.typeTree, "Scalar") != NULL);
+
+    /* mená typov sú rozlíšené */
+    Type *pointType = getRealType(function->paramList[0].params[0].type);
+    CHECK(pointType != NULL && pointType->kind == TY_CLASS && pointType->cls == pointSymbol);
+    Type *numberType = getRealType(function->paramList[0].params[1].type);
+    CHECK(numberType != NULL && numberType->kind == TY_UNION);
+    if (numberType != NULL && numberType->kind == TY_UNION) {
+        CHECK(getRealType(numberType->members.items[1])->kind == TY_CLASS);
+    }
+    CHECK(getRealType(function->returnType) == numberType);
+
+    symtableFree(&table);
+    freeProgram(program);
+}
+
+void testTypeErrors(void) {
+    /* neznamy typ parametra -> 3 */
+    ProgramNode *program = newProgram();
+    DefFuncNode *function = newFunction(program, "f", false, type_get_basic(TY_INT));
+    addParamList(function);
+    addParam(function, "x", type_create_named("Foo"));
+    addMain(program);
+    CHECK(analyze(program) == ERR_UNDEF);
+
+    /* neznamy navratový typ -> 3 */
+    program = newProgram();
+    addParamList(newFunction(program, "f", false, type_create_list(type_create_named("Foo"))));
+    addMain(program);
+    CHECK(analyze(program) == ERR_UNDEF);
+
+    /* neznámy typ atributu a v aliase -> 3 */
+    program = newProgram();
+    addField(newClass(program, "P"), "x", type_create_named("Foo"));
+    addMain(program);
+    CHECK(analyze(program) == ERR_UNDEF);
+
+    program = newProgram();
+    newAlias(program, "A", unionOfTwo(type_get_basic(TY_INT), type_create_named("Foo")));
+    addMain(program);
+    CHECK(analyze(program) == ERR_UNDEF);
+
+    /* dve case class P -> 4 */
+    program = newProgram();
+    addField(newClass(program, "P"), "x", type_get_basic(TY_INT));
+    addField(newClass(program, "P"), "y", type_get_basic(TY_INT));
+    addMain(program);
+    CHECK(analyze(program) == ERR_REDEF);
+
+    /* trieda a alias s rovnakým menom -> 4 */
+    program = newProgram();
+    newClass(program, "P");
+    newAlias(program, "P", type_get_basic(TY_INT));
+    addMain(program);
+    CHECK(analyze(program) == ERR_REDEF);
+
+    /* trieda a funkcia s rovnakým menom -> 4 (v oboch poradiach) */
+    program = newProgram();
+    newClass(program, "P");
+    addParamList(newFunction(program, "P", false, type_get_basic(TY_INT)));
+    addMain(program);
+    CHECK(analyze(program) == ERR_REDEF);
+
+    program = newProgram();
+    addParamList(newFunction(program, "P", false, type_get_basic(TY_INT)));
+    newClass(program, "P");
+    addMain(program);
+    CHECK(analyze(program) == ERR_REDEF);
+
+    /* alias a funkcia s rovnakym menom je ok (iny menny priestor) */
+    program = newProgram();
+    newAlias(program, "A", type_get_basic(TY_INT));
+    addParamList(newFunction(program, "A", false, type_get_basic(TY_INT)));
+    addMain(program);
+    CHECK(analyze(program) == ERR_OK);
+
+    /* rovnaký atribút -> 4 */
+    program = newProgram();
+    ClassDefNode *classDef = newClass(program, "P");
+    addField(classDef, "x", type_get_basic(TY_INT));
+    addField(classDef, "x", type_get_basic(TY_DOUBLE));
+    addMain(program);
+    CHECK(analyze(program) == ERR_REDEF);
+
+    /* trieda môže mať atribút svojho typu */
+    program = newProgram();
+    addField(newClass(program, "Node"), "next", type_create_named("Node"));
+    addMain(program);
+    CHECK(analyze(program) == ERR_OK);
+
+    /* cyklicke aliasy -> 6 */
+    program = newProgram();
+    newAlias(program, "A", type_create_named("B"));
+    newAlias(program, "B", type_create_named("A"));
+    addMain(program);
+    CHECK(analyze(program) == ERR_TYPE);
+
+    program = newProgram();
+    newAlias(program, "A", type_create_list(type_create_named("A")));
+    addMain(program);
+    CHECK(analyze(program) == ERR_TYPE);
+
+    /* @main s aliasom na Unit je ok, na Int -> 6 */
+    program = newProgram();
+    newAlias(program, "U", type_get_basic(TY_UNIT));
+    addParamList(newFunction(program, "main", true, type_create_named("U")));
+    CHECK(analyze(program) == ERR_OK);
+
+    program = newProgram();
+    newAlias(program, "I", type_get_basic(TY_INT));
+    addParamList(newFunction(program, "main", true, type_create_named("I")));
+    CHECK(analyze(program) == ERR_TYPE);
+}
+
+void testExtensions(void) {
+    /* extension (v: Int) twice ; extension (s: String) twice ; def twice */
+    ProgramNode *program = newProgram();
+    ExtensionNode *intExtension = newExtension(program, "v", type_get_basic(TY_INT));
+    DefFuncNode *intTwice = newMethod(intExtension, "twice", type_get_basic(TY_INT));
+    ExtensionNode *stringExtension = newExtension(program, "s", type_get_basic(TY_STRING));
+    DefFuncNode *plus = newMethod(stringExtension, "twice", type_get_basic(TY_STRING));
+    addParamList(plus);
+    addParam(plus, "other", type_get_basic(TY_INT));
+    addParamList(newFunction(program, "twice", false, type_get_basic(TY_INT)));
+    addMain(program);
+
+    Symtable table;
+    symtableInit(&table);
+    ErrorCode error = ERR_OK;
+    semanticAnalyze((ASTNode *)program, &table, &error);
+    CHECK(error == ERR_OK);
+
+    Symbol *method = lookupSymbolInTree(table.extensionTree, "Int.twice");
+    CHECK(method != NULL && method == intTwice->symbol);
+    if (method != NULL) {
+        CHECK(method->kind == SYM_EXTENSION);
+        CHECK(method->receiver == &intExtension->receiver);
+        CHECK(method->definition == (ASTNode *)intTwice);
+        CHECK(method->type->kind == TY_FUNC && method->type->func.params.len == 0);
+    }
+    method = lookupSymbolInTree(table.extensionTree, "String.twice");
+    CHECK(method != NULL && method->type->func.params.len == 1);
+    CHECK(lookupSymbol(&table, "twice")->kind == SYM_FUNCTION);
+
+    symtableFree(&table);
+    freeProgram(program);
+
+    /* dvakrat twice pre Int -> 4 */
+    program = newProgram();
+    newMethod(newExtension(program, "v", type_get_basic(TY_INT)), "twice", NULL);
+    newMethod(newExtension(program, "w", type_get_basic(TY_INT)), "twice", NULL);
+    addMain(program);
+    CHECK(analyze(program) == ERR_REDEF);
+
+    /* Int a alias na Int su ten istý typ -> 4 */
+    program = newProgram();
+    newAlias(program, "MyInt", type_get_basic(TY_INT));
+    newMethod(newExtension(program, "v", type_get_basic(TY_INT)), "foo", NULL);
+    newMethod(newExtension(program, "w", type_create_named("MyInt")), "foo", NULL);
+    addMain(program);
+    CHECK(analyze(program) == ERR_REDEF);
+
+    /* parameter s menom prijemcu -> 4 */
+    program = newProgram();
+    DefFuncNode *methodNode =
+        newMethod(newExtension(program, "v", type_get_basic(TY_INT)), "plus", NULL);
+    addParamList(methodNode);
+    addParam(methodNode, "v", type_get_basic(TY_INT));
+    addMain(program);
+    CHECK(analyze(program) == ERR_REDEF);
+
+    /* rozsírenie triedy, kľuc je meno triedy */
+    program = newProgram();
+    newMethod(newExtension(program, "p", type_create_named("P")), "show", NULL);
+    newClass(program, "P");
+    addMain(program);
+    symtableInit(&table);
+    error = ERR_OK;
+    semanticAnalyze((ASTNode *)program, &table, &error);
+    CHECK(error == ERR_OK);
+    CHECK(lookupSymbolInTree(table.extensionTree, "P.show") != NULL);
+    symtableFree(&table);
+    freeProgram(program);
+
+    /* rozšírenie neznámeho typu -> 3 */
+    program = newProgram();
+    newMethod(newExtension(program, "f", type_create_named("Foo")), "show", NULL);
+    addMain(program);
+    CHECK(analyze(program) == ERR_UNDEF);
+}
+
 int main(void) {
     testValidProgram();
     testMainRules();
     testRedefinitions();
+    testValidTypes();
+    testTypeErrors();
+    testExtensions();
 
     type_free_all();
 
