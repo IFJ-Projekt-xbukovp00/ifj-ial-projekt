@@ -5,6 +5,10 @@
  * Po každom vložení kontroluje usporiadanie BVS, správne uložené výšky
  * a vyváženosť (rozdiel výšok podstromov najviac 1).
  *
+ * Použitie AI: tento súbor vygenerovala AI (Claude Opus 5.5).
+ * Prompt: "Vytvor nam prosim unit testy na testovanie bst pre jazyk ifj26, zadanie najdes
+ *   v .zadanie, po spravnosti mame vsetky extensions"
+ *
  * Implementace překladače imperativního jazyka IFJ26.
  * Projekt z predmetov IFJ a IAL, FIT VUT v Brne, 2026/2027.
  *
@@ -41,7 +45,7 @@ struct Symbol {
     int id;
 };
 
-static int failureCount = 0;
+int failureCount = 0;
 
 #define CHECK(condition)                                                                           \
     do {                                                                                           \
@@ -55,7 +59,7 @@ static int failureCount = 0;
  * Overí invarianty AVL v podstrome. Vráti skutočnú výšku, alebo -1 pri chybe.
  * lowerBound/upperBound sú hranice pre kľúče (NULL = bez hranice).
  */
-static int checkAvl(const Node *node, const char *lowerBound, const char *upperBound) {
+int checkAvl(const Node *node, const char *lowerBound, const char *upperBound) {
     if (node == NULL) {
         return 0;
     }
@@ -86,14 +90,14 @@ static int checkAvl(const Node *node, const char *lowerBound, const char *upperB
 }
 
 /* Vloží a overí, že nenastala chyba. */
-static Node *insertChecked(Node *root, const char *name, struct Symbol *symbol) {
+Node *insertChecked(Node *root, const char *name, struct Symbol *symbol) {
     ErrorCode error = ERR_OK;
     root = insertNode(root, name, symbol, &error);
     CHECK(error == ERR_OK);
     return root;
 }
 
-static struct Symbol *findSymbol(Node *root, const char *name) {
+struct Symbol *findSymbol(Node *root, const char *name) {
     ErrorCode error = ERR_OK;
     Node *foundNode = findNode(root, name, &error);
     if (foundNode == NULL) {
@@ -102,12 +106,12 @@ static struct Symbol *findSymbol(Node *root, const char *name) {
     return foundNode->symbol;
 }
 
-static void testEmpty(void) {
+void testEmpty(void) {
     CHECK(findSymbol(NULL, "x") == NULL);
     destroyTree(NULL);
 }
 
-static void testInsertFind(void) {
+void testInsertFind(void) {
     Node *root = NULL;
     struct Symbol symbolA = {1}, symbolB = {2}, symbolC = {3};
     root = insertChecked(root, "b", &symbolB);
@@ -122,7 +126,7 @@ static void testInsertFind(void) {
     destroyTree(root);
 }
 
-static void testDuplicate(void) {
+void testDuplicate(void) {
     Node *root = NULL;
     struct Symbol firstSymbol = {1}, secondSymbol = {2};
     root = insertChecked(root, "x", &firstSymbol);
@@ -136,7 +140,7 @@ static void testDuplicate(void) {
     destroyTree(root);
 }
 
-static void testKeyIsCopied(void) {
+void testKeyIsCopied(void) {
     Node *root = NULL;
     struct Symbol symbol = {1};
     char nameBuffer[8] = "meno";
@@ -148,7 +152,7 @@ static void testKeyIsCopied(void) {
 }
 
 /* Všetky štyri prípady rotácií: LL, RR, LR, RL. */
-static void testRotations(void) {
+void testRotations(void) {
     const char *insertOrders[4][3] = {
         {"c", "b", "a"}, /* LL -> pravá rotácia */
         {"a", "b", "c"}, /* RR -> ľavá rotácia */
@@ -168,10 +172,10 @@ static void testRotations(void) {
 }
 
 /* Veľa kľúčov v zoradenom aj zamiešanom poradí, invarianty po každom vložení. */
-static void testManyKeys(int shuffled) {
+void testManyKeys(int shuffled) {
     enum { KEY_COUNT = 2000 };
-    static struct Symbol symbols[KEY_COUNT];
-    static char keys[KEY_COUNT][16];
+    struct Symbol symbols[KEY_COUNT];
+    char keys[KEY_COUNT][16];
     int insertOrder[KEY_COUNT];
     for (int keyIndex = 0; keyIndex < KEY_COUNT; keyIndex++) {
         symbols[keyIndex].id = keyIndex;

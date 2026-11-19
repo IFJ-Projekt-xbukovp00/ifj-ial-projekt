@@ -38,3 +38,8 @@ ifj26
 /tests/tmp/
 /tests/lexer_dump
 /tests/unit/test_bst
+/tests/unit/test_symtable
+/tests/unit/test_builtins
+/tests/unit/test_semantic_global
+/tests/unit/test_types
+/tests/unit/test_semantic_body
