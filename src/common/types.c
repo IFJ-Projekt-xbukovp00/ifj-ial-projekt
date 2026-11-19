@@ -273,6 +273,11 @@ bool type_accepts(const Type *expected, const Type *actual){
         return true;
     }
 
+    // prázdny zoznam List() nema typ prvkov, prijme ho kazdy zoznam
+    if (expected->kind == TY_LIST && actual->kind == TY_LIST && actual->elem == NULL){
+        return true;
+    }
+
     // hodnota typu zjednotenie: musi sediet každý jej clen, a to bez prevodu
     if (actual->kind == TY_UNION){
         return acceptsWithoutConversion(expected, actual);

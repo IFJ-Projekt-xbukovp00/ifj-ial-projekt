@@ -705,6 +705,11 @@ Type *checkVarDef(Symtable *table, BodyContext *context, VarOrValNode *varDef, E
         *error = ERR_TYPE;
         return NULL;
     }
+    else if (getRealType(variableType)->kind == TY_LIST && getRealType(variableType)->elem == NULL){
+        // prázdny zoznam vyzaduje očakávaný typ
+        *error = ERR_TYPE;
+        return NULL;
+    }
 
     Symbol *variableSymbol = defineSymbol(table, varDef->name, SYM_VARIABLE, variableType,
                                           varDef->isMutable, error);
@@ -792,6 +797,9 @@ Type *checkNode(Symtable *table, BodyContext *context, ASTNode **node, bool isVa
     }
     else if (current->kind == AST_FOR){
         nodeType = checkFor(table, context, (ForNode *)current, error);
+    }
+    else if (current->kind == AST_LIST_LIT){
+        nodeType = checkListLiteral(table, context, (ListLitNode *)current, error);
     }
     else if (current->kind == AST_LAMBDA){
         nodeType = checkLambda(table, context, (LambdaNode *)current, error);
@@ -983,6 +991,16 @@ Type *checkBinary(Symtable *table, BodyContext *context, BinaryNode *binary, Err
     else if (operator == TOK_AND || operator == TOK_OR){
         if (leftType->kind == TY_BOOL && rightType->kind == TY_BOOL){
             return type_get_basic(TY_BOOL);
+        }
+    }
+
+    else if (operator == TOK_CONCAT && leftType->kind == TY_LIST && rightType->kind == TY_LIST){
+        // prazdny zoznam sa prispôsobí druhému
+        if (leftType->elem == NULL){
+            return rightType;
+        }
+        if (rightType->elem == NULL || type_equals(leftType, rightType)){
+            return leftType;
         }
     }
 
@@ -1295,16 +1313,34 @@ Type *checkCall(Symtable *table, BodyContext *context, CallNode *call, ErrorCode
     }
 
     Symbol *callee = NULL;
+    bool isListStatic = false;
 
     if (caller->kind == AST_ID){
         callee = checkFunctionCallee(table, (IDNode *)caller, error);
     }
     else if (caller->kind == AST_MEMBER){
-        callee = checkMethodCallee(table, context, (MemberNode *)caller, error);
+        MemberNode *member = (MemberNode *)caller;
+
+        if (isListStaticAccess(table, member)){
+            callee = findListStaticFunction(table, member, error);
+            isListStatic = true;
+        }
+        else{
+            Type *objectType = checkMemberObject(table, context, member, error);
+
+            if (objectType == NULL){
+                return NULL;
+            }
+            if (objectType->kind == TY_LIST && isListMethodName(member->name)){
+                return checkListMethodCall(table, context, call, member, objectType, listCount,
+                                           error);
+            }
+            callee = checkMethodCallee(table, member, objectType, error);
+        }
     }
     else{
-        // volať sa da len meno funkcie alebo metóda
-        *error = ERR_TYPE;
+        // ina hodnota (zoznam, lambda) sa vola ako hodnota
+        return checkValueCall(table, context, call, error);
     }
 
     if (callee == NULL){
@@ -1356,8 +1392,14 @@ Type *checkCall(Symtable *table, BodyContext *context, CallNode *call, ErrorCode
             *error = ERR_PARAMS;
         }
         else{
-            checkArguments(table, context, call, callee->type->func.params.items,
-                           callee->type->func.params.len, error);
+            size_t paramCount = callee->type->func.params.len;
+
+            // List.range ma krok nepovinný
+            if (isListStatic && call->argsCount + 1 == paramCount){
+                paramCount--;
+            }
+            checkArguments(table, context, call, callee->type->func.params.items, paramCount,
+                           error);
         }
     }
     else if (callee->kind == SYM_CLASS){
@@ -1453,7 +1495,17 @@ Type *checkFor(Symtable *table, BodyContext *context, ForNode *forNode, ErrorCod
         return NULL;
     }
 
-    if (sourceType == NULL || sourceType->kind != TY_RANGE){
+    // rozsah dáva Int, zoznam typ svojich prvkov
+    Type *loopType = type_get_basic(TY_INT);
+
+    if (sourceType != NULL && sourceType->kind == TY_LIST){
+        loopType = sourceType->elem;
+    }
+    else if (sourceType == NULL || sourceType->kind != TY_RANGE){
+        loopType = NULL;
+    }
+
+    if (loopType == NULL){
         *error = ERR_TYPE;
         return NULL;
     }
@@ -1464,8 +1516,8 @@ Type *checkFor(Symtable *table, BodyContext *context, ForNode *forNode, ErrorCod
         return NULL;
     }
 
-    Symbol *loopSymbol = defineSymbol(table, forNode->varName, SYM_VARIABLE,
-                                      type_get_basic(TY_INT), false, error);
+    Symbol *loopSymbol = defineSymbol(table, forNode->varName, SYM_VARIABLE, loopType, false,
+                                      error);
     if (loopSymbol != NULL){
         forNode->symbol = loopSymbol;
         addContextLocal(context, loopSymbol, error);
@@ -1508,15 +1560,17 @@ Type *getBuiltinMemberType(Type *objectType, const char *name){
 }
 
 Type *checkMember(Symtable *table, BodyContext *context, MemberNode *member, ErrorCode *error){
-    Type *objectType = getRealType(checkNode(table, context, &member->object, true, error));
-
-    if (*error != ERR_OK){
+    // List.range sa da len zavolat
+    if (isListStaticAccess(table, member)){
+        if (findListStaticFunction(table, member, error) != NULL){
+            *error = ERR_PARAMS;
+        }
         return NULL;
     }
 
-    // hodnota, ktorá konci returnom, nemá cleny
+    Type *objectType = checkMemberObject(table, context, member, error);
+
     if (objectType == NULL){
-        *error = ERR_TYPE;
         return NULL;
     }
 
@@ -1536,6 +1590,19 @@ Type *checkMember(Symtable *table, BodyContext *context, MemberNode *member, Err
             member->symbol = objectType->cls;
             return fieldType;
         }
+    }
+
+    Type *listMemberType = getListMemberType(objectType, member->name);
+
+    if (listMemberType != NULL){
+        member->memberKind = MEM_BUILTIN;
+        return listMemberType;
+    }
+
+    // metóda zoznamu s argumentmi sa bez zatvoriek volat neda
+    if (objectType->kind == TY_LIST && isListMethodName(member->name)){
+        *error = ERR_PARAMS;
+        return NULL;
     }
 
     Symbol *method = findExtensionMethod(table, objectType, member->name, error);
@@ -1597,18 +1664,8 @@ Symbol *checkFunctionCallee(Symtable *table, IDNode *calleeId, ErrorCode *error)
     return callee;
 }
 
-Symbol *checkMethodCallee(Symtable *table, BodyContext *context, MemberNode *member,
+Symbol *checkMethodCallee(Symtable *table, MemberNode *member, Type *objectType,
                           ErrorCode *error){
-    Type *objectType = getRealType(checkNode(table, context, &member->object, true, error));
-
-    if (*error != ERR_OK){
-        return NULL;
-    }
-    if (objectType == NULL){
-        *error = ERR_TYPE;
-        return NULL;
-    }
-
     Symbol *method = findExtensionMethod(table, objectType, member->name, error);
 
     if (method == NULL){
@@ -1617,7 +1674,8 @@ Symbol *checkMethodCallee(Symtable *table, BodyContext *context, MemberNode *mem
         }
 
         // vstavany člen sa vola bez zatvoriek, neznamy člen je nedefinovaný
-        if (getBuiltinMemberType(objectType, member->name) != NULL){
+        if (getBuiltinMemberType(objectType, member->name) != NULL
+            || getListMemberType(objectType, member->name) != NULL){
             *error = ERR_PARAMS;
         }
         else{
@@ -1942,6 +2000,23 @@ Type *checkValueCall(Symtable *table, BodyContext *context, CallNode *call, Erro
         return NULL;
     }
 
+    // zoznam sa indexuje syntaxou volania, lst(i)
+    if (calleeType != NULL && calleeType->kind == TY_LIST){
+        Type *indexType = type_get_basic(TY_INT);
+
+        checkArguments(table, context, call, &indexType, 1, error);
+        if (*error != ERR_OK){
+            return NULL;
+        }
+        if (calleeType->elem == NULL){
+            *error = ERR_TYPE;
+            return NULL;
+        }
+
+        call->callKind = CALL_LIST_INDEX;
+        return calleeType->elem;
+    }
+
     // volat sa da len hodnota typu funkcia
     if (calleeType == NULL || calleeType->kind != TY_FUNC){
         *error = ERR_TYPE;
@@ -1956,4 +2031,167 @@ Type *checkValueCall(Symtable *table, BodyContext *context, CallNode *call, Erro
 
     call->callKind = CALL_VALUE;
     return calleeType->func.ret;
+}
+
+Type *checkMemberObject(Symtable *table, BodyContext *context, MemberNode *member,
+                        ErrorCode *error){
+    Type *objectType = getRealType(checkNode(table, context, &member->object, true, error));
+
+    if (*error != ERR_OK){
+        return NULL;
+    }
+
+    // hodnota, ktorá konci returnom, nemá cleny
+    if (objectType == NULL){
+        *error = ERR_TYPE;
+    }
+
+    return objectType;
+}
+
+bool isListStaticAccess(Symtable *table, MemberNode *member){
+    if (member->object->kind != AST_ID){
+        return false;
+    }
+
+    IDNode *objectId = (IDNode *)member->object;
+    return strcmp(objectId->name, "List") == 0 && lookupSymbol(table, "List") == NULL;
+}
+
+Symbol *findListStaticFunction(Symtable *table, MemberNode *member, ErrorCode *error){
+    char *key = malloc(strlen("List.") + strlen(member->name) + 1);
+
+    if (key == NULL){
+        *error = ERR_INTERNAL;
+        return NULL;
+    }
+
+    // vstavana funkcia je v tabuľke pod menom "List.range"
+    strcpy(key, "List.");
+    strcat(key, member->name);
+    Symbol *function = lookupSymbol(table, key);
+    free(key);
+
+    if (function == NULL || function->kind != SYM_BUILTIN){
+        *error = ERR_UNDEF;
+        return NULL;
+    }
+
+    member->memberKind = MEM_CALLEE;
+    member->symbol = function;
+    return function;
+}
+
+bool isListMethodName(const char *name){
+    return strcmp(name, "drop") == 0 || strcmp(name, "take") == 0 || strcmp(name, "slice") == 0
+           || strcmp(name, "filter") == 0 || strcmp(name, "takeWhile") == 0
+           || strcmp(name, "dropWhile") == 0;
+}
+
+Type *getListMemberType(Type *objectType, const char *name){
+    if (objectType->kind == TY_LIST && strcmp(name, "head") == 0){
+        return objectType->elem;
+    }
+    if (objectType->kind == TY_LIST && strcmp(name, "tail") == 0){
+        return objectType;
+    }
+    // rozsah 1 to 5 sa da previest na zoznam
+    if (objectType->kind == TY_RANGE && strcmp(name, "toList") == 0){
+        return type_create_list(type_get_basic(TY_INT));
+    }
+
+    return NULL;
+}
+
+Type *checkListMethodCall(Symtable *table, BodyContext *context, CallNode *call,
+                          MemberNode *member, Type *listType, size_t listCount,
+                          ErrorCode *error){
+    if (listCount != 1){
+        *error = ERR_PARAMS;
+        return NULL;
+    }
+
+    Type *paramTypes[2];
+    size_t paramCount = 1;
+
+    if (strcmp(member->name, "drop") == 0 || strcmp(member->name, "take") == 0){
+        paramTypes[0] = type_get_basic(TY_INT);
+    }
+    else if (strcmp(member->name, "slice") == 0){
+        paramTypes[0] = type_get_basic(TY_INT);
+        paramTypes[1] = type_get_basic(TY_INT);
+        paramCount = 2;
+    }
+    else{
+        // filter, takeWhile a dropWhile berú funkciu (T) => Boolean
+        TypeList predicateParams = {NULL, 0, 0};
+        type_list_append(&predicateParams, listType->elem);
+        paramTypes[0] = type_create_function(predicateParams, type_get_basic(TY_BOOL));
+    }
+
+    checkArguments(table, context, call, paramTypes, paramCount, error);
+    if (*error != ERR_OK){
+        return NULL;
+    }
+
+    call->callKind = CALL_LIST_METHOD;
+    member->memberKind = MEM_CALLEE;
+    return listType;
+}
+
+Type *checkListLiteral(Symtable *table, BodyContext *context, ListLitNode *list,
+                       ErrorCode *error){
+    if (list->elemsCount == 0){
+        return type_create_list(NULL);
+    }
+
+    Type *elemType = NULL;
+    bool areAllEqual = true;
+    bool areAllNumeric = true;
+    bool hasDouble = false;
+
+    for (size_t elemIndex = 0; elemIndex < list->elemsCount; elemIndex++){
+        Type *currentType = checkNode(table, context, &list->elems[elemIndex], true, error);
+
+        if (*error != ERR_OK){
+            return NULL;
+        }
+        if (currentType == NULL){
+            *error = ERR_TYPE;
+            return NULL;
+        }
+
+        if (elemType == NULL){
+            elemType = currentType;
+        }
+        else if (!type_equals(elemType, currentType)){
+            areAllEqual = false;
+        }
+
+        Type *realType = getRealType(currentType);
+
+        if (!isNumericType(realType)){
+            areAllNumeric = false;
+        }
+        else if (realType->kind == TY_DOUBLE){
+            hasDouble = true;
+        }
+    }
+
+    if (areAllEqual){
+        return type_create_list(elemType);
+    }
+
+    // zoznam je homogénny, jedine Int prvky sa da previest na Double
+    if (areAllNumeric && hasDouble){
+        Type *doubleType = type_get_basic(TY_DOUBLE);
+
+        for (size_t elemIndex = 0; elemIndex < list->elemsCount; elemIndex++){
+            acceptValue(doubleType, &list->elems[elemIndex], error);
+        }
+        return type_create_list(doubleType);
+    }
+
+    *error = ERR_TYPE;
+    return NULL;
 }

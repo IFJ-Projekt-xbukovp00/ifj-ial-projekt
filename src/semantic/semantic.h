@@ -528,7 +528,8 @@ Type *checkRange(Symtable *table, BodyContext *context, RangeNode *range, ErrorC
 /**
  * @brief funkcia na kontrolu cyklu for s jedným generátorom a strážami
  *
- * Riadiaca premenná je nová nemodifikovateľná premenná typu Int, platí v strážach aj v tele.
+ * Riadiaca premenná je nová nemodifikovateľná premenná typu Int (pri zozname typu prvku),
+ * platí v strážach aj v tele.
  * @param table je tabuľka symbolov
  * @param context je kontext kontrolovanej funkcie
  * @param forNode je uzol cyklu
@@ -578,12 +579,12 @@ Symbol *checkFunctionCallee(Symtable *table, IDNode *calleeId, ErrorCode *error)
 /**
  * @brief funkcia na nájdenie volanej rozširujúcej metódy (x.foo())
  * @param table je tabuľka symbolov
- * @param context je kontext kontrolovanej funkcie
  * @param member je pristup cez bodku pred zátvorkou
- * @param error je pointer, cez ktorý si vrátim chybove hlásenie (3, 5, 6)
+ * @param objectType je typ hodnoty pred bodkou (uz skontrolovanej)
+ * @param error je pointer, cez ktorý si vrátim chybove hlásenie (3, 5)
  * @returns symbol metódy, pri chybe NULL
  */
-Symbol *checkMethodCallee(Symtable *table, BodyContext *context, MemberNode *member,
+Symbol *checkMethodCallee(Symtable *table, MemberNode *member, Type *objectType,
                           ErrorCode *error);
 
 /**
@@ -694,3 +695,75 @@ Type *checkLambda(Symtable *table, BodyContext *context, LambdaNode *lambda, Err
  * @returns návratový typ volanej hodnoty, pri chybe NULL
  */
 Type *checkValueCall(Symtable *table, BodyContext *context, CallNode *call, ErrorCode *error);
+
+/**
+ * @brief funkcia na kontrolu hodnoty pred bodkou
+ * @param table je tabuľka symbolov
+ * @param context je kontext kontrolovanej funkcie
+ * @param member je pristup cez bodku
+ * @param error je pointer, cez ktorý si vrátim chybové hlásenie (3, 6)
+ * @returns typ hodnoty uz bez mien typov, pri chybe NULL
+ */
+Type *checkMemberObject(Symtable *table, BodyContext *context, MemberNode *member,
+                        ErrorCode *error);
+
+/**
+ * @brief funkcia na zistenie, či ide o statickú funkciu zoznamu (List.range)
+ * @param table je tabuľka symbolov
+ * @param member je pristup cez bodku
+ * @returns true, ak pred bodkou je meno List a nie je to premenná
+ */
+bool isListStaticAccess(Symtable *table, MemberNode *member);
+
+/**
+ * @brief funkcia na nájdenie statickej funkcie zoznamu medzi vstavanými funkciami
+ * @param table je tabuľka symbolov
+ * @param member je pristup cez bodku (List.meno)
+ * @param error je pointer, cez ktorý si vrátim chybové hlásenie (3)
+ * @returns symbol vstavanej funkcie, pri chybe NULL
+ */
+Symbol *findListStaticFunction(Symtable *table, MemberNode *member, ErrorCode *error);
+
+/**
+ * @brief funkcia na zistenie, či je meno metóda zoznamu s argumentmi
+ * @param name je meno člena
+ * @returns true pre drop, take, slice, filter, takeWhile a dropWhile
+ */
+bool isListMethodName(const char *name);
+
+/**
+ * @brief funkcia na zistenie typu člena zoznamu alebo rozsahu bez argumentov
+ * @param objectType je typ hodnoty pred bodkou
+ * @param name je meno člena
+ * @returns typ (head, tail, toList), NULL ak taký člen nie je
+ */
+Type *getListMemberType(Type *objectType, const char *name);
+
+/**
+ * @brief funkcia na kontrolu volania metody zoznamu s argumentmi
+ * @param table je tabuľka symbolov
+ * @param context je kontext kontrolovanej funkcie
+ * @param call je volanie metódy
+ * @param member je pristup cez bodku pred zátvorkou
+ * @param listType je typ zoznamu
+ * @param listCount je počet zoznamov argumentov
+ * @param error je pointer, cez ktory si vrátim chybové hlásenie (5)
+ * @returns typ výsledku (zoznam rovnakého typu), pri chybe NULL
+ */
+Type *checkListMethodCall(Symtable *table, BodyContext *context, CallNode *call,
+                          MemberNode *member, Type *listType, size_t listCount,
+                          ErrorCode *error);
+
+/**
+ * @brief funkcia na kontrolu zoznamu List(a, b, ...)
+ *
+ * Prvky musia mať rovnaký typ, pri Int a Double sa Int prvky prevedú na Double.
+ * Prázdny zoznam má typ List[NULL], prijme ho kazdy typ zoznamu.
+ * @param table je tabuľka symbolov
+ * @param context je kontext kontrolovanej funkcie
+ * @param list je uzol zoznamu
+ * @param error je pointer, cez ktorý si vrátim chybove hlásenie (6)
+ * @returns typ zoznamu, pri chybe NULL
+ */
+Type *checkListLiteral(Symtable *table, BodyContext *context, ListLitNode *list,
+                       ErrorCode *error);

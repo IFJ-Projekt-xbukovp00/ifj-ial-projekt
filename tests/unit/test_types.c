@@ -158,6 +158,10 @@ void testAccepts(void) {
     CHECK(type_accepts(basic(TY_INT), namedResolvedTo("Number", basic(TY_INT))));
     CHECK(type_accepts(namedResolvedTo("Real", basic(TY_DOUBLE)), basic(TY_INT)));
 
+    // prázdny zoznam List() prijme každý typ zoznamu
+    CHECK(type_accepts(type_create_list(basic(TY_INT)), type_create_list(NULL)));
+    CHECK(!type_accepts(basic(TY_INT), type_create_list(NULL)));
+
     // zoznamy sa neprevádzajú
     CHECK(!type_accepts(type_create_list(basic(TY_DOUBLE)), type_create_list(basic(TY_INT))));
 

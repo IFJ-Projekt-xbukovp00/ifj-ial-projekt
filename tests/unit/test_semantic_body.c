@@ -338,6 +338,19 @@ Type *functionTypeOf(Type *paramType, Type *returnType) {
     return type_create_function(params, returnType);
 }
 
+ASTNode *newListLit(void) {
+    ListLitNode *list = calloc(1, sizeof(ListLitNode));
+    list->node.kind = AST_LIST_LIT;
+    return (ASTNode *)list;
+}
+
+ASTNode *addElem(ASTNode *listNode, ASTNode *elem) {
+    ListLitNode *list = (ListLitNode *)listNode;
+    list->elems = realloc(list->elems, (list->elemsCount + 1) * sizeof(ASTNode *));
+    list->elems[list->elemsCount++] = elem;
+    return listNode;
+}
+
 /* uvoľnenie AST (aj ConvertNode, ktoré vložila sémantika) */
 
 void freeNode(ASTNode *node) {
@@ -387,6 +400,12 @@ void freeNode(ASTNode *node) {
         freeNode(forNode->body);
     } else if (node->kind == AST_MEMBER) {
         freeNode(((MemberNode *)node)->object);
+    } else if (node->kind == AST_LIST_LIT) {
+        ListLitNode *list = (ListLitNode *)node;
+        for (size_t elemIndex = 0; elemIndex < list->elemsCount; elemIndex++) {
+            freeNode(list->elems[elemIndex]);
+        }
+        free(list->elems);
     } else if (node->kind == AST_LAMBDA) {
         LambdaNode *lambda = (LambdaNode *)node;
         free(lambda->params.params);
@@ -2705,6 +2724,308 @@ void testParenlessFunctionReturningLambda(void) {
     finishAnalyze(program);
 }
 
+/* testy: zoznamy (LISTS) */
+
+/* List(1, 2, 3) */
+ASTNode *intList(void) {
+    return addElem(addElem(addElem(newListLit(), newIntLiteral(1)), newIntLiteral(2)),
+                   newIntLiteral(3));
+}
+
+/* val l = List(1, 2, 3) ; val x = init, vráti chybu a typ init */
+ErrorCode analyzeWithList(ASTNode *init, Type **resultType) {
+    BlockNode *body = newBlock();
+    addCommand(body, newVarDef("l", false, NULL, intList()));
+    addCommand(body, newVarDef("x", false, NULL, init));
+
+    ProgramNode *program = newProgram();
+    addMain(program, (ASTNode *)body);
+    ErrorCode error = runAnalyze(program);
+    if (resultType != NULL) {
+        *resultType = init->type;
+    }
+    finishAnalyze(program);
+    return error;
+}
+
+/* je typ List[elemKind]? */
+bool isListOf(Type *type, TypeKind elemKind) {
+    return type != NULL && type->kind == TY_LIST && type->elem != NULL &&
+           type->elem->kind == elemKind;
+}
+
+/* l.name(arg) */
+ASTNode *listMethodCall(const char *name, ASTNode *arg) {
+    ASTNode *call = newCall(newMember(newId("l"), name));
+    if (arg != NULL) {
+        addArg(call, arg);
+    }
+    return call;
+}
+
+/* (x: Int) => body */
+ASTNode *intLambda(ASTNode *body) {
+    return addLambdaParam(newLambda(body), "x", type_get_basic(TY_INT));
+}
+
+void testListMixedTypes(void) {
+    /* val l = List(1, "a") (err6_list_mixed_types) */
+    CHECK(analyzeInitExpression(addElem(addElem(newListLit(), newIntLiteral(1)),
+                                        newStringLiteral("a"))) == ERR_TYPE);
+}
+
+void testListType(void) {
+    /* List(1, 2, 3) je List[Int] */
+    Type *resultType = NULL;
+    CHECK(analyzeWithList(intList(), &resultType) == ERR_OK);
+    CHECK(isListOf(resultType, TY_INT));
+}
+
+void testListIntDouble(void) {
+    /* List(1, 2.5) je List[Double], prvý prvok sa prevedie */
+    ASTNode *list = addElem(addElem(newListLit(), newIntLiteral(1)), newDoubleLiteral(2.5));
+    ProgramNode *program;
+    ASTNode *expr = list;
+    CHECK(isListOf(expressionType(&program, &expr), TY_DOUBLE));
+    CHECK(((ListLitNode *)list)->elems[0]->kind == AST_CONVERT);
+    finishAnalyze(program);
+}
+
+void testNestedList(void) {
+    /* List(List(1), List(2)) je List[List[Int]] */
+    ASTNode *list = addElem(addElem(newListLit(), addElem(newListLit(), newIntLiteral(1))),
+                            addElem(newListLit(), newIntLiteral(2)));
+    Type *resultType = NULL;
+    CHECK(analyzeWithList(list, &resultType) == ERR_OK);
+    CHECK(resultType != NULL && resultType->kind == TY_LIST && isListOf(resultType->elem, TY_INT));
+}
+
+void testEmptyListWithType(void) {
+    /* val e: List[Int] = List() */
+    BlockNode *body = newBlock();
+    addCommand(body,
+               newVarDef("e", false, type_create_list(type_get_basic(TY_INT)), newListLit()));
+    CHECK(analyzeMainBody(body) == ERR_OK);
+}
+
+void testEmptyListWithoutType(void) {
+    /* val e = List() -> prázdny zoznam vyžaduje očakávaný typ */
+    CHECK(analyzeInitExpression(newListLit()) == ERR_TYPE);
+}
+
+void testEmptyListAsArgument(void) {
+    /* def f(l: List[Int]): Int = l.head ; f(List()) je OK, f(List(1.5)) -> 5 */
+    for (int variant = 0; variant < 2; variant++) {
+        ProgramNode *program = newProgram();
+        DefFuncNode *function = newFunction(program, "f", false, type_get_basic(TY_INT),
+                                            newMember(newId("l"), "head"));
+        addParamList(function);
+        addParam(function, "l", type_create_list(type_get_basic(TY_INT)));
+
+        ASTNode *arg = newListLit();
+        if (variant == 1) {
+            addElem(arg, newDoubleLiteral(1.5));
+        }
+        BlockNode *body = newBlock();
+        addCommand(body, newExprStatement(callWithArg("f", arg)));
+        addMain(program, (ASTNode *)body);
+
+        if (variant == 0) {
+            CHECK(analyze(program) == ERR_OK);
+        } else {
+            CHECK(analyze(program) == ERR_PARAMS);
+        }
+    }
+}
+
+void testListIndex(void) {
+    /* val x = l(1) -> Int, CALL_LIST_INDEX */
+    ASTNode *call = callWithArg("l", newIntLiteral(1));
+    BlockNode *body = newBlock();
+    addCommand(body, newVarDef("l", false, NULL, intList()));
+    addCommand(body, newVarDef("x", false, NULL, call));
+    ProgramNode *program = newProgram();
+    addMain(program, (ASTNode *)body);
+
+    CHECK(runAnalyze(program) == ERR_OK);
+    CHECK(call->type == type_get_basic(TY_INT));
+    CHECK(((CallNode *)call)->callKind == CALL_LIST_INDEX);
+    finishAnalyze(program);
+}
+
+void testListIndexErrors(void) {
+    /* l("a") a l(1, 2) -> 5 */
+    CHECK(analyzeWithList(callWithArg("l", newStringLiteral("a")), NULL) == ERR_PARAMS);
+    CHECK(analyzeWithList(addArg(callWithArg("l", newIntLiteral(1)), newIntLiteral(2)), NULL) ==
+          ERR_PARAMS);
+}
+
+void testListLiteralIndex(void) {
+    /* val x = List(1, 2, 3)(0) je Int */
+    Type *resultType = NULL;
+    CHECK(analyzeWithList(addArg(newCall(intList()), newIntLiteral(0)), &resultType) == ERR_OK);
+    CHECK(resultType == type_get_basic(TY_INT));
+}
+
+void testListMembers(void) {
+    /* l.head je Int, l.tail je List[Int], l.toString je String */
+    Type *resultType = NULL;
+    CHECK(analyzeWithList(newMember(newId("l"), "head"), &resultType) == ERR_OK);
+    CHECK(resultType == type_get_basic(TY_INT));
+    CHECK(analyzeWithList(newMember(newId("l"), "tail"), &resultType) == ERR_OK);
+    CHECK(isListOf(resultType, TY_INT));
+    CHECK(analyzeWithList(newMember(newId("l"), "toString"), &resultType) == ERR_OK);
+    CHECK(resultType == type_get_basic(TY_STRING));
+}
+
+void testListMethods(void) {
+    /* l.drop(1), l.take(2), l.slice(0, 2) sú List[Int], CALL_LIST_METHOD */
+    Type *resultType = NULL;
+    ASTNode *drop = listMethodCall("drop", newIntLiteral(1));
+    CHECK(analyzeWithList(drop, &resultType) == ERR_OK);
+    CHECK(isListOf(resultType, TY_INT));
+
+    CHECK(analyzeWithList(listMethodCall("take", newIntLiteral(2)), &resultType) == ERR_OK);
+    CHECK(isListOf(resultType, TY_INT));
+
+    ASTNode *slice = addArg(listMethodCall("slice", newIntLiteral(0)), newIntLiteral(2));
+    CHECK(analyzeWithList(slice, &resultType) == ERR_OK);
+    CHECK(isListOf(resultType, TY_INT));
+}
+
+void testListMethodFields(void) {
+    /* val x = l.drop(1) -> CALL_LIST_METHOD, MEM_CALLEE */
+    ASTNode *call = listMethodCall("drop", newIntLiteral(1));
+    BlockNode *body = newBlock();
+    addCommand(body, newVarDef("l", false, NULL, intList()));
+    addCommand(body, newVarDef("x", false, NULL, call));
+    ProgramNode *program = newProgram();
+    addMain(program, (ASTNode *)body);
+
+    CHECK(runAnalyze(program) == ERR_OK);
+    CHECK(((CallNode *)call)->callKind == CALL_LIST_METHOD);
+    CHECK(((MemberNode *)((CallNode *)call)->caller)->memberKind == MEM_CALLEE);
+    finishAnalyze(program);
+}
+
+void testListMethodWrongArgs(void) {
+    /* l.drop("a"), l.slice(1), l.take(1)(2) -> 5 */
+    CHECK(analyzeWithList(listMethodCall("drop", newStringLiteral("a")), NULL) == ERR_PARAMS);
+    CHECK(analyzeWithList(listMethodCall("slice", newIntLiteral(1)), NULL) == ERR_PARAMS);
+    CHECK(analyzeWithList(addArg(newCall(listMethodCall("take", newIntLiteral(1))),
+                                 newIntLiteral(2)),
+                          NULL) == ERR_PARAMS);
+}
+
+void testListMethodWrongForm(void) {
+    /* l.head() a l.drop bez zátvoriek -> 5 */
+    CHECK(analyzeWithList(listMethodCall("head", NULL), NULL) == ERR_PARAMS);
+    CHECK(analyzeWithList(newMember(newId("l"), "drop"), NULL) == ERR_PARAMS);
+}
+
+void testListFilterLambda(void) {
+    /* l.takeWhile((x: Int) => x < 10), l.filter(...), l.dropWhile(...) sú List[Int] */
+    Type *resultType = NULL;
+    const char *names[] = {"filter", "takeWhile", "dropWhile"};
+    for (int nameIndex = 0; nameIndex < 3; nameIndex++) {
+        ASTNode *lambda = intLambda(newBinary(TOK_LESS, newId("x"), newIntLiteral(10)));
+        CHECK(analyzeWithList(listMethodCall(names[nameIndex], lambda), &resultType) == ERR_OK);
+        CHECK(isListOf(resultType, TY_INT));
+    }
+}
+
+void testListFilterWrongLambda(void) {
+    /* l.filter((x: String) => true) a l.filter((x: Int) => x) -> 5 */
+    ASTNode *stringLambda =
+        addLambdaParam(newLambda(newBoolLiteral(true)), "x", type_get_basic(TY_STRING));
+    CHECK(analyzeWithList(listMethodCall("filter", stringLambda), NULL) == ERR_PARAMS);
+    CHECK(analyzeWithList(listMethodCall("filter", intLambda(newId("x"))), NULL) ==
+          ERR_PARAMS);
+}
+
+void testListUnknownMethod(void) {
+    /* l.foo() a l.bar -> 3, 1.head -> 3 */
+    CHECK(analyzeWithList(listMethodCall("foo", NULL), NULL) == ERR_UNDEF);
+    CHECK(analyzeWithList(newMember(newId("l"), "bar"), NULL) == ERR_UNDEF);
+    CHECK(analyzeWithList(newMember(newIntLiteral(1), "head"), NULL) == ERR_UNDEF);
+}
+
+/* List.range(args...) */
+ASTNode *listRange(int argCount, ASTNode *first, ASTNode *second, ASTNode *third) {
+    ASTNode *call = newCall(newMember(newId("List"), "range"));
+    ASTNode *args[] = {first, second, third};
+    for (int argIndex = 0; argIndex < argCount; argIndex++) {
+        addArg(call, args[argIndex]);
+    }
+    return call;
+}
+
+void testListRange(void) {
+    /* List.range(1, 10) a List.range(1, 10, 2) sú List[Int] */
+    Type *resultType = NULL;
+    ASTNode *call = listRange(2, newIntLiteral(1), newIntLiteral(10), NULL);
+    CHECK(analyzeWithList(call, &resultType) == ERR_OK);
+    CHECK(isListOf(resultType, TY_INT));
+
+    CHECK(analyzeWithList(listRange(3, newIntLiteral(1), newIntLiteral(10), newIntLiteral(2)),
+                          &resultType) == ERR_OK);
+    CHECK(isListOf(resultType, TY_INT));
+}
+
+void testListRangeErrors(void) {
+    /* List.range(1), List.range(1, 2.5) -> 5, List.range bez zátvoriek -> 5, List.foo(1) -> 3 */
+    CHECK(analyzeWithList(listRange(1, newIntLiteral(1), NULL, NULL), NULL) == ERR_PARAMS);
+    CHECK(analyzeWithList(listRange(2, newIntLiteral(1), newDoubleLiteral(2.5), NULL), NULL) ==
+          ERR_PARAMS);
+    CHECK(analyzeWithList(newMember(newId("List"), "range"), NULL) == ERR_PARAMS);
+    CHECK(analyzeWithList(addArg(newCall(newMember(newId("List"), "foo")), newIntLiteral(1)),
+                          NULL) == ERR_UNDEF);
+}
+
+void testListConcat(void) {
+    /* l ++ List(4) a l ++ List() sú List[Int] */
+    Type *resultType = NULL;
+    CHECK(analyzeWithList(newBinary(TOK_CONCAT, newId("l"), addElem(newListLit(),
+                                                                    newIntLiteral(4))),
+                          &resultType) == ERR_OK);
+    CHECK(isListOf(resultType, TY_INT));
+    CHECK(analyzeWithList(newBinary(TOK_CONCAT, newId("l"), newListLit()), &resultType) ==
+          ERR_OK);
+    CHECK(isListOf(resultType, TY_INT));
+}
+
+void testListConcatMismatch(void) {
+    /* l ++ List("a") a l ++ 1 -> 6 */
+    CHECK(analyzeWithList(newBinary(TOK_CONCAT, newId("l"),
+                                    addElem(newListLit(), newStringLiteral("a"))),
+                          NULL) == ERR_TYPE);
+    CHECK(analyzeWithList(newBinary(TOK_CONCAT, newId("l"), newIntLiteral(1)), NULL) ==
+          ERR_TYPE);
+}
+
+void testForOverList(void) {
+    /* for s <- List("a", "b") do print(s) -> riadiaca premenná je String */
+    ASTNode *list = addElem(addElem(newListLit(), newStringLiteral("a")), newStringLiteral("b"));
+    ASTNode *loop = newFor("s", list, blockOf(callWithArg("print", newId("s"))));
+    BlockNode *body = newBlock();
+    addCommand(body, loop);
+    ProgramNode *program = newProgram();
+    addMain(program, (ASTNode *)body);
+
+    CHECK(runAnalyze(program) == ERR_OK);
+    CHECK(((ForNode *)loop)->symbol->type == type_get_basic(TY_STRING));
+    finishAnalyze(program);
+}
+
+void testRangeToList(void) {
+    /* val itemsList: List[Int] = (1 to 5).toList */
+    BlockNode *body = newBlock();
+    addCommand(body, newVarDef("itemsList", false, type_create_list(type_get_basic(TY_INT)),
+                               newMember(newRange(newIntLiteral(1), newIntLiteral(5), NULL, true),
+                                         "toList")));
+    CHECK(analyzeMainBody(body) == ERR_OK);
+}
+
 int main(void) {
     testUndefinedVariable();
     testUseBeforeDefinition();
@@ -2907,6 +3228,31 @@ int main(void) {
     testFunctionAsArgument();
     testFunctionReturningLambda();
     testParenlessFunctionReturningLambda();
+
+    testListMixedTypes();
+    testListType();
+    testListIntDouble();
+    testNestedList();
+    testEmptyListWithType();
+    testEmptyListWithoutType();
+    testEmptyListAsArgument();
+    testListIndex();
+    testListIndexErrors();
+    testListLiteralIndex();
+    testListMembers();
+    testListMethods();
+    testListMethodFields();
+    testListMethodWrongArgs();
+    testListMethodWrongForm();
+    testListFilterLambda();
+    testListFilterWrongLambda();
+    testListUnknownMethod();
+    testListRange();
+    testListRangeErrors();
+    testListConcat();
+    testListConcatMismatch();
+    testForOverList();
+    testRangeToList();
 
     type_free_all();
 
