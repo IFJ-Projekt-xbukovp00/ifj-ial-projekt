@@ -146,6 +146,14 @@ void testAccepts(void) {
     CHECK(type_accepts(unionOfTwo(basic(TY_INT), basic(TY_UNIT)),
                        unionOfTwo(basic(TY_UNIT), basic(TY_INT))));
 
+    // zjednotenie ako hodnota sa neprevádza (ALGEBDT: foo(anything) je chyba)
+    Type *scalar = unionOfTwo(unionOfTwo(basic(TY_INT), basic(TY_DOUBLE)), basic(TY_STRING));
+    CHECK(!type_accepts(unionOfTwo(basic(TY_DOUBLE), basic(TY_STRING)), scalar));
+    CHECK(type_accepts(scalar, unionOfTwo(basic(TY_INT), basic(TY_STRING))));
+    CHECK(type_accepts(scalar, basic(TY_INT)));
+    CHECK(type_accepts(basic(TY_ANY), scalar));
+    CHECK(!type_accepts(basic(TY_DOUBLE), unionOfTwo(basic(TY_INT), basic(TY_DOUBLE))));
+
     // meno typu na oboch stranách
     CHECK(type_accepts(basic(TY_INT), namedResolvedTo("Number", basic(TY_INT))));
     CHECK(type_accepts(namedResolvedTo("Real", basic(TY_DOUBLE)), basic(TY_INT)));

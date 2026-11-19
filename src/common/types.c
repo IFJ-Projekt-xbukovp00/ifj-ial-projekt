@@ -216,6 +216,45 @@ bool type_equals(const Type *a, const Type *b){
     return true;
 }
 
+/**
+ * @brief funkcia na zistenie, ci typ prijme hodnotu bez prevodu Int na Double
+ *
+ * Hodnotu zjednotenia nevieme pri preklade previest, lebo nevieme, ktory člen v nej je.
+ * @param expected je typ, ktorý na danom mieste cakame
+ * @param actual je typ hodnoty
+ * @returns true, ak je to v poriadku aj bez prevodu
+ */
+bool acceptsWithoutConversion(const Type *expected, const Type *actual){
+    expected = skipNamedType(expected);
+    actual = skipNamedType(actual);
+
+    if (expected == NULL || actual == NULL){
+        return false;
+    }
+    if (expected->kind == TY_ANY || type_equals(expected, actual)){
+        return true;
+    }
+
+    if (actual->kind == TY_UNION){
+        for (size_t memberIndex = 0; memberIndex < actual->members.len; memberIndex++){
+            if (!acceptsWithoutConversion(expected, actual->members.items[memberIndex])){
+                return false;
+            }
+        }
+        return true;
+    }
+
+    if (expected->kind == TY_UNION){
+        for (size_t memberIndex = 0; memberIndex < expected->members.len; memberIndex++){
+            if (acceptsWithoutConversion(expected->members.items[memberIndex], actual)){
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
 bool type_accepts(const Type *expected, const Type *actual){
     expected = skipNamedType(expected);
     actual = skipNamedType(actual);
@@ -234,14 +273,9 @@ bool type_accepts(const Type *expected, const Type *actual){
         return true;
     }
 
-    // hodnota typu zjednotenie: musi sediet každý jej clen
+    // hodnota typu zjednotenie: musi sediet každý jej clen, a to bez prevodu
     if (actual->kind == TY_UNION){
-        for (size_t memberIndex = 0; memberIndex < actual->members.len; memberIndex++){
-            if (!type_accepts(expected, actual->members.items[memberIndex])){
-                return false;
-            }
-        }
-        return true;
+        return acceptsWithoutConversion(expected, actual);
     }
 
     // ocakavane zjednotenie: stačí jeden člen

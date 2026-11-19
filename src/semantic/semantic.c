@@ -775,6 +775,9 @@ Type *checkNode(Symtable *table, BodyContext *context, ASTNode **node, bool isVa
     else if (current->kind == AST_FOR){
         nodeType = checkFor(table, context, (ForNode *)current, error);
     }
+    else if (current->kind == AST_MATCH){
+        nodeType = checkMatch(table, context, (MatchNode *)current, isValueUsed, error);
+    }
     else if (current->kind == AST_MEMBER){
         nodeType = checkMember(table, context, (MemberNode *)current, error);
     }
@@ -1145,6 +1148,19 @@ bool acceptResult(Type *expected, ASTNode **node, ErrorCode *error){
         }
         return isThenAccepted && acceptResult(expected, &ifNode->elseBranch, error);
     }
+    if (current->kind == AST_MATCH){
+        MatchNode *match = (MatchNode *)current;
+        bool areCasesAccepted = true;
+
+        for (size_t caseIndex = 0; caseIndex < match->casesCount; caseIndex++){
+            CaseNode *caseNode = (CaseNode *)match->cases[caseIndex];
+
+            if (!acceptResult(expected, &caseNode->body, error)){
+                areCasesAccepted = false;
+            }
+        }
+        return areCasesAccepted;
+    }
 
     return acceptValue(expected, node, error);
 }
@@ -1273,6 +1289,9 @@ Type *checkCall(Symtable *table, BodyContext *context, CallNode *call, ErrorCode
         if (callee->kind == SYM_EXTENSION){
             current->callKind = CALL_EXT_METHOD;
         }
+        if (callee->kind == SYM_CLASS){
+            current->callKind = CALL_CONSTRUCTOR;
+        }
         if (listIndex > 1){
             current = (CallNode *)current->caller;
         }
@@ -1286,6 +1305,16 @@ Type *checkCall(Symtable *table, BodyContext *context, CallNode *call, ErrorCode
         else{
             checkArguments(table, context, call, callee->type->func.params.items,
                            callee->type->func.params.len, error);
+        }
+    }
+    else if (callee->kind == SYM_CLASS){
+        // konštruktor ma jeden zoznam, argumenty su atributy triedy
+        if (listCount != 1){
+            *error = ERR_PARAMS;
+        }
+        else{
+            checkConstructorArguments(table, context, call,
+                                      (ClassDefNode *)callee->definition, error);
         }
     }
     else{
@@ -1310,6 +1339,9 @@ Type *checkCall(Symtable *table, BodyContext *context, CallNode *call, ErrorCode
 
     if (*error != ERR_OK){
         return NULL;
+    }
+    if (callee->kind == SYM_CLASS){
+        return callee->type;
     }
 
     return getFunctionReturnType(table, context, callee, error);
@@ -1442,6 +1474,17 @@ Type *checkMember(Symtable *table, BodyContext *context, MemberNode *member, Err
         return memberType;
     }
 
+    if (objectType->kind == TY_CLASS){
+        Type *fieldType = getFieldType(objectType->cls, member->name);
+
+        // symbol je trieda, atribut sa v nej hlada podla mena
+        if (fieldType != NULL){
+            member->memberKind = MEM_FIELD;
+            member->symbol = objectType->cls;
+            return fieldType;
+        }
+    }
+
     Symbol *method = findExtensionMethod(table, objectType, member->name, error);
 
     // neznámy clen je ako nedefinovaná funkcia
@@ -1490,7 +1533,8 @@ Symbol *checkFunctionCallee(Symtable *table, IDNode *calleeId, ErrorCode *error)
         *error = ERR_UNDEF;
         return NULL;
     }
-    if (callee->kind != SYM_FUNCTION && callee->kind != SYM_BUILTIN){
+    if (callee->kind != SYM_FUNCTION && callee->kind != SYM_BUILTIN
+        && callee->kind != SYM_CLASS){
         *error = ERR_TYPE;
         return NULL;
     }
@@ -1533,4 +1577,227 @@ Symbol *checkMethodCallee(Symtable *table, BodyContext *context, MemberNode *mem
     member->symbol = method;
     member->node.type = method->type;
     return method;
+}
+
+void checkConstructorArguments(Symtable *table, BodyContext *context, CallNode *call,
+                               ClassDefNode *classDef, ErrorCode *error){
+    size_t fieldCount = classDef->fields.params_count;
+    Type **fieldTypes = malloc((fieldCount + 1) * sizeof(Type *));
+
+    if (fieldTypes == NULL){
+        *error = ERR_INTERNAL;
+        return;
+    }
+
+    for (size_t fieldIndex = 0; fieldIndex < fieldCount; fieldIndex++){
+        fieldTypes[fieldIndex] = classDef->fields.params[fieldIndex].type;
+    }
+
+    checkArguments(table, context, call, fieldTypes, fieldCount, error);
+    free(fieldTypes);
+}
+
+Type *getFieldType(Symbol *classSymbol, const char *name){
+    ClassDefNode *classDef = (ClassDefNode *)classSymbol->definition;
+
+    for (size_t fieldIndex = 0; fieldIndex < classDef->fields.params_count; fieldIndex++){
+        if (strcmp(classDef->fields.params[fieldIndex].name, name) == 0){
+            return classDef->fields.params[fieldIndex].type;
+        }
+    }
+
+    return NULL;
+}
+
+void defineCaseBinder(Symtable *table, BodyContext *context, Param *binder, Type *type,
+                      ErrorCode *error){
+    // premenna zo vzoru je nemodifikovatelna, plati len vo vetve
+    binder->symbol = defineSymbol(table, binder->name, SYM_VARIABLE, type, false, error);
+
+    if (binder->symbol != NULL){
+        addLocal(context->function, binder->symbol, error);
+    }
+}
+
+void checkCasePattern(Symtable *table, BodyContext *context, CaseNode *caseNode,
+                      Type *subjectType, ErrorCode *error){
+    if (caseNode->patternKind == PAT_LITERAL){
+        checkNode(table, context, &caseNode->literal, true, error);
+
+        if (*error == ERR_OK && !acceptValue(subjectType, &caseNode->literal, error)){
+            *error = ERR_TYPE;
+        }
+    }
+    else if (caseNode->patternKind == PAT_TYPED){
+        resolveType(table, caseNode->binder.type, error);
+        if (*error != ERR_OK){
+            return;
+        }
+
+        // typ vo vzore musí byť jeden z možných typov hodnoty
+        if (!type_accepts(subjectType, caseNode->binder.type)){
+            *error = ERR_TYPE;
+            return;
+        }
+
+        defineCaseBinder(table, context, &caseNode->binder, caseNode->binder.type, error);
+    }
+    else if (caseNode->patternKind == PAT_CONSTRUCTOR){
+        Symbol *classSymbol = lookupSymbolInTree(table->typeTree, caseNode->className);
+
+        if (classSymbol == NULL || classSymbol->kind != SYM_CLASS){
+            *error = ERR_UNDEF;
+            return;
+        }
+
+        caseNode->classSymbol = classSymbol;
+
+        if (!type_accepts(subjectType, classSymbol->type)){
+            *error = ERR_TYPE;
+            return;
+        }
+
+        ClassDefNode *classDef = (ClassDefNode *)classSymbol->definition;
+        ParamList *binders = &caseNode->ctorBinders;
+
+        // kazdy atribút ma práve jednu väzbu, ako pri volaní konštruktora
+        if (binders->params_count != classDef->fields.params_count){
+            *error = ERR_PARAMS;
+            return;
+        }
+
+        for (size_t binderIndex = 0; binderIndex < binders->params_count; binderIndex++){
+            if (*error != ERR_OK){
+                return;
+            }
+            defineCaseBinder(table, context, &binders->params[binderIndex],
+                             classDef->fields.params[binderIndex].type, error);
+        }
+    }
+}
+
+Type *combineCaseTypes(MatchNode *match, Type **caseTypes, ErrorCode *error){
+    Type *resultType = NULL;
+    bool areAllEqual = true;
+    bool areAllNumeric = true;
+    bool hasDouble = false;
+
+    for (size_t caseIndex = 0; caseIndex < match->casesCount; caseIndex++){
+        Type *caseType = caseTypes[caseIndex];
+
+        // vetva, ktorá konci returnom, typ neurčuje
+        if (caseType == NULL){
+            continue;
+        }
+
+        if (resultType == NULL){
+            resultType = caseType;
+        }
+        else if (!type_equals(resultType, caseType)){
+            areAllEqual = false;
+        }
+
+        Type *realType = getRealType(caseType);
+
+        if (!isNumericType(realType)){
+            areAllNumeric = false;
+        }
+        else if (realType->kind == TY_DOUBLE){
+            hasDouble = true;
+        }
+    }
+
+    if (resultType == NULL || areAllEqual){
+        return resultType;
+    }
+
+    if (areAllNumeric && hasDouble){
+        Type *doubleType = type_get_basic(TY_DOUBLE);
+
+        for (size_t caseIndex = 0; caseIndex < match->casesCount; caseIndex++){
+            if (caseTypes[caseIndex] != NULL){
+                acceptValue(doubleType, &((CaseNode *)match->cases[caseIndex])->body, error);
+            }
+        }
+        return doubleType;
+    }
+
+    *error = ERR_TYPE;
+    return NULL;
+}
+
+Type *checkMatch(Symtable *table, BodyContext *context, MatchNode *match, bool isValueUsed,
+                 ErrorCode *error){
+    // match musi byt vycerpávajúci, staci vyzadovat case _
+    bool hasWildcard = false;
+
+    for (size_t caseIndex = 0; caseIndex < match->casesCount; caseIndex++){
+        if (((CaseNode *)match->cases[caseIndex])->patternKind == PAT_WILDCARD){
+            hasWildcard = true;
+        }
+    }
+
+    if (!hasWildcard){
+        *error = ERR_SEM_OTHER;
+        return NULL;
+    }
+
+    Type *subjectType = checkNode(table, context, &match->subject, true, error);
+
+    if (*error != ERR_OK){
+        return NULL;
+    }
+    if (subjectType == NULL){
+        *error = ERR_TYPE;
+        return NULL;
+    }
+
+    Type **caseTypes = malloc(match->casesCount * sizeof(Type *));
+
+    if (caseTypes == NULL){
+        *error = ERR_INTERNAL;
+        return NULL;
+    }
+
+    bool areAllReturning = true;
+
+    for (size_t caseIndex = 0; caseIndex < match->casesCount && *error == ERR_OK; caseIndex++){
+        CaseNode *caseNode = (CaseNode *)match->cases[caseIndex];
+
+        // premenne zo vzoru platia v strazi aj v tele vetvy
+        pushScope(table, error);
+        if (*error != ERR_OK){
+            break;
+        }
+
+        checkCasePattern(table, context, caseNode, subjectType, error);
+
+        if (*error == ERR_OK && caseNode->guard != NULL){
+            checkCondition(table, context, &caseNode->guard, error);
+        }
+
+        caseTypes[caseIndex] = checkNode(table, context, &caseNode->body, isValueUsed, error);
+
+        if (caseTypes[caseIndex] != NULL){
+            areAllReturning = false;
+        }
+
+        popScope(table);
+    }
+
+    Type *resultType = NULL;
+
+    if (*error == ERR_OK){
+        if (!isValueUsed){
+            if (!areAllReturning){
+                resultType = type_get_basic(TY_UNIT);
+            }
+        }
+        else{
+            resultType = combineCaseTypes(match, caseTypes, error);
+        }
+    }
+
+    free(caseTypes);
+    return resultType;
 }

@@ -271,6 +271,34 @@ ASTNode *newMember(ASTNode *object, const char *name) {
     return (ASTNode *)member;
 }
 
+ASTNode *newMatch(ASTNode *subject) {
+    MatchNode *match = calloc(1, sizeof(MatchNode));
+    match->node.kind = AST_MATCH;
+    match->subject = subject;
+    return (ASTNode *)match;
+}
+
+CaseNode *addCase(ASTNode *matchNode, PatternKind patternKind, ASTNode *body) {
+    MatchNode *match = (MatchNode *)matchNode;
+    CaseNode *caseNode = calloc(1, sizeof(CaseNode));
+    caseNode->node.kind = AST_CASE;
+    caseNode->patternKind = patternKind;
+    caseNode->body = body;
+    match->cases = realloc(match->cases, (match->casesCount + 1) * sizeof(ASTNode *));
+    match->cases[match->casesCount++] = (ASTNode *)caseNode;
+    return caseNode;
+}
+
+void addCtorBinder(CaseNode *caseNode, const char *name) {
+    ParamList *binders = &caseNode->ctorBinders;
+    binders->params = realloc(binders->params, (binders->params_count + 1) * sizeof(Param));
+    Param *binder = &binders->params[binders->params_count++];
+    binder->name = (char *)name;
+    binder->type = NULL;
+    binder->line = 1;
+    binder->symbol = NULL;
+}
+
 /* uvoľnenie AST (aj ConvertNode, ktoré vložila sémantika) */
 
 void freeNode(ASTNode *node) {
@@ -320,6 +348,18 @@ void freeNode(ASTNode *node) {
         freeNode(forNode->body);
     } else if (node->kind == AST_MEMBER) {
         freeNode(((MemberNode *)node)->object);
+    } else if (node->kind == AST_MATCH) {
+        MatchNode *match = (MatchNode *)node;
+        freeNode(match->subject);
+        for (size_t caseIndex = 0; caseIndex < match->casesCount; caseIndex++) {
+            CaseNode *caseNode = (CaseNode *)match->cases[caseIndex];
+            freeNode(caseNode->literal);
+            freeNode(caseNode->guard);
+            freeNode(caseNode->body);
+            free(caseNode->ctorBinders.params);
+            free(caseNode);
+        }
+        free(match->cases);
     } else if (node->kind == AST_CALL) {
         CallNode *call = (CallNode *)node;
         freeNode(call->caller);
@@ -346,6 +386,8 @@ void freeProgram(ProgramNode *program) {
         ASTNode *item = program->items[itemIndex];
         if (item->kind == AST_FUNCTION_DEF) {
             freeFunction((DefFuncNode *)item);
+        } else if (item->kind == AST_CLASS_DEF) {
+            free(((ClassDefNode *)item)->fields.params);
         } else if (item->kind == AST_EXTENSION) {
             ExtensionNode *extension = (ExtensionNode *)item;
             for (size_t methodIndex = 0; methodIndex < extension->methodsCount; methodIndex++) {
@@ -1962,6 +2004,330 @@ void testExtensionOnAlias(void) {
     CHECK(analyze(program) == ERR_OK);
 }
 
+/* testy: case class, match a zjednotenia (ALGEBDT) */
+
+/* case class Point(x: Int, y: Int) */
+void addPointClass(ProgramNode *program) {
+    ClassDefNode *point = calloc(1, sizeof(ClassDefNode));
+    point->node.kind = AST_CLASS_DEF;
+    point->name = "Point";
+    point->fields.params = calloc(2, sizeof(Param));
+    point->fields.params_count = 2;
+    point->fields.params[0].name = "x";
+    point->fields.params[0].type = type_get_basic(TY_INT);
+    point->fields.params[1].name = "y";
+    point->fields.params[1].type = type_get_basic(TY_INT);
+    addItem(program, (ASTNode *)point);
+}
+
+/* case class Point ; @main = mainBody */
+ProgramNode *programWithPoint(BlockNode *mainBody) {
+    ProgramNode *program = newProgram();
+    addPointClass(program);
+    addMain(program, (ASTNode *)mainBody);
+    return program;
+}
+
+/* Point(x, y) */
+ASTNode *newPoint(ASTNode *x, ASTNode *y) {
+    return addArg(addArg(newCall(newId("Point")), x), y);
+}
+
+/* val p = Point(1, 2) ; val v = init */
+ErrorCode analyzeWithPoint(ASTNode *init) {
+    BlockNode *body = newBlock();
+    addCommand(body, newVarDef("p", false, NULL, newPoint(newIntLiteral(1), newIntLiteral(2))));
+    addCommand(body, newVarDef("v", false, NULL, init));
+    return analyze(programWithPoint(body));
+}
+
+/* Int | String | Point */
+Type *valueUnionType(void) {
+    TypeList members = {0};
+    type_list_append(&members, type_get_basic(TY_INT));
+    type_list_append(&members, type_get_basic(TY_STRING));
+    type_list_append(&members, type_create_named("Point"));
+    return type_create_union(members);
+}
+
+void testConstructorOk(void) {
+    /* val p = Point(1, 2) -> TY_CLASS, CALL_CONSTRUCTOR */
+    ASTNode *call = newPoint(newIntLiteral(1), newIntLiteral(2));
+    BlockNode *body = newBlock();
+    addCommand(body, newVarDef("p", false, NULL, call));
+    ProgramNode *program = programWithPoint(body);
+
+    CHECK(runAnalyze(program) == ERR_OK);
+    CHECK(call->type != NULL && call->type->kind == TY_CLASS);
+    CHECK(((CallNode *)call)->callKind == CALL_CONSTRUCTOR);
+    CHECK(((CallNode *)call)->symbol != NULL);
+    CHECK(((CallNode *)call)->symbol->kind == SYM_CLASS);
+    finishAnalyze(program);
+}
+
+void testConstructorWrongCount(void) {
+    /* val v = Point(1) */
+    CHECK(analyzeWithPoint(callWithArg("Point", newIntLiteral(1))) == ERR_PARAMS);
+}
+
+void testConstructorWrongType(void) {
+    /* val v = Point(1, "a") */
+    CHECK(analyzeWithPoint(newPoint(newIntLiteral(1), newStringLiteral("a"))) == ERR_PARAMS);
+}
+
+void testFieldAccess(void) {
+    /* val v = p.x + p.y -> Int, MEM_FIELD */
+    ASTNode *fieldX = newMember(newId("p"), "x");
+    BlockNode *body = newBlock();
+    addCommand(body, newVarDef("p", false, NULL, newPoint(newIntLiteral(1), newIntLiteral(2))));
+    addCommand(body, newVarDef("v", false, NULL,
+                               newBinary(TOK_PLUS, fieldX, newMember(newId("p"), "y"))));
+    ProgramNode *program = programWithPoint(body);
+
+    CHECK(runAnalyze(program) == ERR_OK);
+    CHECK(fieldX->type == type_get_basic(TY_INT));
+    CHECK(((MemberNode *)fieldX)->memberKind == MEM_FIELD);
+    finishAnalyze(program);
+}
+
+void testUnknownField(void) {
+    /* val v = p.z */
+    CHECK(analyzeWithPoint(newMember(newId("p"), "z")) == ERR_UNDEF);
+}
+
+void testFieldIsImmutable(void) {
+    /* val v = Point(1, 2).x -> atribút sa dá čítať aj priamo z volania */
+    CHECK(analyzeWithPoint(newMember(newPoint(newIntLiteral(1), newIntLiteral(2)), "x")) ==
+          ERR_OK);
+}
+
+/* def f(value: Int | String | Point): String = match ; @main */
+ErrorCode analyzeMatchFunction(ASTNode *match) {
+    ProgramNode *program = newProgram();
+    addPointClass(program);
+    DefFuncNode *function = newFunction(program, "f", false, type_get_basic(TY_STRING), match);
+    addParamList(function);
+    addParam(function, "value", valueUnionType());
+    addMain(program, (ASTNode *)newBlock());
+    return analyze(program);
+}
+
+void testMatchWithoutWildcard(void) {
+    /* value match { case 0 => "zero" ; case 1 => "one" } (err10_match_without_wildcard) */
+    ASTNode *match = newMatch(newId("value"));
+    addCase(match, PAT_LITERAL, newStringLiteral("zero"))->literal = newIntLiteral(0);
+    addCase(match, PAT_LITERAL, newStringLiteral("one"))->literal = newIntLiteral(1);
+    CHECK(analyzeMatchFunction(match) == ERR_SEM_OTHER);
+}
+
+void testMatchOk(void) {
+    /* príklad describe zo zadania:
+       case 0 => "zero" ; case n: Int if n > 0 => "positive" ; case text: String => text ;
+       case Point(a, b) => toStr(a + b) ; case _ => "negative" */
+    ASTNode *match = newMatch(newId("value"));
+    addCase(match, PAT_LITERAL, newStringLiteral("zero"))->literal = newIntLiteral(0);
+
+    CaseNode *positive = addCase(match, PAT_TYPED, newStringLiteral("positive"));
+    positive->binder.name = "n";
+    positive->binder.type = type_get_basic(TY_INT);
+    positive->guard = newBinary(TOK_GREATER, newId("n"), newIntLiteral(0));
+
+    CaseNode *text = addCase(match, PAT_TYPED, newId("text"));
+    text->binder.name = "text";
+    text->binder.type = type_get_basic(TY_STRING);
+
+    CaseNode *point =
+        addCase(match, PAT_CONSTRUCTOR,
+                callWithArg("toStr", newBinary(TOK_PLUS, newId("a"), newId("b"))));
+    point->className = "Point";
+    addCtorBinder(point, "a");
+    addCtorBinder(point, "b");
+
+    addCase(match, PAT_WILDCARD, newStringLiteral("negative"));
+
+    ProgramNode *program = newProgram();
+    addPointClass(program);
+    DefFuncNode *function = newFunction(program, "f", false, type_get_basic(TY_STRING), match);
+    addParamList(function);
+    addParam(function, "value", valueUnionType());
+    addMain(program, (ASTNode *)newBlock());
+
+    CHECK(runAnalyze(program) == ERR_OK);
+    CHECK(match->type == type_get_basic(TY_STRING));
+    CHECK(positive->binder.symbol != NULL);
+    CHECK(positive->binder.symbol->type == type_get_basic(TY_INT));
+    CHECK(point->classSymbol != NULL);
+    CHECK(point->ctorBinders.params[1].symbol != NULL);
+    CHECK(point->ctorBinders.params[1].symbol->type == type_get_basic(TY_INT));
+    CHECK(function->localsCount == 4);
+    finishAnalyze(program);
+}
+
+void testMatchBranchMismatch(void) {
+    /* val v = 1 match { case 0 => 1 ; case _ => "a" } */
+    ASTNode *match = newMatch(newIntLiteral(1));
+    addCase(match, PAT_LITERAL, newIntLiteral(1))->literal = newIntLiteral(0);
+    addCase(match, PAT_WILDCARD, newStringLiteral("a"));
+    CHECK(analyzeInitExpression(match) == ERR_TYPE);
+}
+
+void testMatchIntDouble(void) {
+    /* val x = 1 match { case 0 => 1 ; case _ => 2.5 } -> Double, Int vetva sa prevedie */
+    ASTNode *match = newMatch(newIntLiteral(1));
+    CaseNode *first = addCase(match, PAT_LITERAL, newIntLiteral(1));
+    first->literal = newIntLiteral(0);
+    addCase(match, PAT_WILDCARD, newDoubleLiteral(2.5));
+
+    ProgramNode *program;
+    ASTNode *expr = match;
+    CHECK(expressionType(&program, &expr) == type_get_basic(TY_DOUBLE));
+    CHECK(first->body->kind == AST_CONVERT);
+    finishAnalyze(program);
+}
+
+void testMatchStatementMixedBranches(void) {
+    /* 1 match { case 0 => 1 ; case _ => "a" } ; () -> hodnota sa nepoužije */
+    ASTNode *match = newMatch(newIntLiteral(1));
+    addCase(match, PAT_LITERAL, newIntLiteral(1))->literal = newIntLiteral(0);
+    addCase(match, PAT_WILDCARD, newStringLiteral("a"));
+    BlockNode *body = newBlock();
+    addCommand(body, newExprStatement(match));
+    addCommand(body, newExprStatement(newUnitLiteral()));
+    CHECK(analyzeMainBody(body) == ERR_OK);
+}
+
+void testMatchGuardNotBool(void) {
+    /* case n: Int if 1 => "a" */
+    ASTNode *match = newMatch(newId("value"));
+    CaseNode *typed = addCase(match, PAT_TYPED, newStringLiteral("a"));
+    typed->binder.name = "n";
+    typed->binder.type = type_get_basic(TY_INT);
+    typed->guard = newIntLiteral(1);
+    addCase(match, PAT_WILDCARD, newStringLiteral("b"));
+    CHECK(analyzeMatchFunction(match) == ERR_TYPE);
+}
+
+void testMatchUnknownClass(void) {
+    /* case Circle(r) => "c" */
+    ASTNode *match = newMatch(newId("value"));
+    CaseNode *circle = addCase(match, PAT_CONSTRUCTOR, newStringLiteral("c"));
+    circle->className = "Circle";
+    addCtorBinder(circle, "r");
+    addCase(match, PAT_WILDCARD, newStringLiteral("b"));
+    CHECK(analyzeMatchFunction(match) == ERR_UNDEF);
+}
+
+void testMatchBinderCount(void) {
+    /* case Point(a) => "p" */
+    ASTNode *match = newMatch(newId("value"));
+    CaseNode *point = addCase(match, PAT_CONSTRUCTOR, newStringLiteral("p"));
+    point->className = "Point";
+    addCtorBinder(point, "a");
+    addCase(match, PAT_WILDCARD, newStringLiteral("b"));
+    CHECK(analyzeMatchFunction(match) == ERR_PARAMS);
+}
+
+void testMatchTypedUnknownType(void) {
+    /* case n: Foo => "a" */
+    ASTNode *match = newMatch(newId("value"));
+    CaseNode *typed = addCase(match, PAT_TYPED, newStringLiteral("a"));
+    typed->binder.name = "n";
+    typed->binder.type = type_create_named("Foo");
+    addCase(match, PAT_WILDCARD, newStringLiteral("b"));
+    CHECK(analyzeMatchFunction(match) == ERR_UNDEF);
+}
+
+void testMatchTypedNotMember(void) {
+    /* case d: Double => "a" -> Double nie je člen Int | String | Point */
+    ASTNode *match = newMatch(newId("value"));
+    CaseNode *typed = addCase(match, PAT_TYPED, newStringLiteral("a"));
+    typed->binder.name = "d";
+    typed->binder.type = type_get_basic(TY_DOUBLE);
+    addCase(match, PAT_WILDCARD, newStringLiteral("b"));
+    CHECK(analyzeMatchFunction(match) == ERR_TYPE);
+}
+
+void testMatchLiteralWrongType(void) {
+    /* val v = 1 match { case "a" => 1 ; case _ => 2 } */
+    ASTNode *match = newMatch(newIntLiteral(1));
+    addCase(match, PAT_LITERAL, newIntLiteral(1))->literal = newStringLiteral("a");
+    addCase(match, PAT_WILDCARD, newIntLiteral(2));
+    CHECK(analyzeInitExpression(match) == ERR_TYPE);
+}
+
+void testMatchBinderScope(void) {
+    /* 1 match { case n: Int => n ; case _ => 0 } ; n */
+    ASTNode *match = newMatch(newIntLiteral(1));
+    CaseNode *typed = addCase(match, PAT_TYPED, newId("n"));
+    typed->binder.name = "n";
+    typed->binder.type = type_get_basic(TY_INT);
+    addCase(match, PAT_WILDCARD, newIntLiteral(0));
+    BlockNode *body = newBlock();
+    addCommand(body, newExprStatement(match));
+    addCommand(body, newExprStatement(newId("n")));
+    CHECK(analyzeMainBody(body) == ERR_UNDEF);
+}
+
+void testFunctionEndsWithMatchConvert(void) {
+    /* def f(): Double = 1 match { case 0 => 1 ; case _ => 2 } -> obe vetvy sa prevedú */
+    ASTNode *match = newMatch(newIntLiteral(1));
+    CaseNode *first = addCase(match, PAT_LITERAL, newIntLiteral(1));
+    first->literal = newIntLiteral(0);
+    CaseNode *wildcard = addCase(match, PAT_WILDCARD, newIntLiteral(2));
+
+    ProgramNode *program;
+    addFunctionWithMain(&program, "f", type_get_basic(TY_DOUBLE), match);
+    CHECK(runAnalyze(program) == ERR_OK);
+    CHECK(first->body->kind == AST_CONVERT);
+    CHECK(wildcard->body->kind == AST_CONVERT);
+    finishAnalyze(program);
+}
+
+/* type Scalar = Int | Double | String ; def foo(x: Double | String): String = toStr(x) ;
+   @main = { var anything: Scalar = 5 ; command } */
+ErrorCode analyzeScalar(ASTNode *command) {
+    ProgramNode *program = newProgram();
+    TypeList scalarMembers = {0};
+    type_list_append(&scalarMembers, type_get_basic(TY_INT));
+    type_list_append(&scalarMembers, type_get_basic(TY_DOUBLE));
+    type_list_append(&scalarMembers, type_get_basic(TY_STRING));
+    TypeAliasNode *alias = calloc(1, sizeof(TypeAliasNode));
+    alias->node.kind = AST_TYPE_ALIAS;
+    alias->name = "Scalar";
+    alias->aliased = type_create_union(scalarMembers);
+    addItem(program, (ASTNode *)alias);
+
+    TypeList fooMembers = {0};
+    type_list_append(&fooMembers, type_get_basic(TY_DOUBLE));
+    type_list_append(&fooMembers, type_get_basic(TY_STRING));
+    DefFuncNode *foo = newFunction(program, "foo", false, type_get_basic(TY_STRING),
+                                   callWithArg("toStr", newId("x")));
+    addParamList(foo);
+    addParam(foo, "x", type_create_union(fooMembers));
+
+    BlockNode *body = newBlock();
+    addCommand(body,
+               newVarDef("anything", true, type_create_named("Scalar"), newIntLiteral(5)));
+    addCommand(body, command);
+    addMain(program, (ASTNode *)body);
+    return analyze(program);
+}
+
+void testUnionAliasAssign(void) {
+    /* anything = "hello" */
+    CHECK(analyzeScalar(newAssign("anything", newStringLiteral("hello"))) == ERR_OK);
+}
+
+void testUnionValueNotWidened(void) {
+    /* foo(anything) -> Int v zjednotení sa neprevedie na Double */
+    CHECK(analyzeScalar(newExprStatement(callWithArg("foo", newId("anything")))) == ERR_PARAMS);
+}
+
+void testUnionIntArgWidened(void) {
+    /* foo(5) -> Int sa prevedie (príklad zo zadania) */
+    CHECK(analyzeScalar(newExprStatement(callWithArg("foo", newIntLiteral(5)))) == ERR_OK);
+}
+
 int main(void) {
     testUndefinedVariable();
     testUseBeforeDefinition();
@@ -2118,6 +2484,29 @@ int main(void) {
     testBuiltinMemberCalledWithParens();
     testExtensionRecursion();
     testExtensionOnAlias();
+
+    testConstructorOk();
+    testConstructorWrongCount();
+    testConstructorWrongType();
+    testFieldAccess();
+    testUnknownField();
+    testFieldIsImmutable();
+    testMatchWithoutWildcard();
+    testMatchOk();
+    testMatchBranchMismatch();
+    testMatchIntDouble();
+    testMatchStatementMixedBranches();
+    testMatchGuardNotBool();
+    testMatchUnknownClass();
+    testMatchBinderCount();
+    testMatchTypedUnknownType();
+    testMatchTypedNotMember();
+    testMatchLiteralWrongType();
+    testMatchBinderScope();
+    testFunctionEndsWithMatchConvert();
+    testUnionAliasAssign();
+    testUnionValueNotWidened();
+    testUnionIntArgWidened();
 
     type_free_all();
 

@@ -570,7 +570,7 @@ Symbol *findExtensionMethod(Symtable *table, Type *receiverType, const char *nam
  * @param table je tabuľka symbolov
  * @param calleeId je identifikátor pred zátvorkou
  * @param error je pointer, cez ktory si vrátim chybové hlasenie (3, 6)
- * @returns symbol funkcie alebo vstavanej funkcie, pri chybe NULL
+ * @returns symbol funkcie, vstavanej funkcie alebo triedy (konštruktor), pri chybe NULL
  */
 Symbol *checkFunctionCallee(Symtable *table, IDNode *calleeId, ErrorCode *error);
 
@@ -584,3 +584,68 @@ Symbol *checkFunctionCallee(Symtable *table, IDNode *calleeId, ErrorCode *error)
  */
 Symbol *checkMethodCallee(Symtable *table, BodyContext *context, MemberNode *member,
                           ErrorCode *error);
+
+/**
+ * @brief funkcia na kontrolu argumentov konštruktora podľa atribútov triedy
+ * @param table je tabuľka symbolov
+ * @param context je kontext kontrolovanej funkcie
+ * @param call je volanie konštruktora
+ * @param classDef je definicia triedy
+ * @param error je pointer, cez ktory si vrátim chybové hlasenie (5)
+ */
+void checkConstructorArguments(Symtable *table, BodyContext *context, CallNode *call,
+                               ClassDefNode *classDef, ErrorCode *error);
+
+/**
+ * @brief funkcia na zistenie typu atribútu triedy
+ * @param classSymbol je symbol triedy
+ * @param name je meno atributu
+ * @returns typ atribútu, NULL ak trieda taky atribút nemá
+ */
+Type *getFieldType(Symbol *classSymbol, const char *name);
+
+/**
+ * @brief funkcia na definovanie premennej zo vzoru vo vetve case
+ * @param table je tabuľka symbolov
+ * @param context je kontext kontrolovanej funkcie
+ * @param binder je väzba zo vzoru (meno a typ)
+ * @param type je typ premennej
+ * @param error je pointer, cez ktorý si vrátim chybove hlásenie (4)
+ */
+void defineCaseBinder(Symtable *table, BodyContext *context, Param *binder, Type *type,
+                      ErrorCode *error);
+
+/**
+ * @brief funkcia na kontrolu vzoru vo vetve case a definovanie jeho premenných
+ * @param table je tabuľka symbolov
+ * @param context je kontext kontrolovanej funkcie
+ * @param caseNode je vetva case
+ * @param subjectType je typ porovnávanej hodnoty
+ * @param error je pointer, cez ktorý si vrátim chybové hlásenie (3, 5, 6)
+ */
+void checkCasePattern(Symtable *table, BodyContext *context, CaseNode *caseNode,
+                      Type *subjectType, ErrorCode *error);
+
+/**
+ * @brief funkcia na zlúčenie typov vetiev match do jedného typu
+ *
+ * Vetvy musia mat rovnaký typ, pri Int a Double sa Int vetvy prevedú na Double.
+ * Vetvy, ktoré končia príkazom return, typ neurčujú.
+ * @param match je uzol match
+ * @param caseTypes je pole typov vetiev v poradí
+ * @param error je pointer, cez ktory si vrátim chybové hlásenie (6)
+ * @returns spoločny typ, NULL ak všetky vetvy končia príkazom return
+ */
+Type *combineCaseTypes(MatchNode *match, Type **caseTypes, ErrorCode *error);
+
+/**
+ * @brief funkcia na kontrolu výrazu match
+ * @param table je tabuľka symbolov
+ * @param context je kontext kontrolovanej funkcie
+ * @param match je uzol match
+ * @param isValueUsed je true, ak sa výsledok dalej použije
+ * @param error je pointer, cez ktorý si vrátim chybové hlásenie (3, 5, 6, 10 bez case _)
+ * @returns typ vysledku (NULL, ak všetky vetvy končia príkazom return)
+ */
+Type *checkMatch(Symtable *table, BodyContext *context, MatchNode *match, bool isValueUsed,
+                 ErrorCode *error);
