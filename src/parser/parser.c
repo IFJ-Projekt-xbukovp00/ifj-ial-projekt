@@ -39,8 +39,12 @@
 /* TODO: AST */
 
 static Token currentToken;
+static TokenType previousType;
 
-static int advance(void) { return scanner_get_token(&currentToken); }
+static int advance(void) {
+    previousType = currentToken.type;
+    return scanner_get_token(&currentToken);
+}
 
 static bool check(TokenType type) { return currentToken.type == type; }
 
@@ -346,17 +350,21 @@ static int parse_statem_list(void) {
     if (err != ERR_OK) {
         return err;
     }
-    while (check(TOK_EOL) || check(TOK_SEMICOLON)) {
-        bool wasSemicolon = check(TOK_SEMICOLON);
-        err = advance();
-        if (err != ERR_OK) {
-            return err;
-        }
-        if (wasSemicolon && check(TOK_EOL)) {
+    for (;;) {
+        if (check(TOK_EOL) || check(TOK_SEMICOLON)) {
+            bool wasSemicolon = check(TOK_SEMICOLON);
             err = advance();
             if (err != ERR_OK) {
                 return err;
             }
+            if (wasSemicolon && check(TOK_EOL)) {
+                err = advance();
+                if (err != ERR_OK) {
+                    return err;
+                }
+            }
+        } else if (previousType != TOK_DEDENT) {
+            break;
         }
         if (check(TOK_DEDENT) || check(TOK_EOF)) {
             break;
