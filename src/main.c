@@ -30,6 +30,7 @@
 #include "error.h"
 #include "parser.h"
 #include "scanner.h"
+#include "semantic.h"
 
 #include <stdio.h>
 
@@ -40,5 +41,24 @@
 int main(void) {
     scanner_init(stdin);
     int result = parser_parse();
+
+    // TODO: Parser not implemented yet
+    /*
+    ASTNode *program = NULL;
+    int result = parser_parse(&program);
+    if (result != ERR_OK){
+        return result;
+    }
+
+    Symtable table;
+    ErrorCode semanticError = ERR_OK;
+    symtableInit(&table);
+    semanticAnalyze(program, &table, &semanticError);
+    result = semanticError;
+
+    symtableFree(&table);
+    type_free_all();
+    */
+
     return result;
 }
