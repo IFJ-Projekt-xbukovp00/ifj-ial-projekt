@@ -299,6 +299,19 @@ void addCtorBinder(CaseNode *caseNode, const char *name) {
     binder->symbol = NULL;
 }
 
+ASTNode *newInterp(void) {
+    InterpNode *interp = calloc(1, sizeof(InterpNode));
+    interp->node.kind = AST_INTERP;
+    return (ASTNode *)interp;
+}
+
+ASTNode *addPart(ASTNode *interpNode, ASTNode *part) {
+    InterpNode *interp = (InterpNode *)interpNode;
+    interp->parts = realloc(interp->parts, (interp->partsCount + 1) * sizeof(ASTNode *));
+    interp->parts[interp->partsCount++] = part;
+    return interpNode;
+}
+
 /* uvoľnenie AST (aj ConvertNode, ktoré vložila sémantika) */
 
 void freeNode(ASTNode *node) {
@@ -348,6 +361,12 @@ void freeNode(ASTNode *node) {
         freeNode(forNode->body);
     } else if (node->kind == AST_MEMBER) {
         freeNode(((MemberNode *)node)->object);
+    } else if (node->kind == AST_INTERP) {
+        InterpNode *interp = (InterpNode *)node;
+        for (size_t partIndex = 0; partIndex < interp->partsCount; partIndex++) {
+            freeNode(interp->parts[partIndex]);
+        }
+        free(interp->parts);
     } else if (node->kind == AST_MATCH) {
         MatchNode *match = (MatchNode *)node;
         freeNode(match->subject);
@@ -2328,6 +2347,69 @@ void testUnionIntArgWidened(void) {
     CHECK(analyzeScalar(newExprStatement(callWithArg("foo", newIntLiteral(5)))) == ERR_OK);
 }
 
+/* testy: interpolované reťazce (INTERPOLATEDS) */
+
+/* val name = "IFJ" ; val n = 26 ; val x = init */
+ErrorCode analyzeInterpolation(ASTNode *init, Type **resultType) {
+    BlockNode *body = newBlock();
+    addCommand(body, newVarDef("name", false, NULL, newStringLiteral("IFJ")));
+    addCommand(body, newVarDef("n", false, NULL, newIntLiteral(26)));
+    addCommand(body, newVarDef("x", false, NULL, init));
+
+    ProgramNode *program = newProgram();
+    addMain(program, (ASTNode *)body);
+    ErrorCode error = runAnalyze(program);
+    if (resultType != NULL) {
+        *resultType = init->type;
+    }
+    finishAnalyze(program);
+    return error;
+}
+
+void testInterpolationOk(void) {
+    /* s"$name${n + 1} costs $$0" (príklad zo zadania) je String */
+    ASTNode *interp = newInterp();
+    addPart(interp, newId("name"));
+    addPart(interp, newBinary(TOK_PLUS, newId("n"), newIntLiteral(1)));
+    addPart(interp, newStringLiteral(" costs $0"));
+
+    Type *resultType = NULL;
+    CHECK(analyzeInterpolation(interp, &resultType) == ERR_OK);
+    CHECK(resultType == type_get_basic(TY_STRING));
+}
+
+void testInterpolationAnyValue(void) {
+    /* s"${1.5} ${true} ${()}" -> hodnoty sa prevádzajú ako pri toStr */
+    ASTNode *interp = newInterp();
+    addPart(interp, newDoubleLiteral(1.5));
+    addPart(interp, newStringLiteral(" "));
+    addPart(interp, newBoolLiteral(true));
+    addPart(interp, newStringLiteral(" "));
+    addPart(interp, newUnitLiteral());
+    CHECK(analyzeInterpolation(interp, NULL) == ERR_OK);
+}
+
+void testInterpolationInConcat(void) {
+    /* s"a$n" + "b" je String */
+    ASTNode *interp = addPart(addPart(newInterp(), newStringLiteral("a")), newId("n"));
+    Type *resultType = NULL;
+    CHECK(analyzeInterpolation(newBinary(TOK_PLUS, interp, newStringLiteral("b")),
+                               &resultType) == ERR_OK);
+    CHECK(resultType == type_get_basic(TY_STRING));
+}
+
+void testInterpolationUndefined(void) {
+    /* s"$missing" */
+    CHECK(analyzeInterpolation(addPart(newInterp(), newId("missing")), NULL) == ERR_UNDEF);
+}
+
+void testInterpolationBadExpression(void) {
+    /* s"${"a" + 1}" */
+    ASTNode *interp =
+        addPart(newInterp(), newBinary(TOK_PLUS, newStringLiteral("a"), newIntLiteral(1)));
+    CHECK(analyzeInterpolation(interp, NULL) == ERR_TYPE);
+}
+
 int main(void) {
     testUndefinedVariable();
     testUseBeforeDefinition();
@@ -2507,6 +2589,12 @@ int main(void) {
     testUnionAliasAssign();
     testUnionValueNotWidened();
     testUnionIntArgWidened();
+
+    testInterpolationOk();
+    testInterpolationAnyValue();
+    testInterpolationInConcat();
+    testInterpolationUndefined();
+    testInterpolationBadExpression();
 
     type_free_all();
 

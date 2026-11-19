@@ -649,3 +649,16 @@ Type *combineCaseTypes(MatchNode *match, Type **caseTypes, ErrorCode *error);
  */
 Type *checkMatch(Symtable *table, BodyContext *context, MatchNode *match, bool isValueUsed,
                  ErrorCode *error);
+
+/**
+ * @brief funkcia na kontrolu interpolovaného reťazca s"..."
+ *
+ * Kazda vlozena hodnota sa prevádza ako pri toStr, preto moze byt lubovolneho typu.
+ * @param table je tabuľka symbolov
+ * @param context je kontext kontrolovanej funkcie
+ * @param interp je uzol interpolovaneho reťazca
+ * @param error je pointer, cez ktorý si vrátim chybové hlásenie (3, 6)
+ * @returns String, pri chybe NULL
+ */
+Type *checkInterpolation(Symtable *table, BodyContext *context, InterpNode *interp,
+                         ErrorCode *error);

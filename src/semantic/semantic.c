@@ -775,6 +775,9 @@ Type *checkNode(Symtable *table, BodyContext *context, ASTNode **node, bool isVa
     else if (current->kind == AST_FOR){
         nodeType = checkFor(table, context, (ForNode *)current, error);
     }
+    else if (current->kind == AST_INTERP){
+        nodeType = checkInterpolation(table, context, (InterpNode *)current, error);
+    }
     else if (current->kind == AST_MATCH){
         nodeType = checkMatch(table, context, (MatchNode *)current, isValueUsed, error);
     }
@@ -1800,4 +1803,23 @@ Type *checkMatch(Symtable *table, BodyContext *context, MatchNode *match, bool i
 
     free(caseTypes);
     return resultType;
+}
+
+Type *checkInterpolation(Symtable *table, BodyContext *context, InterpNode *interp,
+                         ErrorCode *error){
+    for (size_t partIndex = 0; partIndex < interp->partsCount; partIndex++){
+        Type *partType = checkNode(table, context, &interp->parts[partIndex], true, error);
+
+        if (*error != ERR_OK){
+            return NULL;
+        }
+
+        // cast, ktorá končí returnom, nemá hodnotu na vloženie
+        if (partType == NULL){
+            *error = ERR_TYPE;
+            return NULL;
+        }
+    }
+
+    return type_get_basic(TY_STRING);
 }
