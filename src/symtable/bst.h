@@ -31,14 +31,23 @@
 
 #pragma once
 
+struct Symbol; // definicia v symtable.h
+
 typedef struct Node{
     char *name;
-    TokenType type;
+    struct Symbol *symbol;
+    int height;
     struct Node *left;
     struct Node *right;
 }Node;
 
-Node *insertNode(Node *root, const char *name, TokenType type, ErrorCode *error);
+int height(Node *node);
+void updateHeight(Node *node);
+Node *rotateRight(Node *root);
+Node *rotateLeft(Node *root);
+Node *balance(Node *root);
+Node *alocNode(const char *name, struct Symbol *symbol, ErrorCode *error);
+Node *insertNode(Node *root, const char *name, struct Symbol *symbol, ErrorCode *error);
 Node *findNode(Node *root, const char *name, ErrorCode *error);
 void destroyTree(Node *root);
 

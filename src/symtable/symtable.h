@@ -29,83 +29,131 @@
 
 #pragma once
 
+#include "ast.h"
 #include "bst.h"
+#include "types.h"
+
+#include <stdbool.h>
 
 /**
- * @brief strom pre identifikátory
+ * @brief druh symbolu
  */
-typedef struct IDs{
-    Token *Node;
-    struct IDs *left;
-    struct IDs *right  
-}IDs;
+typedef enum{
+    SYM_VARIABLE,   // premenná (val / var)
+    SYM_PARAMETER,  // formálny parameter funkcie
+    SYM_FUNCTION,   // používateľská funkcia
+    SYM_BUILTIN,    // vstavaná funkcia
+    SYM_CLASS,      // case class (ALGEBDT)
+    SYM_ALIAS,      // alias typu (ALGEBDT)
+    SYM_EXTENSION   // rozširujúca metóda (EXTKW)
+}SymbolKind;
 
 /**
- * @brief funkcia na vytvorenie listu do stromu identifikátorov
- * @param Node je štruktúra, ktorá má v sebe informáciu o tokene
- * @returns list
+ * @brief stav kontroly tela funkcie (pri aliase stav rozlisenia typu)
  */
-IDs *initNodeID(Token *Node);
+typedef enum{
+    FUNC_NOT_STARTED,   // ešte nekontrolovaná
+    FUNC_IN_PROGRESS,   // práve sa kontroluje (rekurzia)
+    FUNC_DONE           // hotová
+}FunctionCheckState;
 
 /**
- * @brief funkcia na pridanie listu do stromu identifikátorov
- * @param Node je štruktúra, ktorá má v sebe informáciu o tokene
- * @returns list 
+ * @brief informácie o jednom mene v programe
  */
-IDs *addNodeID(Token *Node);
+typedef struct Symbol{
+    SymbolKind kind;
+    Type *type;                 // typ symbolu, NULL = zatiaľ neodvodený
+    bool isMutable;             // true pre var, inak false
+    ASTNode *definition;        // uzol definície funkcie, inak NULL
+    FunctionCheckState checkState; // stav kontroly tela
+    Param *receiver;            // príjemca rozširujúcej metódy, inak NULL
+    struct Symbol *nextAllocated; // zoznam všetkých symbolov, aby sa dali na konci uvoľniť
+}Symbol;
 
 /**
- * @brief funkcia na hľadanie a kontrolovanie identikátora v strome
- * @param root je kontrolovaný list
- * @param Node je štruktúra, ktorá má v sebe informáciu o tokene
- * @returns pravdivostnú hodnotu
+ * @brief jeden rozsah platnosti (blok), rozsahy tvoria zásobník
  */
-bool findAndControlNodeID;
+typedef struct Scope{
+    Node *tree;             // AVL strom: meno -> symbol
+    struct Scope *parent;   // nadradený rozsah, NULL pre globálny
+}Scope;
 
 /**
- * @brief funkcia na mazanie stromu identifikátorov
- * @param root je list, ktorý odstraňujem
- * @returns ..
+ * @brief tabuľka symbolov
  */
-void clearTreeID(IDs *root);
+typedef struct Symtable{
+    Scope *top;             // aktuálny (najvnútornejší) rozsah
+    Symbol *allSymbols;     // všetky vytvorené symboly
+    Node *typeTree;         // mená typov (type, case class)
+    Node *extensionTree;    // rozširujúce metody, kľúč "Typ.meno"
+}Symtable;
 
 /**
- * @brief binárny strom pre keyWords
+ * @brief funkcia na inicializáciu prázdnej tabuľky (bez rozsahov)
+ * @param table je inicializovaná tabuľka
  */
-typedef struct KeyWordTree{
-    char *word;
-    struct KeyWordTree *left;
-    struct KeyWordTree *right   
-}KeyWordTree;
+void symtableInit(Symtable *table);
 
 /**
- * @brief funkcia na vytvorenie listu do stromu kľúčových slov
- * @param word je kľúčové slovo
- * @returns list
+ * @brief funkcia na uvoľnenie všetkých rozsahov aj symbolov
+ * @param table je uvoľňovaná tabuľka
  */
-KeyWordTree *initNodeKW(char *word);
+void symtableFree(Symtable *table);
 
 /**
- * @brief funkcia na pridanie listu do stromu kľúčových slov
- * @param root je miesto, kde sa má pridať
- * @param word je kľúčové slovo
- * @returns root
+ * @brief funkcia na vnorenie do nového rozsahu (prvý vytvorený je globálny)
+ * @param table je tabuľka symbolov
+ * @param error je pointer, cez ktorý si vrátim chybové hlásenie (ERR_INTERNAL)
  */
-KeyWordTree *addNodeKW(KeyWordTree *root, char *word);
-
-/** 
- * @brief funkcia na hľadanie kľúčového slova v strome
- * @param root je kontrolovaný list
- * @param word je kľúčové slovo, ktoré hľadám
- * @returns pravdivostnú hodnotu
-*/
-bool findNodeKW(KeyWordTree *root, char *word);
+void pushScope(Symtable *table, ErrorCode *error);
 
 /**
- * @brief funkcia na mazanie stromu kľúčových slov
- * @param root je list, ktorý odstraňujem
- * @returns ..
+ * @brief funkcia na opustenie aktuálneho rozsahu
+ * @param table je tabuľka symbolov
+ * Symboly z rozsahu sa neuvoľnia, môže na ne ukazovať AST (uvoľní ich symtableFree).
  */
-void clearTreeKW(KeyWordTree *root);
+void popScope(Symtable *table);
 
+/**
+ * @brief funkcia na definovanie mena v aktuálnom rozsahu
+ * @param table je tabuľka symbolov
+ * @param name je definované meno
+ * @param kind je druh symbolu
+ * @param type je typ symbolu (môže byť NULL)
+ * @param isMutable je true pre var
+ * @param error je pointer, cez ktorý si vrátim chybové hlásenie
+ *        (ERR_REDEF ak meno v aktuálnom rozsahu už je, ERR_INTERNAL pri chybe alokácie)
+ * @returns nový symbol, pri chybe NULL
+ */
+Symbol *defineSymbol(Symtable *table, const char *name, SymbolKind kind, Type *type,
+                     bool isMutable, ErrorCode *error);
 
+/**
+ * @brief funkcia na definovanie mena v zadanom strome (napr. typeTree)
+ * @param table je tabuľka symbolov
+ * @param tree je strom, do ktorého meno vkladám
+ * @param name je definované meno
+ * @param kind je druh symbolu
+ * @param type je typ symbolu (moze byt NULL)
+ * @param isMutable je true pre var
+ * @param error je pointer, cez ktory si vrátim chybove hlasenie (ERR_REDEF, ERR_INTERNAL)
+ * @returns nový symbol, pri chybe NULL
+ */
+Symbol *defineSymbolInTree(Symtable *table, Node **tree, const char *name, SymbolKind kind,
+                           Type *type, bool isMutable, ErrorCode *error);
+
+/**
+ * @brief funkcia na hľadanie mena v jednom strome
+ * @param tree je prehľadávaný strom
+ * @param name je hladane meno
+ * @returns symbol, alebo NULL ak tam meno nie je
+ */
+Symbol *lookupSymbolInTree(Node *tree, const char *name);
+
+/**
+ * @brief funkcia na hľadanie mena od aktuálneho rozsahu po globálny
+ * @param table je tabuľka symbolov
+ * @param name je hľadané meno
+ * @returns najbližší symbol s daným menom, alebo NULL ak meno neexistuje
+ */
+Symbol *lookupSymbol(Symtable *table, const char *name);

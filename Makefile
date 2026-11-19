@@ -37,10 +37,28 @@ CFLAGS  += $(INC)
 
 IC26INT ?= tests/bin/ic26int-linux-$(shell uname -m)
 
+LEXDUMP     := tests/lexer_dump
+LEXDUMP_OBJ := src/lexer/scanner.o src/lexer/dfa.o src/common/dynstr.o src/common/error.o \
+               src/lexer/keywords.o
+
+UNIT_BST     := tests/unit/test_bst
+UNIT_BST_OBJ := src/symtable/bst.o src/common/error.o
+UNIT_SYMTABLE     := tests/unit/test_symtable
+UNIT_SYMTABLE_OBJ := src/symtable/symtable.o src/symtable/bst.o src/common/error.o
+UNIT_BUILTINS     := tests/unit/test_builtins
+UNIT_BUILTINS_OBJ := src/semantic/semantic.o src/symtable/symtable.o src/symtable/bst.o \
+                     src/common/types.o src/common/error.o
+UNIT_SEMANTIC_GLOBAL     := tests/unit/test_semantic_global
+UNIT_SEMANTIC_GLOBAL_OBJ := $(UNIT_BUILTINS_OBJ)
+UNIT_TYPES     := tests/unit/test_types
+UNIT_TYPES_OBJ := src/common/types.o src/common/error.o
+UNIT_SEMANTIC_BODY     := tests/unit/test_semantic_body
+UNIT_SEMANTIC_BODY_OBJ := $(UNIT_BUILTINS_OBJ)
+
 PACK_DIR := pack
 PACK_ZIP := xbukovp00.zip
 
-.PHONY: build check build-check format docs test pack clean
+.PHONY: build check build-check format docs test test-lexer test-unit pack clean
 
 build: $(TARGET)
 
@@ -62,8 +80,41 @@ format:
 docs:
 	doxygen Doxyfile
 
-test: build
-	IFJ26=./$(TARGET) IC26INT=$(IC26INT) tests/run_tests.sh
+test: build $(LEXDUMP)
+	IFJ26=./$(TARGET) IC26INT=$(IC26INT) LEXDUMP=./$(LEXDUMP) tests/run_tests.sh
+
+$(LEXDUMP): tests/lexer_dump.c $(LEXDUMP_OBJ)
+	$(CC) $(CFLAGS) -o $@ $^
+
+test-lexer: $(LEXDUMP)
+	LEXDUMP=./$(LEXDUMP) tests/run_lexer_tests.sh
+
+$(UNIT_BST): tests/unit/test_bst.c $(UNIT_BST_OBJ)
+	$(CC) $(CFLAGS) -o $@ $^
+
+$(UNIT_SYMTABLE): tests/unit/test_symtable.c $(UNIT_SYMTABLE_OBJ)
+	$(CC) $(CFLAGS) -o $@ $^
+
+$(UNIT_BUILTINS): tests/unit/test_builtins.c $(UNIT_BUILTINS_OBJ)
+	$(CC) $(CFLAGS) -o $@ $^
+
+$(UNIT_SEMANTIC_GLOBAL): tests/unit/test_semantic_global.c $(UNIT_SEMANTIC_GLOBAL_OBJ)
+	$(CC) $(CFLAGS) -o $@ $^
+
+$(UNIT_TYPES): tests/unit/test_types.c $(UNIT_TYPES_OBJ)
+	$(CC) $(CFLAGS) -o $@ $^
+
+$(UNIT_SEMANTIC_BODY): tests/unit/test_semantic_body.c $(UNIT_SEMANTIC_BODY_OBJ)
+	$(CC) $(CFLAGS) -o $@ $^
+
+test-unit: $(UNIT_BST) $(UNIT_SYMTABLE) $(UNIT_BUILTINS) $(UNIT_SEMANTIC_GLOBAL) $(UNIT_TYPES) \
+           $(UNIT_SEMANTIC_BODY)
+	./$(UNIT_BST)
+	./$(UNIT_SYMTABLE)
+	./$(UNIT_BUILTINS)
+	./$(UNIT_SEMANTIC_GLOBAL)
+	./$(UNIT_TYPES)
+	./$(UNIT_SEMANTIC_BODY)
 
 pack:
 	rm -rf $(PACK_DIR) $(PACK_ZIP)
@@ -77,5 +128,6 @@ pack:
 	rm -rf $(PACK_DIR)
 
 clean:
-	rm -f $(TARGET) $(OBJ)
+	rm -f $(TARGET) $(OBJ) $(LEXDUMP) $(UNIT_BST) $(UNIT_SYMTABLE) $(UNIT_BUILTINS) \
+	      $(UNIT_SEMANTIC_GLOBAL) $(UNIT_TYPES) $(UNIT_SEMANTIC_BODY)
 	rm -rf docs/doxygen $(PACK_DIR) $(PACK_ZIP) tests/tmp
