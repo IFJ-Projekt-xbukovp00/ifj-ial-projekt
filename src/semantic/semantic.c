@@ -624,6 +624,19 @@ Type *checkId(Symtable *table, BodyContext *context, IDNode *id, ErrorCode *erro
         return getFunctionReturnType(table, context, symbol, error);
     }
 
+    // funkcia s jedným zoznamom parametrov ako hodnota (referencia na funkciu)
+    if (symbol->kind == SYM_FUNCTION
+        && ((DefFuncNode *)symbol->definition)->paramListCount == 1){
+        getFunctionReturnType(table, context, symbol, error);
+        if (*error != ERR_OK){
+            return NULL;
+        }
+
+        id->idKind = ID_FUNC_REF;
+        id->symbol = symbol;
+        return symbol->type;
+    }
+
     // ine funkcie a konštruktory ako hodnotu nepodporujeme
     if (symbol->kind != SYM_VARIABLE && symbol->kind != SYM_PARAMETER){
         *error = ERR_TYPE;
@@ -687,6 +700,11 @@ Type *checkVarDef(Symtable *table, BodyContext *context, VarOrValNode *varDef, E
         *error = ERR_TYPE;
         return NULL;
     }
+    else if (varDef->init->kind == AST_ID && ((IDNode *)varDef->init)->idKind == ID_FUNC_REF){
+        // bežnú funkciu mozno ulozit len do premennej s uvedeným typom
+        *error = ERR_TYPE;
+        return NULL;
+    }
 
     Symbol *variableSymbol = defineSymbol(table, varDef->name, SYM_VARIABLE, variableType,
                                           varDef->isMutable, error);
@@ -695,7 +713,7 @@ Type *checkVarDef(Symtable *table, BodyContext *context, VarOrValNode *varDef, E
     }
 
     varDef->symbol = variableSymbol;
-    addLocal(context->function, variableSymbol, error);
+    addContextLocal(context, variableSymbol, error);
     return type_get_basic(TY_UNIT);
 }
 
@@ -775,6 +793,9 @@ Type *checkNode(Symtable *table, BodyContext *context, ASTNode **node, bool isVa
     else if (current->kind == AST_FOR){
         nodeType = checkFor(table, context, (ForNode *)current, error);
     }
+    else if (current->kind == AST_LAMBDA){
+        nodeType = checkLambda(table, context, (LambdaNode *)current, error);
+    }
     else if (current->kind == AST_INTERP){
         nodeType = checkInterpolation(table, context, (InterpNode *)current, error);
     }
@@ -848,7 +869,7 @@ void checkFunctionBody(Symtable *table, BodyContext *parent, Symbol *functionSym
         return;
     }
 
-    BodyContext context = {function, parent};
+    BodyContext context = {function, parent, NULL};
 
     // pri explicitnom Unit sa vysledok tela zahodi
     bool isUnitDeclared = isUnitType(function->returnType);
@@ -1092,6 +1113,12 @@ bool isUnitType(Type *type){
 
 Type *checkReturn(Symtable *table, BodyContext *context, ReturnNode *returnNode,
                   ErrorCode *error){
+    // v tele lambdy return nesmie byť
+    if (context->lambda != NULL){
+        *error = ERR_SEM_OTHER;
+        return NULL;
+    }
+
     Type *returnType = context->function->returnType;
 
     // return vyzaduje uvedeny navratovy typ
@@ -1257,6 +1284,16 @@ Type *checkCall(Symtable *table, BodyContext *context, CallNode *call, ErrorCode
         caller = ((CallNode *)caller)->caller;
     }
 
+    // premenná alebo parameter s funkciou sa vola ako hodnota
+    if (caller->kind == AST_ID){
+        Symbol *callerSymbol = lookupSymbol(table, ((IDNode *)caller)->name);
+
+        if (callerSymbol != NULL
+            && (callerSymbol->kind == SYM_VARIABLE || callerSymbol->kind == SYM_PARAMETER)){
+            return checkValueCall(table, context, call, error);
+        }
+    }
+
     Symbol *callee = NULL;
 
     if (caller->kind == AST_ID){
@@ -1272,6 +1309,19 @@ Type *checkCall(Symtable *table, BodyContext *context, CallNode *call, ErrorCode
 
     if (callee == NULL){
         return NULL;
+    }
+
+    // funkcia, ktora vracia funkciu: zoznam navyše patrí volaniu výsledku, goo()(1)
+    if (callee->kind == SYM_FUNCTION
+        && listCount > ((DefFuncNode *)callee->definition)->paramListCount){
+        Type *returnType = getRealType(getFunctionReturnType(table, context, callee, error));
+
+        if (*error != ERR_OK){
+            return NULL;
+        }
+        if (returnType != NULL && returnType->kind == TY_FUNC){
+            return checkValueCall(table, context, call, error);
+        }
     }
 
     // zoznamy volani od najvnutornejsieho, ten patri k prvemu zoznamu parametrov
@@ -1418,7 +1468,7 @@ Type *checkFor(Symtable *table, BodyContext *context, ForNode *forNode, ErrorCod
                                       type_get_basic(TY_INT), false, error);
     if (loopSymbol != NULL){
         forNode->symbol = loopSymbol;
-        addLocal(context->function, loopSymbol, error);
+        addContextLocal(context, loopSymbol, error);
     }
 
     for (size_t guardIndex = 0; guardIndex < forNode->guardsCount; guardIndex++){
@@ -1618,7 +1668,7 @@ void defineCaseBinder(Symtable *table, BodyContext *context, Param *binder, Type
     binder->symbol = defineSymbol(table, binder->name, SYM_VARIABLE, type, false, error);
 
     if (binder->symbol != NULL){
-        addLocal(context->function, binder->symbol, error);
+        addContextLocal(context, binder->symbol, error);
     }
 }
 
@@ -1822,4 +1872,88 @@ Type *checkInterpolation(Symtable *table, BodyContext *context, InterpNode *inte
     }
 
     return type_get_basic(TY_STRING);
+}
+
+void addContextLocal(BodyContext *context, Symbol *local, ErrorCode *error){
+    if (context->lambda == NULL){
+        addLocal(context->function, local, error);
+        return;
+    }
+
+    LambdaNode *lambda = context->lambda;
+    Symbol **newLocals = realloc(lambda->locals, (lambda->localsCount + 1) * sizeof(Symbol *));
+
+    if (newLocals == NULL){
+        *error = ERR_INTERNAL;
+        return;
+    }
+
+    lambda->locals = newLocals;
+    lambda->locals[lambda->localsCount] = local;
+    lambda->localsCount++;
+}
+
+Type *checkLambda(Symtable *table, BodyContext *context, LambdaNode *lambda, ErrorCode *error){
+    resolveParamList(table, &lambda->params, error);
+    if (*error != ERR_OK){
+        return NULL;
+    }
+
+    // lambda nevidi lokalne premenné okolitej funkcie
+    Scope *savedTop = table->top;
+    table->top = getGlobalScope(table);
+
+    pushScope(table, error);
+    if (*error != ERR_OK){
+        table->top = savedTop;
+        return NULL;
+    }
+
+    TypeList paramTypes = {NULL, 0, 0};
+
+    for (size_t paramIndex = 0; paramIndex < lambda->params.params_count; paramIndex++){
+        Param *param = &lambda->params.params[paramIndex];
+        type_list_append(&paramTypes, param->type);
+
+        if (*error == ERR_OK){
+            param->symbol = defineSymbol(table, param->name, SYM_PARAMETER, param->type, false,
+                                         error);
+        }
+    }
+
+    BodyContext lambdaContext = {context->function, context, lambda};
+    Type *bodyType = checkNode(table, &lambdaContext, &lambda->body, true, error);
+
+    popScope(table);
+    table->top = savedTop;
+
+    if (*error != ERR_OK){
+        free(paramTypes.items);
+        return NULL;
+    }
+
+    return type_create_function(paramTypes, bodyType);
+}
+
+Type *checkValueCall(Symtable *table, BodyContext *context, CallNode *call, ErrorCode *error){
+    Type *calleeType = getRealType(checkNode(table, context, &call->caller, true, error));
+
+    if (*error != ERR_OK){
+        return NULL;
+    }
+
+    // volat sa da len hodnota typu funkcia
+    if (calleeType == NULL || calleeType->kind != TY_FUNC){
+        *error = ERR_TYPE;
+        return NULL;
+    }
+
+    checkArguments(table, context, call, calleeType->func.params.items,
+                   calleeType->func.params.len, error);
+    if (*error != ERR_OK){
+        return NULL;
+    }
+
+    call->callKind = CALL_VALUE;
+    return calleeType->func.ret;
 }

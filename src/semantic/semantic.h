@@ -40,6 +40,7 @@
 typedef struct BodyContext{
     DefFuncNode *function;      // funkcia, ktorej telo sa kontroluje
     struct BodyContext *parent; // kontext, z ktoreho sa kontrola spustila, inak NULL
+    LambdaNode *lambda;         // lambda, ktorej telo sa kontroluje, inak NULL
 }BodyContext;
 
 /**
@@ -662,3 +663,34 @@ Type *checkMatch(Symtable *table, BodyContext *context, MatchNode *match, bool i
  */
 Type *checkInterpolation(Symtable *table, BodyContext *context, InterpNode *interp,
                          ErrorCode *error);
+
+/**
+ * @brief funkcia na pridanie lokálnej premennej do lambdy alebo funkcie z kontextu
+ * @param context je kontext kontrolovaného tela
+ * @param local je symbol premennej
+ * @param error je pointer, cez ktorý si vrátim chybove hlásenie (ERR_INTERNAL)
+ */
+void addContextLocal(BodyContext *context, Symbol *local, ErrorCode *error);
+
+/**
+ * @brief funkcia na kontrolu lambda funkcie
+ *
+ * Telo sa kontroluje v rozsahu globálny + parametre lambdy, takze nevidí
+ * lokalne premenné okolitej funkcie (jazyk nema uzávery).
+ * @param table je tabuľka symbolov
+ * @param context je kontext funkcie, v ktorej lambda je
+ * @param lambda je uzol lambdy
+ * @param error je pointer, cez ktory si vrátim chybové hlásenie (3, 4, 10 pri return)
+ * @returns typ (parametre) => typ tela, pri chybe NULL
+ */
+Type *checkLambda(Symtable *table, BodyContext *context, LambdaNode *lambda, ErrorCode *error);
+
+/**
+ * @brief funkcia na kontrolu volania hodnoty typu funkcia (premenná, výsledok volania)
+ * @param table je tabuľka symbolov
+ * @param context je kontext kontrolovanej funkcie
+ * @param call je volanie, jeho caller je volaná hodnota
+ * @param error je pointer, cez ktorý si vrátim chybové hlasenie (5, 6)
+ * @returns návratový typ volanej hodnoty, pri chybe NULL
+ */
+Type *checkValueCall(Symtable *table, BodyContext *context, CallNode *call, ErrorCode *error);

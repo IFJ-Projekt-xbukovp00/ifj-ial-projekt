@@ -312,6 +312,32 @@ ASTNode *addPart(ASTNode *interpNode, ASTNode *part) {
     return interpNode;
 }
 
+ASTNode *newLambda(ASTNode *body) {
+    LambdaNode *lambda = calloc(1, sizeof(LambdaNode));
+    lambda->node.kind = AST_LAMBDA;
+    lambda->body = body;
+    return (ASTNode *)lambda;
+}
+
+ASTNode *addLambdaParam(ASTNode *lambdaNode, const char *name, Type *type) {
+    LambdaNode *lambda = (LambdaNode *)lambdaNode;
+    ParamList *params = &lambda->params;
+    params->params = realloc(params->params, (params->params_count + 1) * sizeof(Param));
+    Param *param = &params->params[params->params_count++];
+    param->name = (char *)name;
+    param->type = type;
+    param->line = 1;
+    param->symbol = NULL;
+    return lambdaNode;
+}
+
+/* typ (paramType) => returnType */
+Type *functionTypeOf(Type *paramType, Type *returnType) {
+    TypeList params = {0};
+    type_list_append(&params, paramType);
+    return type_create_function(params, returnType);
+}
+
 /* uvoľnenie AST (aj ConvertNode, ktoré vložila sémantika) */
 
 void freeNode(ASTNode *node) {
@@ -361,6 +387,11 @@ void freeNode(ASTNode *node) {
         freeNode(forNode->body);
     } else if (node->kind == AST_MEMBER) {
         freeNode(((MemberNode *)node)->object);
+    } else if (node->kind == AST_LAMBDA) {
+        LambdaNode *lambda = (LambdaNode *)node;
+        free(lambda->params.params);
+        free(lambda->locals);
+        freeNode(lambda->body);
     } else if (node->kind == AST_INTERP) {
         InterpNode *interp = (InterpNode *)node;
         for (size_t partIndex = 0; partIndex < interp->partsCount; partIndex++) {
@@ -2410,6 +2441,270 @@ void testInterpolationBadExpression(void) {
     CHECK(analyzeInterpolation(interp, NULL) == ERR_TYPE);
 }
 
+/* testy: lambdy a funkcie ako hodnoty (LAMBDAS) */
+
+/* (left: Int, right: Int) => left + right */
+ASTNode *newAddLambda(void) {
+    ASTNode *lambda = newLambda(newBinary(TOK_PLUS, newId("left"), newId("right")));
+    addLambdaParam(lambda, "left", type_get_basic(TY_INT));
+    addLambdaParam(lambda, "right", type_get_basic(TY_INT));
+    return lambda;
+}
+
+/* (Int, Int) => Int */
+Type *addLambdaType(void) {
+    TypeList params = {0};
+    type_list_append(&params, type_get_basic(TY_INT));
+    type_list_append(&params, type_get_basic(TY_INT));
+    return type_create_function(params, type_get_basic(TY_INT));
+}
+
+void testLambdaType(void) {
+    /* val add = (left: Int, right: Int) => left + right -> (Int, Int) => Int */
+    ProgramNode *program;
+    ASTNode *expr = newAddLambda();
+    Type *lambdaType = expressionType(&program, &expr);
+    CHECK(lambdaType != NULL && lambdaType->kind == TY_FUNC);
+    if (lambdaType != NULL && lambdaType->kind == TY_FUNC) {
+        CHECK(lambdaType->func.params.len == 2);
+        CHECK(lambdaType->func.ret == type_get_basic(TY_INT));
+    }
+    CHECK(((LambdaNode *)expr)->params.params[0].symbol != NULL);
+    finishAnalyze(program);
+}
+
+void testLambdaCall(void) {
+    /* val add: (Int, Int) => Int = lambda ; val x = add(10, 8) -> Int, CALL_VALUE */
+    ASTNode *call = addArg(callWithArg("add", newIntLiteral(10)), newIntLiteral(8));
+    BlockNode *body = newBlock();
+    addCommand(body, newVarDef("add", false, addLambdaType(), newAddLambda()));
+    addCommand(body, newVarDef("x", false, NULL, call));
+
+    ProgramNode *program = newProgram();
+    addMain(program, (ASTNode *)body);
+    CHECK(runAnalyze(program) == ERR_OK);
+    CHECK(call->type == type_get_basic(TY_INT));
+    CHECK(((CallNode *)call)->callKind == CALL_VALUE);
+    finishAnalyze(program);
+}
+
+void testLambdaWrongArg(void) {
+    /* val add = lambda ; val x = add("a", 8) */
+    BlockNode *body = newBlock();
+    addCommand(body, newVarDef("add", false, NULL, newAddLambda()));
+    addCommand(body, newVarDef("x", false, NULL,
+                               addArg(callWithArg("add", newStringLiteral("a")),
+                                      newIntLiteral(8))));
+    CHECK(analyzeMainBody(body) == ERR_PARAMS);
+}
+
+void testLambdaWrongDeclaredType(void) {
+    /* val f: (Int) => String = (a: Int) => a */
+    ASTNode *lambda = addLambdaParam(newLambda(newId("a")), "a", type_get_basic(TY_INT));
+    BlockNode *body = newBlock();
+    addCommand(body, newVarDef("f", false,
+                               functionTypeOf(type_get_basic(TY_INT), type_get_basic(TY_STRING)),
+                               lambda));
+    CHECK(analyzeMainBody(body) == ERR_TYPE);
+}
+
+void testLambdaUnknownParamType(void) {
+    /* val f = (a: Foo) => 1 */
+    ASTNode *lambda = addLambdaParam(newLambda(newIntLiteral(1)), "a", type_create_named("Foo"));
+    CHECK(analyzeInitExpression(lambda) == ERR_UNDEF);
+}
+
+void testReturnInLambda(void) {
+    /* val f = (a: Int) => { return a } (err10_return_in_lambda) */
+    BlockNode *lambdaBody = newBlock();
+    addCommand(lambdaBody, newReturn(newId("a")));
+    ASTNode *lambda =
+        addLambdaParam(newLambda((ASTNode *)lambdaBody), "a", type_get_basic(TY_INT));
+    CHECK(analyzeInitExpression(lambda) == ERR_SEM_OTHER);
+}
+
+void testReturnInLambdaInsideTypedFunction(void) {
+    /* def g(): Int = { val f = (a: Int) => { if a < 0 then return a else a } ; 1 } */
+    BlockNode *lambdaBody = newBlock();
+    addCommand(lambdaBody,
+               newExprStatement(newIf(newBinary(TOK_LESS, newId("a"), newIntLiteral(0)),
+                                      newReturn(newId("a")), newId("a"))));
+    ASTNode *lambda =
+        addLambdaParam(newLambda((ASTNode *)lambdaBody), "a", type_get_basic(TY_INT));
+
+    BlockNode *body = newBlock();
+    addCommand(body, newVarDef("f", false, NULL, lambda));
+    addCommand(body, newExprStatement(newIntLiteral(1)));
+    CHECK(analyzeFunction(type_get_basic(TY_INT), (ASTNode *)body) == ERR_SEM_OTHER);
+}
+
+void testLambdaNoClosure(void) {
+    /* val x = 1 ; val f = (a: Int) => a + x -> lambda nevidí premenné okolitej funkcie */
+    ASTNode *lambda = addLambdaParam(newLambda(newBinary(TOK_PLUS, newId("a"), newId("x"))),
+                                     "a", type_get_basic(TY_INT));
+    BlockNode *body = newBlock();
+    addCommand(body, newVarDef("x", false, NULL, newIntLiteral(1)));
+    addCommand(body, newVarDef("f", false, NULL, lambda));
+    CHECK(analyzeMainBody(body) == ERR_UNDEF);
+}
+
+void testLambdaLocals(void) {
+    /* val f = (a: Int) => { val strA = toStr(a) ; "cislo" + strA } -> premenná patrí lambde */
+    BlockNode *lambdaBody = newBlock();
+    addCommand(lambdaBody, newVarDef("strA", false, NULL, callWithArg("toStr", newId("a"))));
+    addCommand(lambdaBody,
+               newExprStatement(newBinary(TOK_PLUS, newStringLiteral("cislo"), newId("strA"))));
+    ASTNode *lambda =
+        addLambdaParam(newLambda((ASTNode *)lambdaBody), "a", type_get_basic(TY_INT));
+
+    BlockNode *body = newBlock();
+    addCommand(body, newVarDef("f", false, NULL, lambda));
+    ProgramNode *program = newProgram();
+    DefFuncNode *mainFunction = addMain(program, (ASTNode *)body);
+
+    CHECK(runAnalyze(program) == ERR_OK);
+    CHECK(((LambdaNode *)lambda)->localsCount == 1);
+    CHECK(mainFunction->localsCount == 1);
+    finishAnalyze(program);
+}
+
+/* def foo(x: Int) = x + 5 ; @main = { val f [: declaredType] = foo } */
+ProgramNode *programWithFooRef(Type *declaredType, ASTNode **reference) {
+    ProgramNode *program = newProgram();
+    DefFuncNode *foo =
+        newFunction(program, "foo", false, NULL, newBinary(TOK_PLUS, newId("x"), newIntLiteral(5)));
+    addParamList(foo);
+    addParam(foo, "x", type_get_basic(TY_INT));
+
+    *reference = newId("foo");
+    BlockNode *body = newBlock();
+    addCommand(body, newVarDef("f", false, declaredType, *reference));
+    addMain(program, (ASTNode *)body);
+    return program;
+}
+
+void testFunctionRefWithType(void) {
+    /* val addFive: (Int) => Int = foo -> ID_FUNC_REF */
+    ASTNode *reference;
+    ProgramNode *program = programWithFooRef(
+        functionTypeOf(type_get_basic(TY_INT), type_get_basic(TY_INT)), &reference);
+    CHECK(runAnalyze(program) == ERR_OK);
+    CHECK(((IDNode *)reference)->idKind == ID_FUNC_REF);
+    CHECK(reference->type != NULL && reference->type->kind == TY_FUNC);
+    finishAnalyze(program);
+}
+
+void testFunctionRefWithoutType(void) {
+    /* val f = foo -> bežná funkcia len do premennej s uvedeným typom */
+    ASTNode *reference;
+    CHECK(analyze(programWithFooRef(NULL, &reference)) == ERR_TYPE);
+}
+
+void testFunctionRefWrongType(void) {
+    /* val f: (Int) => String = foo */
+    ASTNode *reference;
+    CHECK(analyze(programWithFooRef(
+              functionTypeOf(type_get_basic(TY_INT), type_get_basic(TY_STRING)), &reference)) ==
+          ERR_TYPE);
+}
+
+void testFunctionRefMultipleLists(void) {
+    /* def add(a: Int)(b: Int): Int ; val f: (Int) => Int = add */
+    ProgramNode *program = newProgram();
+    DefFuncNode *add = newFunction(program, "add", false, type_get_basic(TY_INT), newId("a"));
+    addParamList(add);
+    addParam(add, "a", type_get_basic(TY_INT));
+    addParamList(add);
+    addParam(add, "b", type_get_basic(TY_INT));
+    BlockNode *body = newBlock();
+    addCommand(body, newVarDef("f", false,
+                               functionTypeOf(type_get_basic(TY_INT), type_get_basic(TY_INT)),
+                               newId("add")));
+    addMain(program, (ASTNode *)body);
+    CHECK(analyze(program) == ERR_TYPE);
+}
+
+void testFunctionAsArgument(void) {
+    /* príklad zo zadania:
+       def bar(a: Int, f: (Int) => Boolean) =
+         val result = f(a)
+         if result then print("f uspelo") else print("f neuspelo")
+       @main = { val positive = (value: Int) => value > 0 ; bar(5, positive) ; bar(5, foo) }
+       def foo(x: Int): Boolean = x < 3 */
+    ProgramNode *program = newProgram();
+    BlockNode *barBody = newBlock();
+    addCommand(barBody, newVarDef("result", false, NULL, callWithArg("f", newId("a"))));
+    addCommand(barBody, newExprStatement(newIf(newId("result"),
+                                               callWithArg("print", newStringLiteral("f uspelo")),
+                                               callWithArg("print",
+                                                           newStringLiteral("f neuspelo")))));
+    DefFuncNode *bar = newFunction(program, "bar", false, NULL, (ASTNode *)barBody);
+    addParamList(bar);
+    addParam(bar, "a", type_get_basic(TY_INT));
+    addParam(bar, "f", functionTypeOf(type_get_basic(TY_INT), type_get_basic(TY_BOOL)));
+
+    ASTNode *positive =
+        addLambdaParam(newLambda(newBinary(TOK_GREATER, newId("value"), newIntLiteral(0))),
+                       "value", type_get_basic(TY_INT));
+    BlockNode *body = newBlock();
+    addCommand(body, newVarDef("positive", false, NULL, positive));
+    addCommand(body, newExprStatement(addArg(callWithArg("bar", newIntLiteral(5)),
+                                             newId("positive"))));
+    addCommand(body,
+               newExprStatement(addArg(callWithArg("bar", newIntLiteral(5)), newId("foo"))));
+    addMain(program, (ASTNode *)body);
+
+    DefFuncNode *foo = newFunction(program, "foo", false, type_get_basic(TY_BOOL),
+                                   newBinary(TOK_LESS, newId("x"), newIntLiteral(3)));
+    addParamList(foo);
+    addParam(foo, "x", type_get_basic(TY_INT));
+    CHECK(analyze(program) == ERR_OK);
+}
+
+void testFunctionReturningLambda(void) {
+    /* def goo(): (Int) => String = return (a: Int) => "cislo" + toStr(a) ;
+       val s: String = goo()(5) */
+    ASTNode *lambda = addLambdaParam(
+        newLambda(newBinary(TOK_PLUS, newStringLiteral("cislo"), callWithArg("toStr", newId("a")))),
+        "a", type_get_basic(TY_INT));
+    BlockNode *gooBody = newBlock();
+    addCommand(gooBody, newReturn(lambda));
+
+    ProgramNode *program = newProgram();
+    DefFuncNode *goo = newFunction(program, "goo", false,
+                                   functionTypeOf(type_get_basic(TY_INT), type_get_basic(TY_STRING)),
+                                   (ASTNode *)gooBody);
+    addParamList(goo);
+
+    ASTNode *call = addArg(newCall(newCall(newId("goo"))), newIntLiteral(5));
+    BlockNode *body = newBlock();
+    addCommand(body, newVarDef("s", false, type_get_basic(TY_STRING), call));
+    addMain(program, (ASTNode *)body);
+
+    CHECK(runAnalyze(program) == ERR_OK);
+    CHECK(((CallNode *)call)->callKind == CALL_VALUE);
+    finishAnalyze(program);
+}
+
+void testParenlessFunctionReturningLambda(void) {
+    /* def make: (Int) => Int = (a: Int) => a * 2 ; val x = make(4) */
+    ASTNode *lambda =
+        addLambdaParam(newLambda(newBinary(TOK_MULTIPLY, newId("a"), newIntLiteral(2))), "a",
+                       type_get_basic(TY_INT));
+    ProgramNode *program = newProgram();
+    newFunction(program, "make", false,
+                functionTypeOf(type_get_basic(TY_INT), type_get_basic(TY_INT)), lambda);
+
+    ASTNode *call = callWithArg("make", newIntLiteral(4));
+    BlockNode *body = newBlock();
+    addCommand(body, newVarDef("x", false, NULL, call));
+    addMain(program, (ASTNode *)body);
+
+    CHECK(runAnalyze(program) == ERR_OK);
+    CHECK(call->type == type_get_basic(TY_INT));
+    finishAnalyze(program);
+}
+
 int main(void) {
     testUndefinedVariable();
     testUseBeforeDefinition();
@@ -2595,6 +2890,23 @@ int main(void) {
     testInterpolationInConcat();
     testInterpolationUndefined();
     testInterpolationBadExpression();
+
+    testLambdaType();
+    testLambdaCall();
+    testLambdaWrongArg();
+    testLambdaWrongDeclaredType();
+    testLambdaUnknownParamType();
+    testReturnInLambda();
+    testReturnInLambdaInsideTypedFunction();
+    testLambdaNoClosure();
+    testLambdaLocals();
+    testFunctionRefWithType();
+    testFunctionRefWithoutType();
+    testFunctionRefWrongType();
+    testFunctionRefMultipleLists();
+    testFunctionAsArgument();
+    testFunctionReturningLambda();
+    testParenlessFunctionReturningLambda();
 
     type_free_all();
 
