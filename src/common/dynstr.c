@@ -47,7 +47,7 @@ bool dynstr_reserve(DynStr *s, size_t extra) {
     } else {
         new_cap = DYNSTR_INIT_CAP;
     }
-    
+
     while (new_cap < needed) {
         new_cap *= 2;
     }

@@ -37,11 +37,11 @@
  * Telo funkcie sa môže kontrolovat aj na poziadanie (z volania v inom tele),
  * vtedy parent ukazuje na kontext volajúcej funkcie.
  */
-typedef struct BodyContext{
+typedef struct BodyContext {
     DefFuncNode *function;      // funkcia, ktorej telo sa kontroluje
     struct BodyContext *parent; // kontext, z ktoreho sa kontrola spustila, inak NULL
     LambdaNode *lambda;         // lambda, ktorej telo sa kontroluje, inak NULL
-}BodyContext;
+} BodyContext;
 
 /**
  * @brief funkcia na vloženie vstavaných funkcií do aktuálneho (globálneho) rozsahu
@@ -199,7 +199,7 @@ void semanticAnalyze(ASTNode *program, Symtable *table, ErrorCode *error);
  * @param literal je uzol literalu
  * @returns typ literálu
  */
-Type *getLiteralType(LiteralNode *literal);
+Type *getLiteralType(const LiteralNode *literal);
 
 /**
  * @brief funkcia na zistenie, ci treba hodnotu previest z Int na Double
@@ -336,7 +336,7 @@ void checkFunctionBodies(Symtable *table, ProgramNode *program, ErrorCode *error
  * @param type je typ, uz bez mien typov
  * @returns true pre Int a Double
  */
-bool isNumericType(Type *type);
+bool isNumericType(const Type *type);
 
 /**
  * @brief funkcia na prevod Int operandu na Double, ak je druhý operand Double
@@ -346,7 +346,7 @@ bool isNumericType(Type *type);
  * @param error je pointer, cez ktorý si vrátim chybové hlásenie (ERR_INTERNAL)
  * @returns Double, ak je aspoň jeden operand Double, inak Int
  */
-Type *convertNumericOperands(BinaryNode *binary, Type *leftType, Type *rightType,
+Type *convertNumericOperands(BinaryNode *binary, const Type *leftType, const Type *rightType,
                              ErrorCode *error);
 
 /**
@@ -388,8 +388,7 @@ Type *checkBranch(Symtable *table, BodyContext *context, ASTNode **branch, bool 
  * @param condition je pointer na miesto v AST, kde je podmienka
  * @param error je pointer, cez ktorý si vrátim chybové hlásenie (6)
  */
-void checkCondition(Symtable *table, BodyContext *context, ASTNode **condition,
-                    ErrorCode *error);
+void checkCondition(Symtable *table, BodyContext *context, ASTNode **condition, ErrorCode *error);
 
 /**
  * @brief funkcia na kontrolu podmienky if (prikaz aj vyraz)
@@ -434,8 +433,7 @@ bool isUnitType(Type *type);
  * @param error je pointer, cez ktorý si vrátim chybové hlásenie (6)
  * @returns vždy NULL (return nemá vysledok)
  */
-Type *checkReturn(Symtable *table, BodyContext *context, ReturnNode *returnNode,
-                  ErrorCode *error);
+Type *checkReturn(Symtable *table, BodyContext *context, ReturnNode *returnNode, ErrorCode *error);
 
 /**
  * @brief funkcia na kontrolu, ci výsledok tela môže byť návratovou hodnotou
@@ -544,7 +542,7 @@ Type *checkFor(Symtable *table, BodyContext *context, ForNode *forNode, ErrorCod
  * @param name je meno clena
  * @returns typ vysledku, NULL ak taký člen pre dany typ neexistuje
  */
-Type *getBuiltinMemberType(Type *objectType, const char *name);
+Type *getBuiltinMemberType(const Type *objectType, const char *name);
 
 /**
  * @brief funkcia na kontrolu pristupu cez bodku (vyraz.meno)
@@ -584,8 +582,7 @@ Symbol *checkFunctionCallee(Symtable *table, IDNode *calleeId, ErrorCode *error)
  * @param error je pointer, cez ktorý si vrátim chybove hlásenie (3, 5)
  * @returns symbol metódy, pri chybe NULL
  */
-Symbol *checkMethodCallee(Symtable *table, MemberNode *member, Type *objectType,
-                          ErrorCode *error);
+Symbol *checkMethodCallee(Symtable *table, MemberNode *member, Type *objectType, ErrorCode *error);
 
 /**
  * @brief funkcia na kontrolu argumentov konštruktora podľa atribútov triedy
@@ -625,8 +622,8 @@ void defineCaseBinder(Symtable *table, BodyContext *context, Param *binder, Type
  * @param subjectType je typ porovnávanej hodnoty
  * @param error je pointer, cez ktorý si vrátim chybové hlásenie (3, 5, 6)
  */
-void checkCasePattern(Symtable *table, BodyContext *context, CaseNode *caseNode,
-                      Type *subjectType, ErrorCode *error);
+void checkCasePattern(Symtable *table, BodyContext *context, CaseNode *caseNode, Type *subjectType,
+                      ErrorCode *error);
 
 /**
  * @brief funkcia na zlúčenie typov vetiev match do jedného typu
@@ -750,9 +747,8 @@ Type *getListMemberType(Type *objectType, const char *name);
  * @param error je pointer, cez ktory si vrátim chybové hlásenie (5)
  * @returns typ výsledku (zoznam rovnakého typu), pri chybe NULL
  */
-Type *checkListMethodCall(Symtable *table, BodyContext *context, CallNode *call,
-                          MemberNode *member, Type *listType, size_t listCount,
-                          ErrorCode *error);
+Type *checkListMethodCall(Symtable *table, BodyContext *context, CallNode *call, MemberNode *member,
+                          Type *listType, size_t listCount, ErrorCode *error);
 
 /**
  * @brief funkcia na kontrolu zoznamu List(a, b, ...)
@@ -765,5 +761,4 @@ Type *checkListMethodCall(Symtable *table, BodyContext *context, CallNode *call,
  * @param error je pointer, cez ktorý si vrátim chybove hlásenie (6)
  * @returns typ zoznamu, pri chybe NULL
  */
-Type *checkListLiteral(Symtable *table, BodyContext *context, ListLitNode *list,
-                       ErrorCode *error);
+Type *checkListLiteral(Symtable *table, BodyContext *context, ListLitNode *list, ErrorCode *error);

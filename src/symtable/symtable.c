@@ -31,15 +31,15 @@
 #include <stdlib.h>
 #include <string.h>
 
-void symtableInit(Symtable *table){
+void symtableInit(Symtable *table) {
     table->top = NULL;
     table->allSymbols = NULL;
     table->typeTree = NULL;
     table->extensionTree = NULL;
 }
 
-void symtableFree(Symtable *table){
-    while (table->top != NULL){
+void symtableFree(Symtable *table) {
+    while (table->top != NULL) {
         popScope(table);
     }
 
@@ -50,7 +50,7 @@ void symtableFree(Symtable *table){
 
     Symbol *symbol = table->allSymbols;
 
-    while (symbol != NULL){
+    while (symbol != NULL) {
         Symbol *nextSymbol = symbol->nextAllocated;
         free(symbol);
         symbol = nextSymbol;
@@ -59,10 +59,10 @@ void symtableFree(Symtable *table){
     table->allSymbols = NULL;
 }
 
-void pushScope(Symtable *table, ErrorCode *error){
+void pushScope(Symtable *table, ErrorCode *error) {
     Scope *newScope = malloc(sizeof(Scope));
 
-    if (newScope == NULL){
+    if (newScope == NULL) {
         *error = ERR_INTERNAL;
         return;
     }
@@ -72,10 +72,10 @@ void pushScope(Symtable *table, ErrorCode *error){
     table->top = newScope;
 }
 
-void popScope(Symtable *table){
+void popScope(Symtable *table) {
 
     Scope *oldScope = table->top;
-    if (oldScope == NULL){
+    if (oldScope == NULL) {
         return;
     }
 
@@ -84,9 +84,9 @@ void popScope(Symtable *table){
     free(oldScope);
 }
 
-Symbol *defineSymbol(Symtable *table, const char *name, SymbolKind kind, Type *type,
-                     bool isMutable, ErrorCode *error){
-    if (table->top == NULL){
+Symbol *defineSymbol(Symtable *table, const char *name, SymbolKind kind, Type *type, bool isMutable,
+                     ErrorCode *error) {
+    if (table->top == NULL) {
         *error = ERR_INTERNAL;
         return NULL;
     }
@@ -95,9 +95,9 @@ Symbol *defineSymbol(Symtable *table, const char *name, SymbolKind kind, Type *t
 }
 
 Symbol *defineSymbolInTree(Symtable *table, Node **tree, const char *name, SymbolKind kind,
-                           Type *type, bool isMutable, ErrorCode *error){
+                           Type *type, bool isMutable, ErrorCode *error) {
     Symbol *symbol = malloc(sizeof(Symbol));
-    if (symbol == NULL){
+    if (symbol == NULL) {
         *error = ERR_INTERNAL;
         return NULL;
     }
@@ -113,7 +113,7 @@ Symbol *defineSymbolInTree(Symtable *table, Node **tree, const char *name, Symbo
 
     *tree = insertNode(*tree, name, symbol, &insertError);
 
-    if (insertError != ERR_OK){
+    if (insertError != ERR_OK) {
         free(symbol);
         *error = insertError;
         return NULL;
@@ -124,27 +124,27 @@ Symbol *defineSymbolInTree(Symtable *table, Node **tree, const char *name, Symbo
     return symbol;
 }
 
-Symbol *lookupSymbolInTree(Node *tree, const char *name){
+Symbol *lookupSymbolInTree(Node *tree, const char *name) {
     ErrorCode findError = ERR_OK;
-    Node *foundNode = findNode(tree, name, &findError);
+    const Node *foundNode = findNode(tree, name, &findError);
 
-    if (foundNode == NULL){
+    if (foundNode == NULL) {
         return NULL;
     }
 
     return foundNode->symbol;
 }
 
-Symbol *lookupSymbol(Symtable *table, const char *name){
+Symbol *lookupSymbol(Symtable *table, const char *name) {
     ErrorCode findError = ERR_OK;
 
-    for (Scope *scope = table->top; scope != NULL; scope = scope->parent){
+    for (Scope *scope = table->top; scope != NULL; scope = scope->parent) {
         Node *foundNode = findNode(scope->tree, name, &findError);
 
-        if (foundNode != NULL){
+        if (foundNode != NULL) {
             return foundNode->symbol;
         }
     }
-    
+
     return NULL;
 }

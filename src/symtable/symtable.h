@@ -38,55 +38,55 @@
 /**
  * @brief druh symbolu
  */
-typedef enum{
-    SYM_VARIABLE,   // premenná (val / var)
-    SYM_PARAMETER,  // formálny parameter funkcie
-    SYM_FUNCTION,   // používateľská funkcia
-    SYM_BUILTIN,    // vstavaná funkcia
-    SYM_CLASS,      // case class (ALGEBDT)
-    SYM_ALIAS,      // alias typu (ALGEBDT)
-    SYM_EXTENSION   // rozširujúca metóda (EXTKW)
-}SymbolKind;
+typedef enum {
+    SYM_VARIABLE,  // premenná (val / var)
+    SYM_PARAMETER, // formálny parameter funkcie
+    SYM_FUNCTION,  // používateľská funkcia
+    SYM_BUILTIN,   // vstavaná funkcia
+    SYM_CLASS,     // case class (ALGEBDT)
+    SYM_ALIAS,     // alias typu (ALGEBDT)
+    SYM_EXTENSION  // rozširujúca metóda (EXTKW)
+} SymbolKind;
 
 /**
  * @brief stav kontroly tela funkcie (pri aliase stav rozlisenia typu)
  */
-typedef enum{
-    FUNC_NOT_STARTED,   // ešte nekontrolovaná
-    FUNC_IN_PROGRESS,   // práve sa kontroluje (rekurzia)
-    FUNC_DONE           // hotová
-}FunctionCheckState;
+typedef enum {
+    FUNC_NOT_STARTED, // ešte nekontrolovaná
+    FUNC_IN_PROGRESS, // práve sa kontroluje (rekurzia)
+    FUNC_DONE         // hotová
+} FunctionCheckState;
 
 /**
  * @brief informácie o jednom mene v programe
  */
-typedef struct Symbol{
+typedef struct Symbol {
     SymbolKind kind;
-    Type *type;                 // typ symbolu, NULL = zatiaľ neodvodený
-    bool isMutable;             // true pre var, inak false
-    ASTNode *definition;        // uzol definície funkcie, inak NULL
+    Type *type;                    // typ symbolu, NULL = zatiaľ neodvodený
+    bool isMutable;                // true pre var, inak false
+    ASTNode *definition;           // uzol definície funkcie, inak NULL
     FunctionCheckState checkState; // stav kontroly tela
-    Param *receiver;            // príjemca rozširujúcej metódy, inak NULL
-    struct Symbol *nextAllocated; // zoznam všetkých symbolov, aby sa dali na konci uvoľniť
-}Symbol;
+    Param *receiver;               // príjemca rozširujúcej metódy, inak NULL
+    struct Symbol *nextAllocated;  // zoznam všetkých symbolov, aby sa dali na konci uvoľniť
+} Symbol;
 
 /**
  * @brief jeden rozsah platnosti (blok), rozsahy tvoria zásobník
  */
-typedef struct Scope{
-    Node *tree;             // AVL strom: meno -> symbol
-    struct Scope *parent;   // nadradený rozsah, NULL pre globálny
-}Scope;
+typedef struct Scope {
+    Node *tree;           // AVL strom: meno -> symbol
+    struct Scope *parent; // nadradený rozsah, NULL pre globálny
+} Scope;
 
 /**
  * @brief tabuľka symbolov
  */
-typedef struct Symtable{
-    Scope *top;             // aktuálny (najvnútornejší) rozsah
-    Symbol *allSymbols;     // všetky vytvorené symboly
-    Node *typeTree;         // mená typov (type, case class)
-    Node *extensionTree;    // rozširujúce metody, kľúč "Typ.meno"
-}Symtable;
+typedef struct Symtable {
+    Scope *top;          // aktuálny (najvnútornejší) rozsah
+    Symbol *allSymbols;  // všetky vytvorené symboly
+    Node *typeTree;      // mená typov (type, case class)
+    Node *extensionTree; // rozširujúce metody, kľúč "Typ.meno"
+} Symtable;
 
 /**
  * @brief funkcia na inicializáciu prázdnej tabuľky (bez rozsahov)
@@ -125,8 +125,8 @@ void popScope(Symtable *table);
  *        (ERR_REDEF ak meno v aktuálnom rozsahu už je, ERR_INTERNAL pri chybe alokácie)
  * @returns nový symbol, pri chybe NULL
  */
-Symbol *defineSymbol(Symtable *table, const char *name, SymbolKind kind, Type *type,
-                     bool isMutable, ErrorCode *error);
+Symbol *defineSymbol(Symtable *table, const char *name, SymbolKind kind, Type *type, bool isMutable,
+                     ErrorCode *error);
 
 /**
  * @brief funkcia na definovanie mena v zadanom strome (napr. typeTree)

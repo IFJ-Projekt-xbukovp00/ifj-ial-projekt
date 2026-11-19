@@ -749,4 +749,3 @@ int dfa_next_token(DfaInput *in, DfaCtx *ctx, DfaState *state, Token *tok) {
 }
 
 // clang-format on
-

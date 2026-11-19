@@ -30,13 +30,13 @@
 #include "keywords.h"
 #include <stdlib.h>
 #include <string.h>
-KeyWordTree *initNodeKW(char *word){
+KeyWordTree *initNodeKW(const char *word) {
     KeyWordTree *newNode = malloc(sizeof(KeyWordTree));
-    if (newNode == NULL){
+    if (newNode == NULL) {
         return NULL;
     }
-    newNode->word = malloc(strlen(word)+1);
-    if (newNode->word == NULL){
+    newNode->word = malloc(strlen(word) + 1);
+    if (newNode->word == NULL) {
         free(newNode);
         return NULL;
     }
@@ -45,36 +45,33 @@ KeyWordTree *initNodeKW(char *word){
     newNode->right = NULL;
     return newNode;
 }
-KeyWordTree *addNodeKW(KeyWordTree *root, char *word){
-    if (root == NULL){
+KeyWordTree *addNodeKW(KeyWordTree *root, char *word) {
+    if (root == NULL) {
         return initNodeKW(word);
     }
     int cmp = strcmp(word, root->word);
-    if (cmp < 0){
+    if (cmp < 0) {
         root->left = addNodeKW(root->left, word);
-    }
-    else if (cmp > 0){
+    } else if (cmp > 0) {
         root->right = addNodeKW(root->right, word);
     }
     return root;
 }
-bool findNodeKW(KeyWordTree *root, char *word){
-    if (root == NULL){
+bool findNodeKW(KeyWordTree *root, char *word) {
+    if (root == NULL) {
         return false;
     }
     int cmp = strcmp(word, root->word);
-    if (cmp == 0){
+    if (cmp == 0) {
         return true;
-    }
-    else if (cmp < 0){
+    } else if (cmp < 0) {
         return findNodeKW(root->left, word);
-    }
-    else{
+    } else {
         return findNodeKW(root->right, word);
     }
 }
-void clearTreeKW(KeyWordTree *root){
-    if (root == NULL){
+void clearTreeKW(KeyWordTree *root) {
+    if (root == NULL) {
         return;
     }
     clearTreeKW(root->left);

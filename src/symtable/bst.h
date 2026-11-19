@@ -26,22 +26,22 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-#include "token.h"
 #include "error.h"
+#include "token.h"
 
 #pragma once
 
 struct Symbol; // definicia v symtable.h
 
-typedef struct Node{
+typedef struct Node {
     char *name;
     struct Symbol *symbol;
     int height;
     struct Node *left;
     struct Node *right;
-}Node;
+} Node;
 
-int height(Node *node);
+int height(const Node *node);
 void updateHeight(Node *node);
 Node *rotateRight(Node *root);
 Node *rotateLeft(Node *root);
@@ -50,4 +50,3 @@ Node *alocNode(const char *name, struct Symbol *symbol, ErrorCode *error);
 Node *insertNode(Node *root, const char *name, struct Symbol *symbol, ErrorCode *error);
 Node *findNode(Node *root, const char *name, ErrorCode *error);
 void destroyTree(Node *root);
-

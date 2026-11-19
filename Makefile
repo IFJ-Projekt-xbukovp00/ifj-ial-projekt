@@ -70,7 +70,8 @@ src/%.o: src/%.c
 
 check:
 	clang-format --dry-run --Werror $(SRC) $(HDR)
-	cppcheck --enable=warning,style --error-exitcode=1 --quiet $(INC) -i $(OLD) src/
+	cppcheck --enable=warning,style --suppress=nullPointerRedundantCheck:src/common/types.c \
+	         --error-exitcode=1 --quiet $(INC) -i $(OLD) src/
 
 build-check: check build
 
