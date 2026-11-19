@@ -41,6 +41,7 @@
 int main(void) {
     scanner_init(stdin);
     int result = parser_parse();
+    scanner_free();
 
     // TODO: Parser not implemented yet
     /*
