@@ -125,6 +125,8 @@ pack:
 	-cp rozdeleni $(PACK_DIR)/
 	-cp rozsireni $(PACK_DIR)/
 	-cp docs/dokumentace.pdf $(PACK_DIR)/
+	git ls-files tests | grep -v -e '^tests/bin/' -e '^tests/is_it_ok.sh$$' | \
+	    xargs cp --parents -t $(PACK_DIR)/
 	cd $(PACK_DIR) && zip -rq ../$(PACK_ZIP) .
 	rm -rf $(PACK_DIR)
 
