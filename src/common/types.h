@@ -53,7 +53,8 @@ typedef enum {
 
 struct Type;
 
-/** @brief Dynamické pole typov, používa sa pre parametre funkcie (TY_FUNC) a členy zjednotenia (TY_UNION). */
+/** @brief Dynamické pole typov, používa sa pre parametre funkcie (TY_FUNC) a členy zjednotenia
+ * (TY_UNION). */
 typedef struct {
     struct Type **items; // Pole ukazovateľov na typy.
     size_t len;          // Koľko typov v poli práve je.

@@ -28,8 +28,8 @@
  */
 
 #include "bst.h"
-#include "token.h"
 #include "error.h"
+#include "token.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -39,8 +39,8 @@
  * @param node je uzol, ktorého výšku potrebujem
  * @returns výška uzla
  */
-int height(Node *node){
-    if (node == NULL){
+int height(const Node *node) {
+    if (node == NULL) {
         return 0;
     }
     return node->height;
@@ -51,13 +51,12 @@ int height(Node *node){
  * @param node je uzol, ktorého výšku aktualizujem
  * @returns ..
  */
-void updateHeight(Node *node){
+void updateHeight(Node *node) {
     int leftHeight = height(node->left);
     int rightHeight = height(node->right);
-    if (leftHeight > rightHeight){
+    if (leftHeight > rightHeight) {
         node->height = 1 + leftHeight;
-    }
-    else {
+    } else {
         node->height = 1 + rightHeight;
     }
 }
@@ -67,7 +66,7 @@ void updateHeight(Node *node){
  * @param root je koreň, cez ktorý robím rotáciu
  * @returns nový koreň podstromu
  */
-Node *rotateRight(Node *root){
+Node *rotateRight(Node *root) {
     Node *newRoot = root->left;
     root->left = newRoot->right;
     newRoot->right = root;
@@ -81,7 +80,7 @@ Node *rotateRight(Node *root){
  * @param root je koreň, cez ktorý robím rotáciu
  * @returns nový koreň podstromu
  */
-Node *rotateLeft(Node *root){
+Node *rotateLeft(Node *root) {
     Node *newRoot = root->right;
     root->right = newRoot->left;
     newRoot->left = root;
@@ -95,17 +94,17 @@ Node *rotateLeft(Node *root){
  * @param root je koreň, ktorý balansujem
  * @returns nový koreň podstromu
  */
-Node *balance(Node *root){
+Node *balance(Node *root) {
     updateHeight(root);
     int balanceFactor = height(root->left) - height(root->right);
-    if (balanceFactor > 1){
-        if (height(root->left->left) < height(root->left->right)){
+    if (balanceFactor > 1) {
+        if (height(root->left->left) < height(root->left->right)) {
             root->left = rotateLeft(root->left); // LR
         }
         return rotateRight(root);
     }
-    if (balanceFactor < -1){
-        if (height(root->right->right) < height(root->right->left)){
+    if (balanceFactor < -1) {
+        if (height(root->right->right) < height(root->right->left)) {
             root->right = rotateRight(root->right); // RL
         }
         return rotateLeft(root);
@@ -114,20 +113,20 @@ Node *balance(Node *root){
 }
 /**
  * @brief funkcia na alokovanie uzla AVL stromu
- * @param name je hodnota 
- * @param symbol je symbol 
- * @param error je pointer, cez ktorý si vrátim chybu (ERR_INTERNAL 
+ * @param name je hodnota
+ * @param symbol je symbol
+ * @param error je pointer, cez ktorý si vrátim chybu (ERR_INTERNAL
  *              ak zlyhá alokácia)
  * @returns nový uzol
  */
-Node *alocNode(const char *name, struct Symbol *symbol, ErrorCode *error){
+Node *alocNode(const char *name, struct Symbol *symbol, ErrorCode *error) {
     Node *node = malloc(sizeof(Node));
-    if (node == NULL){
+    if (node == NULL) {
         *error = ERR_INTERNAL;
         return NULL;
     }
-    node->name = malloc(strlen(name)+1);
-    if (node->name == NULL){
+    node->name = malloc(strlen(name) + 1);
+    if (node->name == NULL) {
         free(node);
         *error = ERR_INTERNAL;
         return NULL;
@@ -149,19 +148,17 @@ Node *alocNode(const char *name, struct Symbol *symbol, ErrorCode *error){
  *        (ERR_REDEF ak meno v strome už je, ERR_INTERNAL pri chybe alokácie, no
  *        pri úspechu sa nemení)
  * @returns updatnutý strom
-*/
-Node *insertNode(Node *root, const char *name, struct Symbol *symbol, ErrorCode *error){
-    if (root == NULL){
+ */
+Node *insertNode(Node *root, const char *name, struct Symbol *symbol, ErrorCode *error) {
+    if (root == NULL) {
         return alocNode(name, symbol, error);
     }
     int cmp = strcmp(name, root->name);
-    if (cmp < 0){
+    if (cmp < 0) {
         root->left = insertNode(root->left, name, symbol, error);
-    }
-    else if (cmp > 0){
+    } else if (cmp > 0) {
         root->right = insertNode(root->right, name, symbol, error);
-    }
-    else {
+    } else {
         *error = ERR_REDEF;
         return root;
     }
@@ -175,28 +172,28 @@ Node *insertNode(Node *root, const char *name, struct Symbol *symbol, ErrorCode 
  * @param error je pointer, cez ktorý si vrátim chybovú hlášku
  * @returns list s hodnotou
  */
-Node *findNode(Node *root, const char *name, ErrorCode *error){
-    if (root == NULL){
+Node *findNode(Node *root, const char *name, ErrorCode *error) {
+    if (root == NULL) {
         return NULL;
     }
     int cmp = strcmp(name, root->name);
-    if (cmp == 0){
+    if (cmp == 0) {
         return root;
     }
-    if (cmp < 0){
+    if (cmp < 0) {
         return findNode(root->left, name, error);
     }
     return findNode(root->right, name, error);
 }
- 
+
 /**
  * @brief Uvoľnenie stromu z pamäte
  * @param root je koreň/list, na ktorom sa nachádzam
  * @returns nič
  */
-void destroyTree(Node *root){
-    if (root == NULL){
-        return; 
+void destroyTree(Node *root) {
+    if (root == NULL) {
+        return;
     }
     destroyTree(root->left);
     destroyTree(root->right);

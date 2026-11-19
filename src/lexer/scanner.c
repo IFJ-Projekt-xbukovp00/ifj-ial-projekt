@@ -38,7 +38,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-/** @brief Určuje, či máme otvorený výraz v jednoriadkovom alebo viacriadkovom interpolovanom reťazci. */
+/** @brief Určuje, či máme otvorený výraz v jednoriadkovom alebo viacriadkovom interpolovanom
+ * reťazci. */
 typedef enum {
     INTERP_SINGLE, // s"…"
     INTERP_MULTI,  // s"""…"""
@@ -56,35 +57,20 @@ typedef struct {
     int line;
 } QueuedToken;
 
-/** @brief Zoznam slov, ktoré po načítaní identifikátora rozpoznáme ako kľúčové slová alebo literály. */
+/** @brief Zoznam slov, ktoré po načítaní identifikátora rozpoznáme ako kľúčové slová alebo
+ * literály. */
 static const struct {
     const char *word;
     TokenType type;
 } keywords[] = {
-    {"def", TOK_KW_DEF},
-    {"do", TOK_KW_DO},
-    {"Double", TOK_KW_DOUBLE},
-    {"else", TOK_KW_ELSE},
-    {"if", TOK_KW_IF},
-    {"import", TOK_KW_IMPORT},
-    {"Int", TOK_KW_INT},
-    {"return", TOK_KW_RETURN},
-    {"String", TOK_KW_STRING},
-    {"then", TOK_KW_THEN},
-    {"Unit", TOK_KW_UNIT},
-    {"val", TOK_KW_VAL},
-    {"var", TOK_KW_VAR},
-    {"while", TOK_KW_WHILE},
-    {"Boolean", TOK_KW_BOOLEAN},
-    {"case", TOK_KW_CASE},
-    {"class", TOK_KW_CLASS},
-    {"extension", TOK_KW_EXTENSION},
-    {"for", TOK_KW_FOR},
-    {"List", TOK_KW_LIST},
-    {"match", TOK_KW_MATCH},
-    {"type", TOK_KW_TYPE},
-    {"true", TOK_BOOL_LIT},
-    {"false", TOK_BOOL_LIT},
+    {"def", TOK_KW_DEF},   {"do", TOK_KW_DO},         {"Double", TOK_KW_DOUBLE},
+    {"else", TOK_KW_ELSE}, {"if", TOK_KW_IF},         {"import", TOK_KW_IMPORT},
+    {"Int", TOK_KW_INT},   {"return", TOK_KW_RETURN}, {"String", TOK_KW_STRING},
+    {"then", TOK_KW_THEN}, {"Unit", TOK_KW_UNIT},     {"val", TOK_KW_VAL},
+    {"var", TOK_KW_VAR},   {"while", TOK_KW_WHILE},   {"Boolean", TOK_KW_BOOLEAN},
+    {"case", TOK_KW_CASE}, {"class", TOK_KW_CLASS},   {"extension", TOK_KW_EXTENSION},
+    {"for", TOK_KW_FOR},   {"List", TOK_KW_LIST},     {"match", TOK_KW_MATCH},
+    {"type", TOK_KW_TYPE}, {"true", TOK_BOOL_LIT},    {"false", TOK_BOOL_LIT},
 };
 
 static DfaInput input; // uchovávame vstup a informácie o polohe pri čítaní znakov
@@ -102,8 +88,8 @@ static size_t indents_len, indents_cap;
 static InterpFrame *interps; // evidujeme otvorené výrazy interpolovaných reťazcov
 static size_t interps_len, interps_cap;
 
-static int depth;        // počítame otvorené okrúhle a hranaté zátvorky
-static int last_line;    // pamätáme si riadok posledného tokenu, aby sme ho vedeli priradiť k TOK_EOL
+static int depth;     // počítame otvorené okrúhle a hranaté zátvorky
+static int last_line; // pamätáme si riadok posledného tokenu, aby sme ho vedeli priradiť k TOK_EOL
 static bool line_start;  // označuje, že ďalší token bude prvý na riadku
 static bool had_line;    // zistíme, či už máme za sebou nejaký logický riadok
 static bool expect_eol;  // po takomto blokovom komentári ešte očakávame koniec riadku
@@ -189,7 +175,8 @@ static bool fillKeyWordTree(void) {
 }
 
 /**
- * @brief Typ tokenu pre identifikátor: kľúčové slovo alebo literál, ak je v strome, inak TOK_IDENTIFIER.
+ * @brief Typ tokenu pre identifikátor: kľúčové slovo alebo literál, ak je v strome, inak
+ * TOK_IDENTIFIER.
  *
  * Strom zatiaľ ukladá len slovo, preto sa typ nájdeného slova dohľadá v keywords[].
  */
@@ -345,7 +332,8 @@ int scanner_get_token(Token *token) {
             continue; // Znak nového riadku potom spracujeme ako koniec riadku.
         case TOK_MULTI_LINE_COMMENT:
             if (ctx.nl && depth == 0) {
-                expect_eol = true; // Ak komentár obsahuje nový riadok, berieme ho ako koniec riadku.
+                expect_eol =
+                    true; // Ak komentár obsahuje nový riadok, berieme ho ako koniec riadku.
             }
             continue;
         case TOK_EOL:

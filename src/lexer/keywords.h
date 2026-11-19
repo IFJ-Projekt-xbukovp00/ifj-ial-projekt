@@ -34,18 +34,18 @@
 /**
  * @brief binárny strom pre keyWords
  */
-typedef struct KeyWordTree{
+typedef struct KeyWordTree {
     char *word;
     struct KeyWordTree *left;
     struct KeyWordTree *right;
-}KeyWordTree;
+} KeyWordTree;
 
 /**
  * @brief funkcia na vytvorenie listu do stromu kľúčových slov
  * @param word je kľúčové slovo
  * @returns list
  */
-KeyWordTree *initNodeKW(char *word);
+KeyWordTree *initNodeKW(const char *word);
 
 /**
  * @brief funkcia na pridanie listu do stromu kľúčových slov
@@ -55,12 +55,12 @@ KeyWordTree *initNodeKW(char *word);
  */
 KeyWordTree *addNodeKW(KeyWordTree *root, char *word);
 
-/** 
+/**
  * @brief funkcia na hľadanie kľúčového slova v strome
  * @param root je kontrolovaný list
  * @param word je kľúčové slovo, ktoré hľadám
  * @returns pravdivostnú hodnotu
-*/
+ */
 bool findNodeKW(KeyWordTree *root, char *word);
 
 /**
@@ -69,5 +69,3 @@ bool findNodeKW(KeyWordTree *root, char *word);
  * @returns ..
  */
 void clearTreeKW(KeyWordTree *root);
-
-

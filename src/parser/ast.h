@@ -41,50 +41,50 @@ struct Symbol; // definicia v symtable.h
 /**
  * @brief štruktúra očíslovania typov uzlov
  */
-typedef enum{
-    AST_LIT, /** literál */
-    AST_ID, /** identifikátor */
-    AST_BINARY, /** binárna operácia ('+', '-',...) */
-    AST_UNARY, /** unárna operácia (-x, negácia,...) */
-    AST_CALL, /** volanie funkcie */
-    AST_IF, /** podmienka IF */
-    AST_WHILE, /** podmienka WHILE */
-    AST_RETURN, /** return; */
-    AST_BLOCK, /** blok */
-    AST_ASSIGN, /** priradenie */
-    AST_VAR_DEF, /** definícia premenných */
+typedef enum {
+    AST_LIT,            /** literál */
+    AST_ID,             /** identifikátor */
+    AST_BINARY,         /** binárna operácia ('+', '-',...) */
+    AST_UNARY,          /** unárna operácia (-x, negácia,...) */
+    AST_CALL,           /** volanie funkcie */
+    AST_IF,             /** podmienka IF */
+    AST_WHILE,          /** podmienka WHILE */
+    AST_RETURN,         /** return; */
+    AST_BLOCK,          /** blok */
+    AST_ASSIGN,         /** priradenie */
+    AST_VAR_DEF,        /** definícia premenných */
     AST_EXPR_STATEMENT, /** údaj o výraze */
-    AST_FUNCTION_DEF, /** definícia funkcie */
-    AST_PROGRAM, /** program */
-    AST_EXTENSION, // extension
-    AST_CLASS_DEF, // case class
-    AST_TYPE_ALIAS, // alias typu
-    AST_FOR, // cyklus FOR
-    AST_MEMBER, // pristup cez bodku
-    AST_MATCH, // match
-    AST_CASE, // vetva case
-    AST_LAMBDA, // lambda
-    AST_RANGE, // rozsah
-    AST_LIST_LIT, // zoznam
-    AST_INTERP, // interpolovany retazec
-    AST_CONVERT // prevod Int na Double
-}ASTNodeKind;
+    AST_FUNCTION_DEF,   /** definícia funkcie */
+    AST_PROGRAM,        /** program */
+    AST_EXTENSION,      // extension
+    AST_CLASS_DEF,      // case class
+    AST_TYPE_ALIAS,     // alias typu
+    AST_FOR,            // cyklus FOR
+    AST_MEMBER,         // pristup cez bodku
+    AST_MATCH,          // match
+    AST_CASE,           // vetva case
+    AST_LAMBDA,         // lambda
+    AST_RANGE,          // rozsah
+    AST_LIST_LIT,       // zoznam
+    AST_INTERP,         // interpolovany retazec
+    AST_CONVERT         // prevod Int na Double
+} ASTNodeKind;
 
 /**
  * @brief štruktúra očíslovania typov literálov
  */
-typedef enum{
-    LIT_INT, /** int */
-    LIT_DOUBLE, /** double */
-    LIT_STRING, /** char/char * */
+typedef enum {
+    LIT_INT,     /** int */
+    LIT_DOUBLE,  /** double */
+    LIT_STRING,  /** char/char * */
     LIT_BOOLEAN, /** bool */
-    LIT_UNIT /** void */
-}LiteralType;
+    LIT_UNIT     /** void */
+} LiteralType;
 
 /**
  * @brief druh volania
  */
-typedef enum{
+typedef enum {
     CALL_UNRESOLVED,  // nevyriesene
     CALL_FUNC,        // nasa funkcia
     CALL_BUILTIN,     // vstavana funkcia
@@ -93,51 +93,51 @@ typedef enum{
     CALL_LIST_INDEX,  // index zoznamu
     CALL_EXT_METHOD,  // rozsirujuca metoda
     CALL_LIST_METHOD  // metoda zoznamu
-}CallKind;
+} CallKind;
 
 /**
  * @brief druh identifikatora
  */
-typedef enum{
+typedef enum {
     ID_UNRESOLVED, // nevyriesene
     ID_VAR,        // premenna alebo parameter
     ID_FUNC_CALL,  // volanie funkcie bez zatvoriek
     ID_FUNC_REF    // funkcia ako hodnota
-}IdKind;
+} IdKind;
 
 /**
  * @brief druh pristupu cez bodku
  */
-typedef enum{
+typedef enum {
     MEM_UNRESOLVED, // nevyriesene
     MEM_BUILTIN,    // vstavany clen
     MEM_FIELD,      // atribut triedy
     MEM_EXT_METHOD, // rozsirujuca metoda
     MEM_CALLEE      // volana metoda
-}MemberKind;
+} MemberKind;
 
 /**
  * @brief druh vzoru vo vetve case
  */
-typedef enum{
+typedef enum {
     PAT_WILDCARD,   // case _
     PAT_LITERAL,    // literal
     PAT_TYPED,      // typ
     PAT_CONSTRUCTOR // konstruktor
-}PatternKind;
+} PatternKind;
 /**
  * @brief štruktúra, ako bude vyzerať samotný uzol v AST strome
  */
-typedef struct{
-    ASTNodeKind kind; 
+typedef struct {
+    ASTNodeKind kind;
     int line; // riadok
     Type *type;
-}ASTNode;
+} ASTNode;
 
 /**
  * @brief uzol literálov
  */
-typedef struct{
+typedef struct {
     ASTNode node;
     LiteralType litType;
     union {
@@ -145,18 +145,18 @@ typedef struct{
         double float_value;
         char *string_value;
         bool bool_value;
-    }litValue;
-}LiteralNode;
+    } litValue;
+} LiteralNode;
 
 /**
  * @brief uzol identifikátorov
  */
-typedef struct{
+typedef struct {
     ASTNode node;
     char *name;
     IdKind idKind; // (S)
     struct Symbol *symbol;
-}IDNode;
+} IDNode;
 
 /**
  * @brief uzol binárnych operácíi
@@ -166,173 +166,172 @@ typedef struct {
     TokenType operator;
     ASTNode *left;
     ASTNode *right;
-}BinaryNode;
+} BinaryNode;
 
 /**
  * @brief uzol unárnych operácíi
  */
-typedef struct{
+typedef struct {
     ASTNode node;
     TokenType operator;
     ASTNode *right;
-}UnaryNode;
+} UnaryNode;
 
 /**
  * @brief uzol volaní funkcíi
  */
-typedef struct{
+typedef struct {
     ASTNode node;
-    ASTNode *caller; /** ten, kto funkciu volá */
-    ASTNode **args; /** argumenty funkcie */
-    size_t argsCount; /** počet argumentov */
-    CallKind callKind; // (S)
+    ASTNode *caller;       /** ten, kto funkciu volá */
+    ASTNode **args;        /** argumenty funkcie */
+    size_t argsCount;      /** počet argumentov */
+    CallKind callKind;     // (S)
     struct Symbol *symbol; // (S)
-}CallNode;
-
+} CallNode;
 
 /**
  * @brief uzol if-podmienok
  */
-typedef struct{
+typedef struct {
     ASTNode node;
-    ASTNode *condition; /** podmienka */
+    ASTNode *condition;  /** podmienka */
     ASTNode *thenBranch; /** ak je splnená */
     ASTNode *elseBranch; /** ak nie je splnená */
-}IfNode;
+} IfNode;
 
 /**
  * @brief uzol while-podmienok
  */
-typedef struct{
+typedef struct {
     ASTNode node;
     ASTNode *condition;
     ASTNode *body;
-}WhileNode;
+} WhileNode;
 
 /**
  * @brief uzol bloku
  */
-typedef struct{
+typedef struct {
     ASTNode node;
-    ASTNode **commandOrder; /** pole príkazov v poradí bloku*/
+    ASTNode **commandOrder;   /** pole príkazov v poradí bloku*/
     size_t commandOrderCount; /** počet príkazov */
-}BlockNode;
+} BlockNode;
 
 /**
  * @brief štruktúra parametrov
  */
-typedef struct{
+typedef struct {
     char *name;
     Type *type;
     int line;
     struct Symbol *symbol;
-}Param;
+} Param;
 
 /**
  * @brief štruktúra zoznamu parametrov
  */
-typedef struct{
+typedef struct {
     Param *params;
     size_t params_count;
-}ParamList;
+} ParamList;
 
 /**
  * @brief uzol definícii premenných var & val
  */
-typedef struct{
+typedef struct {
     ASTNode node;
     ASTNode *init;
     char *name;
     bool isMutable; /** var->true, val->false */
     Type *declaredType;
     struct Symbol *symbol;
-}VarOrValNode;
+} VarOrValNode;
 
 /**
  * @brief uzol priradenia k premennej
  */
-typedef struct{
+typedef struct {
     ASTNode node;
     char *name;
     ASTNode *value;
     struct Symbol *symbol;
-}AssignNode;
+} AssignNode;
 
 /**
  * @brief uzol returnov
  */
-typedef struct{
+typedef struct {
     ASTNode node;
     ASTNode *returnValue; // NULL pri return bez hodnoty
-}ReturnNode;
+} ReturnNode;
 
 /**
  * @brief uzol samostatných príkazov
  */
-typedef struct{
+typedef struct {
     ASTNode node;
     ASTNode *expr;
-}LonelyExprNode;
+} LonelyExprNode;
 
 /**
  * @brief uzol deficícíi funkcíi
  */
-typedef struct{
+typedef struct {
     ASTNode node;
     char *name;
-    ParamList *paramList; /** zoznam parametrov */
+    ParamList *paramList;  /** zoznam parametrov */
     size_t paramListCount; // 0 = def f: Int, 1 = def f()
     Type *returnType;
-    bool isMain; /** či je funkcia @main */
+    bool isMain;   /** či je funkcia @main */
     ASTNode *body; /** telo funkcie */
     struct Symbol *symbol;
     struct Symbol **locals; // (S) lokalne premenne
-    size_t localsCount; // (S)
-}DefFuncNode;
+    size_t localsCount;     // (S)
+} DefFuncNode;
 
 /**
  * @brief uzol koreňa celého programu
  */
-typedef struct{
+typedef struct {
     ASTNode node;
     ASTNode **items; // definicie v poradi zo zdrojaku
     size_t itemsCount;
-}ProgramNode;
+} ProgramNode;
 
 /**
  * @brief uzol extension
  */
-typedef struct{
+typedef struct {
     ASTNode node;
     Param receiver;    // prijemca
     ASTNode **methods; // metody
     size_t methodsCount;
-}ExtensionNode;
+} ExtensionNode;
 
 /**
  * @brief uzol case class
  */
-typedef struct{
+typedef struct {
     ASTNode node;
     char *name;
     ParamList fields;      // atributy
     struct Symbol *symbol; // (S)
-}ClassDefNode;
+} ClassDefNode;
 
 /**
  * @brief uzol aliasu typu
  */
-typedef struct{
+typedef struct {
     ASTNode node;
     char *name;
     Type *aliased;         // typ aliasu
     struct Symbol *symbol; // (S)
-}TypeAliasNode;
+} TypeAliasNode;
 
 /**
  * @brief uzol for cyklu
  */
-typedef struct{
+typedef struct {
     ASTNode node;
     char *varName;    // riadiaca premenna
     ASTNode *source;  // rozsah alebo zoznam
@@ -340,33 +339,33 @@ typedef struct{
     size_t guardsCount;
     ASTNode *body;
     struct Symbol *symbol; // (S)
-}ForNode;
+} ForNode;
 
 /**
  * @brief uzol pristupu cez bodku
  */
-typedef struct{
+typedef struct {
     ASTNode node;
     ASTNode *object;       // vyraz pred bodkou
     char *name;            // meno za bodkou
     MemberKind memberKind; // (S)
     struct Symbol *symbol; // (S)
-}MemberNode;
+} MemberNode;
 
 /**
  * @brief uzol match
  */
-typedef struct{
+typedef struct {
     ASTNode node;
     ASTNode *subject; // porovnavany vyraz
     ASTNode **cases;  // vetvy
     size_t casesCount;
-}MatchNode;
+} MatchNode;
 
 /**
  * @brief uzol vetvy case
  */
-typedef struct{
+typedef struct {
     ASTNode node;
     PatternKind patternKind;
     ASTNode *literal;           // PAT_LITERAL
@@ -376,53 +375,53 @@ typedef struct{
     struct Symbol *classSymbol; // (S)
     ASTNode *guard;             // straz alebo NULL
     ASTNode *body;              // telo
-}CaseNode;
+} CaseNode;
 
 /**
  * @brief uzol lambdy
  */
-typedef struct{
+typedef struct {
     ASTNode node;
     ParamList params;       // parametre
     ASTNode *body;          // telo
     struct Symbol *symbol;  // (S)
     struct Symbol **locals; // (S) lokalne premenne
     size_t localsCount;     // (S)
-}LambdaNode;
+} LambdaNode;
 
 /**
  * @brief uzol rozsahu
  */
-typedef struct{
+typedef struct {
     ASTNode node;
     ASTNode *from;
     ASTNode *to;
     ASTNode *step;  // NULL = 1
     bool inclusive; // to->true, until->false
-}RangeNode;
+} RangeNode;
 
 /**
  * @brief uzol zoznamu
  */
-typedef struct{
+typedef struct {
     ASTNode node;
     ASTNode **elems; // prvky
     size_t elemsCount;
-}ListLitNode;
+} ListLitNode;
 
 /**
  * @brief uzol interpolovaneho retazca
  */
-typedef struct{
+typedef struct {
     ASTNode node;
     ASTNode **parts; // casti retazca
     size_t partsCount;
-}InterpNode;
+} InterpNode;
 
 /**
  * @brief uzol prevodu Int na Double
  */
-typedef struct{
+typedef struct {
     ASTNode node;
     ASTNode *operand; // vyraz Int
-}ConvertNode;
+} ConvertNode;
