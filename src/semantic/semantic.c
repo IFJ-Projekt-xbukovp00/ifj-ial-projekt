@@ -1722,6 +1722,11 @@ Type *getFieldType(Symbol *classSymbol, const char *name){
 
 void defineCaseBinder(Symtable *table, BodyContext *context, Param *binder, Type *type,
                       ErrorCode *error){
+    // väzba _ hodnotu ignoruje, premenna nevznikne
+    if (strcmp(binder->name, "_") == 0){
+        return;
+    }
+
     // premenna zo vzoru je nemodifikovatelna, plati len vo vetve
     binder->symbol = defineSymbol(table, binder->name, SYM_VARIABLE, type, false, error);
 

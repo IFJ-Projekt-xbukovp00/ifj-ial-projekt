@@ -607,7 +607,7 @@ void checkConstructorArguments(Symtable *table, BodyContext *context, CallNode *
 Type *getFieldType(Symbol *classSymbol, const char *name);
 
 /**
- * @brief funkcia na definovanie premennej zo vzoru vo vetve case
+ * @brief funkcia na definovanie premennej zo vzoru vo vetve case (väzba _ sa preskočí)
  * @param table je tabuľka symbolov
  * @param context je kontext kontrolovanej funkcie
  * @param binder je väzba zo vzoru (meno a typ)

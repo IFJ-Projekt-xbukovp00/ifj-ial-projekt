@@ -2296,6 +2296,32 @@ void testMatchBinderCount(void) {
     CHECK(analyzeMatchFunction(match) == ERR_PARAMS);
 }
 
+void testMatchUnderscoreBinders(void) {
+    /* case Point(_, _) => "p" ; case Point(_, b) => toStr(b) -> _ nevytvorí premennú */
+    ASTNode *match = newMatch(newId("value"));
+    CaseNode *ignored = addCase(match, PAT_CONSTRUCTOR, newStringLiteral("p"));
+    ignored->className = "Point";
+    addCtorBinder(ignored, "_");
+    addCtorBinder(ignored, "_");
+    CaseNode *partial = addCase(match, PAT_CONSTRUCTOR, callWithArg("toStr", newId("b")));
+    partial->className = "Point";
+    addCtorBinder(partial, "_");
+    addCtorBinder(partial, "b");
+    addCase(match, PAT_WILDCARD, newStringLiteral("x"));
+    CHECK(analyzeMatchFunction(match) == ERR_OK);
+}
+
+void testMatchUnderscoreNotVisible(void) {
+    /* case Point(_, b) => _ -> _ nie je premenná */
+    ASTNode *match = newMatch(newId("value"));
+    CaseNode *point = addCase(match, PAT_CONSTRUCTOR, newId("_"));
+    point->className = "Point";
+    addCtorBinder(point, "_");
+    addCtorBinder(point, "b");
+    addCase(match, PAT_WILDCARD, newStringLiteral("x"));
+    CHECK(analyzeMatchFunction(match) == ERR_UNDEF);
+}
+
 void testMatchTypedUnknownType(void) {
     /* case n: Foo => "a" */
     ASTNode *match = newMatch(newId("value"));
@@ -3197,6 +3223,8 @@ int main(void) {
     testMatchGuardNotBool();
     testMatchUnknownClass();
     testMatchBinderCount();
+    testMatchUnderscoreBinders();
+    testMatchUnderscoreNotVisible();
     testMatchTypedUnknownType();
     testMatchTypedNotMember();
     testMatchLiteralWrongType();
