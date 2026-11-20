@@ -98,6 +98,20 @@ int newLabel(CodeGen *gen);
 DefFuncNode *findMain(ProgramNode *prog);
 
 /**
+ * @brief funkcia na vygenerovanie vstavanej funkcie print s literalom
+ * @param gen je kontext generatora
+ * @param call je uzol volania print
+ */
+void genPrint(CodeGen *gen, CallNode *call);
+
+/**
+ * @brief funkcia na vygenerovanie volania funkcie
+ * @param gen je kontext generatora
+ * @param call je uzol volania
+ */
+void genCall(CodeGen *gen, CallNode *call);
+
+/**
  * @brief funkcia na vygenerovanie vsetkych prikazov bloku
  * @param gen je kontext generatora
  * @param block je generovany blok

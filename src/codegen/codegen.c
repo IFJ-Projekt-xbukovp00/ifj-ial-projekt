@@ -31,6 +31,7 @@
 #include "error.h"
 
 #include <stdarg.h>
+#include <string.h>
 
 void emit(CodeGen *gen, const char *format, ...) {
     va_list args;
@@ -99,6 +100,38 @@ DefFuncNode *findMain(ProgramNode *prog) {
     return NULL;
 }
 
+void genPrint(CodeGen *gen, CallNode *call) {
+    ASTNode *arg = call->args[0];
+
+    if (arg->kind != AST_LIT) {
+        return;
+    }
+
+    LiteralNode *literal = (LiteralNode *)arg;
+
+    // () sa vypisuje ako retazec "()"
+    if (literal->litType == LIT_UNIT) {
+        emit(gen, "WRITE string@()\n");
+        return;
+    }
+
+    emit(gen, "WRITE ");
+    emitLiteral(gen, literal);
+    emit(gen, "\n");
+}
+
+void genCall(CodeGen *gen, CallNode *call) {
+    if (call->callKind != CALL_BUILTIN || call->caller->kind != AST_ID) {
+        return;
+    }
+
+    const char *name = ((IDNode *)call->caller)->name;
+
+    if (strcmp(name, "print") == 0) {
+        genPrint(gen, call);
+    }
+}
+
 void genBlock(CodeGen *gen, BlockNode *block) {
     for (size_t commandIndex = 0; commandIndex < block->commandOrderCount; commandIndex++) {
         genStatement(gen, block->commandOrder[commandIndex]);
@@ -114,6 +147,8 @@ void genStatement(CodeGen *gen, ASTNode *node) {
         genBlock(gen, (BlockNode *)node);
     } else if (node->kind == AST_EXPR_STATEMENT) {
         genStatement(gen, ((LonelyExprNode *)node)->expr);
+    } else if (node->kind == AST_CALL) {
+        genCall(gen, (CallNode *)node);
     }
 }
 
