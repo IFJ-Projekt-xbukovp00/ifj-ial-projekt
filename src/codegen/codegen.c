@@ -42,6 +42,24 @@ void emit(FILE *out, const char *format, ...) {
 
 void emitHeader(FILE *out) { emit(out, ".IFJcode26\n"); }
 
+void emitLiteral(FILE *out, LiteralNode *literal) {
+    if (literal->litType == LIT_INT) {
+        emit(out, "int@%lld", literal->litValue.int_value);
+    } else if (literal->litType == LIT_DOUBLE) {
+        // desatinne cislo sa zapisuje vo formate %a
+        emit(out, "float@%a", literal->litValue.float_value);
+    } else if (literal->litType == LIT_BOOLEAN) {
+        if (literal->litValue.bool_value) {
+            emit(out, "bool@true");
+        } else {
+            emit(out, "bool@false");
+        }
+    } else if (literal->litType == LIT_UNIT) {
+        // hodnota () je za behu nil
+        emit(out, "nil@nil");
+    }
+}
+
 int codegenGenerate(ProgramNode *prog, FILE *out) {
     (void)prog;
 

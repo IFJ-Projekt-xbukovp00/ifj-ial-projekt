@@ -53,3 +53,10 @@ void emit(FILE *out, const char *format, ...);
  * @param out je vystupny subor
  */
 void emitHeader(FILE *out);
+
+/**
+ * @brief funkcia na vypis literalu ako konstanty (int@5, float@0x1p+0, ...)
+ * @param out je vystupny subor
+ * @param literal je vypisovany literal
+ */
+void emitLiteral(FILE *out, LiteralNode *literal);
