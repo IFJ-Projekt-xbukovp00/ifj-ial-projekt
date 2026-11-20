@@ -132,6 +132,22 @@ void genCall(CodeGen *gen, CallNode *call) {
     }
 }
 
+void genBinary(CodeGen *gen, BinaryNode *binary) {
+    // operandy sa vyhodnocuju zlava doprava, pravy je na vrchu zasobnika
+    genExpr(gen, binary->left);
+    genExpr(gen, binary->right);
+
+    if (binary->operator == TOK_PLUS) {
+        emit(gen, "ADDS\n");
+    } else if (binary->operator == TOK_MINUS) {
+        emit(gen, "SUBS\n");
+    } else if (binary->operator == TOK_MULTIPLY) {
+        emit(gen, "MULS\n");
+    } else if (binary->operator == TOK_DIVIDE) {
+        emit(gen, "IDIVS\n");
+    }
+}
+
 void genExpr(CodeGen *gen, ASTNode *node) {
     // kazdy vyraz necha na zasobniku presne jednu hodnotu
     if (node->kind == AST_LIT) {
@@ -140,6 +156,8 @@ void genExpr(CodeGen *gen, ASTNode *node) {
         emit(gen, "\n");
     } else if (node->kind == AST_ID) {
         emit(gen, "PUSHS GF@%s\n", ((IDNode *)node)->name);
+    } else if (node->kind == AST_BINARY) {
+        genBinary(gen, (BinaryNode *)node);
     }
 }
 

@@ -112,6 +112,13 @@ void genPrint(CodeGen *gen, CallNode *call);
 void genCall(CodeGen *gen, CallNode *call);
 
 /**
+ * @brief funkcia na vygenerovanie binarnej operacie
+ * @param gen je kontext generatora
+ * @param binary je uzol binarnej operacie
+ */
+void genBinary(CodeGen *gen, BinaryNode *binary);
+
+/**
  * @brief funkcia na vygenerovanie vyrazu, vysledok vyrazu ostane na datovom zasobniku
  * @param gen je kontext generatora
  * @param node je generovany vyraz
