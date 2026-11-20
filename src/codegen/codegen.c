@@ -162,6 +162,17 @@ void genBinary(CodeGen *gen, BinaryNode *binary) {
         emit(gen, "GTS\n");
     } else if (binary->operator == TOK_EQUAL) {
         emit(gen, "EQS\n");
+    } else if (binary->operator == TOK_LESS_EQUAL) {
+        // a <= b je to iste ako !(a > b)
+        emit(gen, "GTS\n");
+        emit(gen, "NOTS\n");
+    } else if (binary->operator == TOK_GREATER_EQUAL) {
+        // a >= b je to iste ako !(a < b)
+        emit(gen, "LTS\n");
+        emit(gen, "NOTS\n");
+    } else if (binary->operator == TOK_NOT_EQUAL) {
+        emit(gen, "EQS\n");
+        emit(gen, "NOTS\n");
     }
 }
 
