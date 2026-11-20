@@ -63,6 +63,12 @@ void emit(CodeGen *gen, const char *format, ...);
 void emitHeader(CodeGen *gen);
 
 /**
+ * @brief funkcia na definovanie pomocnych premennych %t0 a %t1
+ * @param gen je kontext generatora
+ */
+void emitHelperVars(CodeGen *gen);
+
+/**
  * @brief funkcia na vypis retazcovej konstanty, specialne znaky sa escapuju ako \ddd
  * @param gen je kontext generatora
  * @param text je vypisovany retazec

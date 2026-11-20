@@ -43,6 +43,11 @@ void emit(CodeGen *gen, const char *format, ...) {
 
 void emitHeader(CodeGen *gen) { emit(gen, ".IFJcode26\n"); }
 
+void emitHelperVars(CodeGen *gen) {
+    emit(gen, "DEFVAR GF@%%t0\n");
+    emit(gen, "DEFVAR GF@%%t1\n");
+}
+
 void emitString(CodeGen *gen, const char *text) {
     emit(gen, "string@");
 
@@ -137,7 +142,13 @@ void genBinary(CodeGen *gen, BinaryNode *binary) {
     genExpr(gen, binary->left);
     genExpr(gen, binary->right);
 
-    if (binary->operator == TOK_PLUS) {
+    if (binary->operator == TOK_PLUS && binary->node.type->kind == TY_STRING) {
+        // CONCAT nema zasobnikovu verziu, operandy sa vyberu do pomocnych premennych
+        emit(gen, "POPS GF@%%t1\n");
+        emit(gen, "POPS GF@%%t0\n");
+        emit(gen, "CONCAT GF@%%t0 GF@%%t0 GF@%%t1\n");
+        emit(gen, "PUSHS GF@%%t0\n");
+    } else if (binary->operator == TOK_PLUS) {
         emit(gen, "ADDS\n");
     } else if (binary->operator == TOK_MINUS) {
         emit(gen, "SUBS\n");
@@ -224,6 +235,7 @@ int codegenGenerate(ProgramNode *prog, FILE *out) {
     }
 
     emitHeader(&gen);
+    emitHelperVars(&gen);
 
     // telo main sa vykona priamo v globalnom ramci
     genStatement(&gen, mainFunction->body);
