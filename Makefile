@@ -54,6 +54,8 @@ UNIT_TYPES     := tests/unit/test_types
 UNIT_TYPES_OBJ := src/common/types.o src/common/error.o
 UNIT_SEMANTIC_BODY     := tests/unit/test_semantic_body
 UNIT_SEMANTIC_BODY_OBJ := $(UNIT_BUILTINS_OBJ)
+UNIT_CODEGEN     := tests/unit/test_codegen
+UNIT_CODEGEN_OBJ := src/codegen/codegen.o src/common/dynstr.o $(UNIT_BUILTINS_OBJ)
 
 PACK_DIR := pack
 PACK_ZIP := xbukovp00.zip
@@ -108,14 +110,18 @@ $(UNIT_TYPES): tests/unit/test_types.c $(UNIT_TYPES_OBJ)
 $(UNIT_SEMANTIC_BODY): tests/unit/test_semantic_body.c $(UNIT_SEMANTIC_BODY_OBJ)
 	$(CC) $(CFLAGS) -o $@ $^
 
+$(UNIT_CODEGEN): tests/unit/test_codegen.c $(UNIT_CODEGEN_OBJ)
+	$(CC) $(CFLAGS) -o $@ $^
+
 test-unit: $(UNIT_BST) $(UNIT_SYMTABLE) $(UNIT_BUILTINS) $(UNIT_SEMANTIC_GLOBAL) $(UNIT_TYPES) \
-           $(UNIT_SEMANTIC_BODY)
+           $(UNIT_SEMANTIC_BODY) $(UNIT_CODEGEN)
 	./$(UNIT_BST)
 	./$(UNIT_SYMTABLE)
 	./$(UNIT_BUILTINS)
 	./$(UNIT_SEMANTIC_GLOBAL)
 	./$(UNIT_TYPES)
 	./$(UNIT_SEMANTIC_BODY)
+	IC26INT=$(IC26INT) ./$(UNIT_CODEGEN)
 
 pack:
 	rm -rf $(PACK_DIR) $(PACK_ZIP)
@@ -132,5 +138,5 @@ pack:
 
 clean:
 	rm -f $(TARGET) $(OBJ) $(LEXDUMP) $(UNIT_BST) $(UNIT_SYMTABLE) $(UNIT_BUILTINS) \
-	      $(UNIT_SEMANTIC_GLOBAL) $(UNIT_TYPES) $(UNIT_SEMANTIC_BODY)
+	      $(UNIT_SEMANTIC_GLOBAL) $(UNIT_TYPES) $(UNIT_SEMANTIC_BODY) $(UNIT_CODEGEN)
 	rm -rf docs/doxygen $(PACK_DIR) $(PACK_ZIP) tests/tmp
