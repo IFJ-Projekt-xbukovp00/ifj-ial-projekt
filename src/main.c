@@ -27,6 +27,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "codegen.h"
 #include "error.h"
 #include "parser.h"
 #include "scanner.h"
@@ -43,11 +44,9 @@ int main(void) {
     int result = parser_parse();
     scanner_free();
 
-    // TODO: Parser not implemented yet
-    /*
+    // parser AST nevracia, semantika a generovanie bezia len ked koren programu existuje
     ASTNode *program = NULL;
-    int result = parser_parse(&program);
-    if (result != ERR_OK){
+    if (result != ERR_OK || program == NULL) {
         return result;
     }
 
@@ -57,9 +56,13 @@ int main(void) {
     semanticAnalyze(program, &table, &semanticError);
     result = semanticError;
 
+    // generuje sa pred symtableFree, AST ukazuje na symboly z tabulky
+    if (result == ERR_OK) {
+        result = codegenGenerate((ProgramNode *)program, stdout);
+    }
+
     symtableFree(&table);
     type_free_all();
-    */
 
     return result;
 }
