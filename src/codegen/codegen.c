@@ -156,6 +156,12 @@ void genBinary(CodeGen *gen, BinaryNode *binary) {
         } else {
             emit(gen, "IDIVS\n");
         }
+    } else if (binary->operator == TOK_LESS) {
+        emit(gen, "LTS\n");
+    } else if (binary->operator == TOK_GREATER) {
+        emit(gen, "GTS\n");
+    } else if (binary->operator == TOK_EQUAL) {
+        emit(gen, "EQS\n");
     }
 }
 
