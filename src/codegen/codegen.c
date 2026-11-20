@@ -132,6 +132,16 @@ void genCall(CodeGen *gen, CallNode *call) {
     }
 }
 
+void genVarDef(CodeGen *gen, VarOrValNode *varDef) {
+    emit(gen, "DEFVAR GF@%s\n", varDef->name);
+
+    if (varDef->init->kind == AST_LIT) {
+        emit(gen, "MOVE GF@%s ", varDef->name);
+        emitLiteral(gen, (LiteralNode *)varDef->init);
+        emit(gen, "\n");
+    }
+}
+
 void genBlock(CodeGen *gen, BlockNode *block) {
     for (size_t commandIndex = 0; commandIndex < block->commandOrderCount; commandIndex++) {
         genStatement(gen, block->commandOrder[commandIndex]);
@@ -147,6 +157,8 @@ void genStatement(CodeGen *gen, ASTNode *node) {
         genBlock(gen, (BlockNode *)node);
     } else if (node->kind == AST_EXPR_STATEMENT) {
         genStatement(gen, ((LonelyExprNode *)node)->expr);
+    } else if (node->kind == AST_VAR_DEF) {
+        genVarDef(gen, (VarOrValNode *)node);
     } else if (node->kind == AST_CALL) {
         genCall(gen, (CallNode *)node);
     }

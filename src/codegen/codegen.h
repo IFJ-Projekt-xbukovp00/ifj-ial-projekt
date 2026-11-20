@@ -112,6 +112,13 @@ void genPrint(CodeGen *gen, CallNode *call);
 void genCall(CodeGen *gen, CallNode *call);
 
 /**
+ * @brief funkcia na vygenerovanie definicie premennej (val aj var)
+ * @param gen je kontext generatora
+ * @param varDef je uzol definicie
+ */
+void genVarDef(CodeGen *gen, VarOrValNode *varDef);
+
+/**
  * @brief funkcia na vygenerovanie vsetkych prikazov bloku
  * @param gen je kontext generatora
  * @param block je generovany blok
