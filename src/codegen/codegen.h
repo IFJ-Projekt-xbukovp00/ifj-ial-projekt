@@ -89,3 +89,24 @@ void initCodeGen(CodeGen *gen, FILE *out);
  * @return nove cislo navestia
  */
 int newLabel(CodeGen *gen);
+
+/**
+ * @brief funkcia na najdenie funkcie @main medzi definiciami programu
+ * @param prog je koren AST
+ * @return uzol funkcie main, alebo NULL ak v programe nie je
+ */
+DefFuncNode *findMain(ProgramNode *prog);
+
+/**
+ * @brief funkcia na vygenerovanie vsetkych prikazov bloku
+ * @param gen je kontext generatora
+ * @param block je generovany blok
+ */
+void genBlock(CodeGen *gen, BlockNode *block);
+
+/**
+ * @brief funkcia na vygenerovanie jedneho prikazu
+ * @param gen je kontext generatora
+ * @param node je generovany prikaz (moze byt NULL)
+ */
+void genStatement(CodeGen *gen, ASTNode *node);

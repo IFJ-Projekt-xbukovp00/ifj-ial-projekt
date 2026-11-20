@@ -87,12 +87,50 @@ int newLabel(CodeGen *gen) {
     return gen->labelCounter;
 }
 
-int codegenGenerate(ProgramNode *prog, FILE *out) {
-    (void)prog;
+DefFuncNode *findMain(ProgramNode *prog) {
+    for (size_t itemIndex = 0; itemIndex < prog->itemsCount; itemIndex++) {
+        ASTNode *item = prog->items[itemIndex];
 
+        if (item->kind == AST_FUNCTION_DEF && ((DefFuncNode *)item)->isMain) {
+            return (DefFuncNode *)item;
+        }
+    }
+
+    return NULL;
+}
+
+void genBlock(CodeGen *gen, BlockNode *block) {
+    for (size_t commandIndex = 0; commandIndex < block->commandOrderCount; commandIndex++) {
+        genStatement(gen, block->commandOrder[commandIndex]);
+    }
+}
+
+void genStatement(CodeGen *gen, ASTNode *node) {
+    if (node == NULL) {
+        return;
+    }
+
+    if (node->kind == AST_BLOCK) {
+        genBlock(gen, (BlockNode *)node);
+    } else if (node->kind == AST_EXPR_STATEMENT) {
+        genStatement(gen, ((LonelyExprNode *)node)->expr);
+    }
+}
+
+int codegenGenerate(ProgramNode *prog, FILE *out) {
     CodeGen gen;
     initCodeGen(&gen, out);
 
+    DefFuncNode *mainFunction = findMain(prog);
+    if (mainFunction == NULL) {
+        return ERR_INTERNAL;
+    }
+
     emitHeader(&gen);
+
+    // telo main sa vykona priamo v globalnom ramci
+    genStatement(&gen, mainFunction->body);
+    emit(&gen, "EXIT int@0\n");
+
     return ERR_OK;
 }
