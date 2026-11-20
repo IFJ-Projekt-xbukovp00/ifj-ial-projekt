@@ -198,6 +198,11 @@ void genVarDef(CodeGen *gen, VarOrValNode *varDef) {
     emit(gen, "POPS GF@%s\n", varDef->name);
 }
 
+void genAssign(CodeGen *gen, AssignNode *assign) {
+    genExpr(gen, assign->value);
+    emit(gen, "POPS GF@%s\n", assign->name);
+}
+
 void genBlock(CodeGen *gen, BlockNode *block) {
     for (size_t commandIndex = 0; commandIndex < block->commandOrderCount; commandIndex++) {
         genStatement(gen, block->commandOrder[commandIndex]);
@@ -215,6 +220,8 @@ void genStatement(CodeGen *gen, ASTNode *node) {
         genStatement(gen, ((LonelyExprNode *)node)->expr);
     } else if (node->kind == AST_VAR_DEF) {
         genVarDef(gen, (VarOrValNode *)node);
+    } else if (node->kind == AST_ASSIGN) {
+        genAssign(gen, (AssignNode *)node);
     } else if (node->kind == AST_CALL) {
         genCall(gen, (CallNode *)node);
     }

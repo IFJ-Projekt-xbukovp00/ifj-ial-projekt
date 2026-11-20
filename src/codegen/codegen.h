@@ -146,6 +146,13 @@ void genExpr(CodeGen *gen, ASTNode *node);
 void genVarDef(CodeGen *gen, VarOrValNode *varDef);
 
 /**
+ * @brief funkcia na vygenerovanie priradenia do premennej
+ * @param gen je kontext generatora
+ * @param assign je uzol priradenia
+ */
+void genAssign(CodeGen *gen, AssignNode *assign);
+
+/**
  * @brief funkcia na vygenerovanie vsetkych prikazov bloku
  * @param gen je kontext generatora
  * @param block je generovany blok
