@@ -160,6 +160,13 @@ void genAssign(CodeGen *gen, AssignNode *assign);
 void genIf(CodeGen *gen, IfNode *ifNode);
 
 /**
+ * @brief funkcia na vygenerovanie cyklu while
+ * @param gen je kontext generatora
+ * @param whileNode je uzol cyklu
+ */
+void genWhile(CodeGen *gen, WhileNode *whileNode);
+
+/**
  * @brief funkcia na vygenerovanie vsetkych prikazov bloku
  * @param gen je kontext generatora
  * @param block je generovany blok

@@ -237,6 +237,20 @@ void genIf(CodeGen *gen, IfNode *ifNode) {
     emit(gen, "LABEL L$%d\n", endLabel);
 }
 
+void genWhile(CodeGen *gen, WhileNode *whileNode) {
+    int startLabel = newLabel(gen);
+    int endLabel = newLabel(gen);
+
+    emit(gen, "LABEL L$%d\n", startLabel);
+    genExpr(gen, whileNode->condition);
+    emit(gen, "PUSHS bool@false\n");
+    emit(gen, "JUMPIFEQS L$%d\n", endLabel);
+
+    genStatement(gen, whileNode->body);
+    emit(gen, "JUMP L$%d\n", startLabel);
+    emit(gen, "LABEL L$%d\n", endLabel);
+}
+
 void genBlock(CodeGen *gen, BlockNode *block) {
     for (size_t commandIndex = 0; commandIndex < block->commandOrderCount; commandIndex++) {
         genStatement(gen, block->commandOrder[commandIndex]);
@@ -258,6 +272,8 @@ void genStatement(CodeGen *gen, ASTNode *node) {
         genAssign(gen, (AssignNode *)node);
     } else if (node->kind == AST_IF) {
         genIf(gen, (IfNode *)node);
+    } else if (node->kind == AST_WHILE) {
+        genWhile(gen, (WhileNode *)node);
     } else if (node->kind == AST_CALL) {
         genCall(gen, (CallNode *)node);
     }
