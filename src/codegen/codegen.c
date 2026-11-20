@@ -220,6 +220,23 @@ void genAssign(CodeGen *gen, AssignNode *assign) {
     emit(gen, "POPS GF@%s\n", assign->name);
 }
 
+void genIf(CodeGen *gen, IfNode *ifNode) {
+    int elseLabel = newLabel(gen);
+    int endLabel = newLabel(gen);
+
+    // pri nepravdivej podmienke sa skace na else vetvu
+    genExpr(gen, ifNode->condition);
+    emit(gen, "PUSHS bool@false\n");
+    emit(gen, "JUMPIFEQS L$%d\n", elseLabel);
+
+    genStatement(gen, ifNode->thenBranch);
+    emit(gen, "JUMP L$%d\n", endLabel);
+
+    emit(gen, "LABEL L$%d\n", elseLabel);
+    genStatement(gen, ifNode->elseBranch);
+    emit(gen, "LABEL L$%d\n", endLabel);
+}
+
 void genBlock(CodeGen *gen, BlockNode *block) {
     for (size_t commandIndex = 0; commandIndex < block->commandOrderCount; commandIndex++) {
         genStatement(gen, block->commandOrder[commandIndex]);
@@ -239,6 +256,8 @@ void genStatement(CodeGen *gen, ASTNode *node) {
         genVarDef(gen, (VarOrValNode *)node);
     } else if (node->kind == AST_ASSIGN) {
         genAssign(gen, (AssignNode *)node);
+    } else if (node->kind == AST_IF) {
+        genIf(gen, (IfNode *)node);
     } else if (node->kind == AST_CALL) {
         genCall(gen, (CallNode *)node);
     }

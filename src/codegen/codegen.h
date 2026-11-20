@@ -153,6 +153,13 @@ void genVarDef(CodeGen *gen, VarOrValNode *varDef);
 void genAssign(CodeGen *gen, AssignNode *assign);
 
 /**
+ * @brief funkcia na vygenerovanie podmieneneho prikazu if/else
+ * @param gen je kontext generatora
+ * @param ifNode je uzol podmienky
+ */
+void genIf(CodeGen *gen, IfNode *ifNode);
+
+/**
  * @brief funkcia na vygenerovanie vsetkych prikazov bloku
  * @param gen je kontext generatora
  * @param block je generovany blok
