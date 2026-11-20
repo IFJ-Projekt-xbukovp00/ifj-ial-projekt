@@ -144,7 +144,12 @@ void genBinary(CodeGen *gen, BinaryNode *binary) {
     } else if (binary->operator == TOK_MULTIPLY) {
         emit(gen, "MULS\n");
     } else if (binary->operator == TOK_DIVIDE) {
-        emit(gen, "IDIVS\n");
+        // delenie Double je desatinne, delenie Int celociselne
+        if (binary->node.type->kind == TY_DOUBLE) {
+            emit(gen, "DIVS\n");
+        } else {
+            emit(gen, "IDIVS\n");
+        }
     }
 }
 
@@ -153,7 +158,11 @@ void genUnary(CodeGen *gen, UnaryNode *unary) {
 
     // -x sa pocita ako x * -1
     if (unary->operator == TOK_MINUS) {
-        emit(gen, "PUSHS int@-1\n");
+        if (unary->node.type->kind == TY_DOUBLE) {
+            emit(gen, "PUSHS float@%a\n", -1.0);
+        } else {
+            emit(gen, "PUSHS int@-1\n");
+        }
         emit(gen, "MULS\n");
     }
 }
@@ -170,6 +179,10 @@ void genExpr(CodeGen *gen, ASTNode *node) {
         genBinary(gen, (BinaryNode *)node);
     } else if (node->kind == AST_UNARY) {
         genUnary(gen, (UnaryNode *)node);
+    } else if (node->kind == AST_CONVERT) {
+        // implicitny prevod Int na Double, ktory vlozila semantika
+        genExpr(gen, ((ConvertNode *)node)->operand);
+        emit(gen, "INT2FLOATS\n");
     }
 }
 
