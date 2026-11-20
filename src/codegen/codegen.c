@@ -42,12 +42,29 @@ void emit(FILE *out, const char *format, ...) {
 
 void emitHeader(FILE *out) { emit(out, ".IFJcode26\n"); }
 
+void emitString(FILE *out, const char *text) {
+    emit(out, "string@");
+
+    for (size_t charIndex = 0; text[charIndex] != '\0'; charIndex++) {
+        unsigned char currentChar = (unsigned char)text[charIndex];
+
+        // biele znaky, # a \ sa musia zapisat ako \ddd
+        if (currentChar <= 32 || currentChar == 35 || currentChar == 92) {
+            emit(out, "\\%03d", currentChar);
+        } else {
+            emit(out, "%c", currentChar);
+        }
+    }
+}
+
 void emitLiteral(FILE *out, LiteralNode *literal) {
     if (literal->litType == LIT_INT) {
         emit(out, "int@%lld", literal->litValue.int_value);
     } else if (literal->litType == LIT_DOUBLE) {
         // desatinne cislo sa zapisuje vo formate %a
         emit(out, "float@%a", literal->litValue.float_value);
+    } else if (literal->litType == LIT_STRING) {
+        emitString(out, literal->litValue.string_value);
     } else if (literal->litType == LIT_BOOLEAN) {
         if (literal->litValue.bool_value) {
             emit(out, "bool@true");

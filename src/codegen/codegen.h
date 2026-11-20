@@ -55,6 +55,13 @@ void emit(FILE *out, const char *format, ...);
 void emitHeader(FILE *out);
 
 /**
+ * @brief funkcia na vypis retazcovej konstanty, specialne znaky sa escapuju ako \ddd
+ * @param out je vystupny subor
+ * @param text je vypisovany retazec
+ */
+void emitString(FILE *out, const char *text);
+
+/**
  * @brief funkcia na vypis literalu ako konstanty (int@5, float@0x1p+0, ...)
  * @param out je vystupny subor
  * @param literal je vypisovany literal
