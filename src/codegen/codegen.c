@@ -28,5 +28,10 @@
  */
 
 #include "codegen.h"
+#include "error.h"
 
-/* TODO: implementácia */
+int codegenGenerate(ProgramNode *prog, FILE *out) {
+    (void)prog;
+    (void)out;
+    return ERR_OK;
+}

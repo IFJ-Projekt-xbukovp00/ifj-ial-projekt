@@ -29,4 +29,14 @@
 
 #pragma once
 
-/* TODO: rozhranie generátora */
+#include "ast.h"
+
+#include <stdio.h>
+
+/**
+ * @brief funkcia na vygenerovanie programu v jazyku IFJcode26
+ * @param prog je koren AST, ktory uz presiel semantickou analyzou
+ * @param out je vystupny subor, kam sa zapisuje kod
+ * @return 0 ak generovanie prebehlo v poriadku, inak kod chyby
+ */
+int codegenGenerate(ProgramNode *prog, FILE *out);
