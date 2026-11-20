@@ -40,3 +40,16 @@
  * @return 0 ak generovanie prebehlo v poriadku, inak kod chyby
  */
 int codegenGenerate(ProgramNode *prog, FILE *out);
+
+/**
+ * @brief funkcia na vypis jednej casti kodu, formatuje sa ako pri printf
+ * @param out je vystupny subor
+ * @param format je formatovaci retazec
+ */
+void emit(FILE *out, const char *format, ...);
+
+/**
+ * @brief funkcia na vypis uvodneho riadku programu
+ * @param out je vystupny subor
+ */
+void emitHeader(FILE *out);

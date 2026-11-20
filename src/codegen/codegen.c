@@ -30,8 +30,21 @@
 #include "codegen.h"
 #include "error.h"
 
+#include <stdarg.h>
+
+void emit(FILE *out, const char *format, ...) {
+    va_list args;
+
+    va_start(args, format);
+    vfprintf(out, format, args);
+    va_end(args);
+}
+
+void emitHeader(FILE *out) { emit(out, ".IFJcode26\n"); }
+
 int codegenGenerate(ProgramNode *prog, FILE *out) {
     (void)prog;
-    (void)out;
+
+    emitHeader(out);
     return ERR_OK;
 }
