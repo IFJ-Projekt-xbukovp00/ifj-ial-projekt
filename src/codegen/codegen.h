@@ -112,6 +112,13 @@ void genPrint(CodeGen *gen, CallNode *call);
 void genCall(CodeGen *gen, CallNode *call);
 
 /**
+ * @brief funkcia na vygenerovanie vyrazu, vysledok vyrazu ostane na datovom zasobniku
+ * @param gen je kontext generatora
+ * @param node je generovany vyraz
+ */
+void genExpr(CodeGen *gen, ASTNode *node);
+
+/**
  * @brief funkcia na vygenerovanie definicie premennej (val aj var)
  * @param gen je kontext generatora
  * @param varDef je uzol definicie

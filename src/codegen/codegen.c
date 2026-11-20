@@ -132,14 +132,21 @@ void genCall(CodeGen *gen, CallNode *call) {
     }
 }
 
+void genExpr(CodeGen *gen, ASTNode *node) {
+    // kazdy vyraz necha na zasobniku presne jednu hodnotu
+    if (node->kind == AST_LIT) {
+        emit(gen, "PUSHS ");
+        emitLiteral(gen, (LiteralNode *)node);
+        emit(gen, "\n");
+    } else if (node->kind == AST_ID) {
+        emit(gen, "PUSHS GF@%s\n", ((IDNode *)node)->name);
+    }
+}
+
 void genVarDef(CodeGen *gen, VarOrValNode *varDef) {
     emit(gen, "DEFVAR GF@%s\n", varDef->name);
-
-    if (varDef->init->kind == AST_LIT) {
-        emit(gen, "MOVE GF@%s ", varDef->name);
-        emitLiteral(gen, (LiteralNode *)varDef->init);
-        emit(gen, "\n");
-    }
+    genExpr(gen, varDef->init);
+    emit(gen, "POPS GF@%s\n", varDef->name);
 }
 
 void genBlock(CodeGen *gen, BlockNode *block) {
