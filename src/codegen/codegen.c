@@ -108,21 +108,16 @@ DefFuncNode *findMain(ProgramNode *prog) {
 void genPrint(CodeGen *gen, CallNode *call) {
     ASTNode *arg = call->args[0];
 
-    if (arg->kind != AST_LIT) {
-        return;
-    }
+    // WRITE nema zasobnikovu verziu
+    genExpr(gen, arg);
+    emit(gen, "POPS GF@%%t0\n");
 
-    LiteralNode *literal = (LiteralNode *)arg;
-
-    // () sa vypisuje ako retazec "()"
-    if (literal->litType == LIT_UNIT) {
+    // hodnota Unit je za behu nil, vypisuje sa ako "()"
+    if (arg->type->kind == TY_UNIT) {
         emit(gen, "WRITE string@()\n");
-        return;
+    } else {
+        emit(gen, "WRITE GF@%%t0\n");
     }
-
-    emit(gen, "WRITE ");
-    emitLiteral(gen, literal);
-    emit(gen, "\n");
 }
 
 void genCall(CodeGen *gen, CallNode *call) {

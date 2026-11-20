@@ -104,7 +104,7 @@ int newLabel(CodeGen *gen);
 DefFuncNode *findMain(ProgramNode *prog);
 
 /**
- * @brief funkcia na vygenerovanie vstavanej funkcie print s literalom
+ * @brief funkcia na vygenerovanie vstavanej funkcie print
  * @param gen je kontext generatora
  * @param call je uzol volania print
  */
