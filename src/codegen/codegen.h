@@ -34,6 +34,14 @@
 #include <stdio.h>
 
 /**
+ * @brief kontext generatora, prenasa sa medzi vsetkymi funkciami generatora
+ */
+typedef struct {
+    FILE *out;        // vystupny subor
+    int labelCounter; // pocitadlo navesti L$N
+} CodeGen;
+
+/**
  * @brief funkcia na vygenerovanie programu v jazyku IFJcode26
  * @param prog je koren AST, ktory uz presiel semantickou analyzou
  * @param out je vystupny subor, kam sa zapisuje kod
@@ -43,27 +51,41 @@ int codegenGenerate(ProgramNode *prog, FILE *out);
 
 /**
  * @brief funkcia na vypis jednej casti kodu, formatuje sa ako pri printf
- * @param out je vystupny subor
+ * @param gen je kontext generatora
  * @param format je formatovaci retazec
  */
-void emit(FILE *out, const char *format, ...);
+void emit(CodeGen *gen, const char *format, ...);
 
 /**
  * @brief funkcia na vypis uvodneho riadku programu
- * @param out je vystupny subor
+ * @param gen je kontext generatora
  */
-void emitHeader(FILE *out);
+void emitHeader(CodeGen *gen);
 
 /**
  * @brief funkcia na vypis retazcovej konstanty, specialne znaky sa escapuju ako \ddd
- * @param out je vystupny subor
+ * @param gen je kontext generatora
  * @param text je vypisovany retazec
  */
-void emitString(FILE *out, const char *text);
+void emitString(CodeGen *gen, const char *text);
 
 /**
  * @brief funkcia na vypis literalu ako konstanty (int@5, float@0x1p+0, ...)
- * @param out je vystupny subor
+ * @param gen je kontext generatora
  * @param literal je vypisovany literal
  */
-void emitLiteral(FILE *out, LiteralNode *literal);
+void emitLiteral(CodeGen *gen, LiteralNode *literal);
+
+/**
+ * @brief funkcia na inicializaciu kontextu generatora
+ * @param gen je inicializovany kontext
+ * @param out je vystupny subor
+ */
+void initCodeGen(CodeGen *gen, FILE *out);
+
+/**
+ * @brief funkcia na ziskanie noveho cisla navestia, navestie sa potom pise ako L$N
+ * @param gen je kontext generatora
+ * @return nove cislo navestia
+ */
+int newLabel(CodeGen *gen);

@@ -32,54 +32,67 @@
 
 #include <stdarg.h>
 
-void emit(FILE *out, const char *format, ...) {
+void emit(CodeGen *gen, const char *format, ...) {
     va_list args;
 
     va_start(args, format);
-    vfprintf(out, format, args);
+    vfprintf(gen->out, format, args);
     va_end(args);
 }
 
-void emitHeader(FILE *out) { emit(out, ".IFJcode26\n"); }
+void emitHeader(CodeGen *gen) { emit(gen, ".IFJcode26\n"); }
 
-void emitString(FILE *out, const char *text) {
-    emit(out, "string@");
+void emitString(CodeGen *gen, const char *text) {
+    emit(gen, "string@");
 
     for (size_t charIndex = 0; text[charIndex] != '\0'; charIndex++) {
         unsigned char currentChar = (unsigned char)text[charIndex];
 
         // biele znaky, # a \ sa musia zapisat ako \ddd
         if (currentChar <= 32 || currentChar == 35 || currentChar == 92) {
-            emit(out, "\\%03d", currentChar);
+            emit(gen, "\\%03d", currentChar);
         } else {
-            emit(out, "%c", currentChar);
+            emit(gen, "%c", currentChar);
         }
     }
 }
 
-void emitLiteral(FILE *out, LiteralNode *literal) {
+void emitLiteral(CodeGen *gen, LiteralNode *literal) {
     if (literal->litType == LIT_INT) {
-        emit(out, "int@%lld", literal->litValue.int_value);
+        emit(gen, "int@%lld", literal->litValue.int_value);
     } else if (literal->litType == LIT_DOUBLE) {
         // desatinne cislo sa zapisuje vo formate %a
-        emit(out, "float@%a", literal->litValue.float_value);
+        emit(gen, "float@%a", literal->litValue.float_value);
     } else if (literal->litType == LIT_STRING) {
-        emitString(out, literal->litValue.string_value);
+        emitString(gen, literal->litValue.string_value);
     } else if (literal->litType == LIT_BOOLEAN) {
         if (literal->litValue.bool_value) {
-            emit(out, "bool@true");
+            emit(gen, "bool@true");
         } else {
-            emit(out, "bool@false");
+            emit(gen, "bool@false");
         }
     } else if (literal->litType == LIT_UNIT) {
         // hodnota () je za behu nil
-        emit(out, "nil@nil");
+        emit(gen, "nil@nil");
     }
+}
+
+void initCodeGen(CodeGen *gen, FILE *out) {
+    gen->out = out;
+    gen->labelCounter = 0;
+}
+
+int newLabel(CodeGen *gen) {
+    gen->labelCounter++;
+    return gen->labelCounter;
 }
 
 int codegenGenerate(ProgramNode *prog, FILE *out) {
     (void)prog;
 
-    emitHeader(out);
+    CodeGen gen;
+    initCodeGen(&gen, out);
+
+    emitHeader(&gen);
     return ERR_OK;
 }
