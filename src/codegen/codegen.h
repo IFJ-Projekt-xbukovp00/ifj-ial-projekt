@@ -30,6 +30,7 @@
 #pragma once
 
 #include "ast.h"
+#include "dynstr.h"
 
 #include <stdio.h>
 
@@ -38,7 +39,9 @@
  */
 typedef struct {
     FILE *out;        // vystupny subor
+    DynStr code;      // vygenerovany kod, vypise sa az na konci
     int labelCounter; // pocitadlo navesti L$N
+    int error;        // ERR_INTERNAL ak zlyhala alokacia
 } CodeGen;
 
 /**
@@ -50,14 +53,14 @@ typedef struct {
 int codegenGenerate(ProgramNode *prog, FILE *out);
 
 /**
- * @brief funkcia na vypis jednej casti kodu, formatuje sa ako pri printf
+ * @brief funkcia na zapis jednej casti kodu do bufferu, formatuje sa ako pri printf
  * @param gen je kontext generatora
  * @param format je formatovaci retazec
  */
 void emit(CodeGen *gen, const char *format, ...);
 
 /**
- * @brief funkcia na vypis uvodneho riadku programu
+ * @brief funkcia na vypis uvodneho riadku programu priamo do vystupu
  * @param gen je kontext generatora
  */
 void emitHeader(CodeGen *gen);
@@ -95,6 +98,12 @@ void initCodeGen(CodeGen *gen, FILE *out);
  * @return nove cislo navestia
  */
 int newLabel(CodeGen *gen);
+
+/**
+ * @brief funkcia na uvolnenie pamate kontextu generatora
+ * @param gen je uvolnovany kontext
+ */
+void freeCodeGen(CodeGen *gen);
 
 /**
  * @brief funkcia na najdenie funkcie @main medzi definiciami programu

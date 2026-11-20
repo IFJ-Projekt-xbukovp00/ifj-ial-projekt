@@ -28,20 +28,38 @@
  */
 
 #include "codegen.h"
+#include "dynstr.h"
 #include "error.h"
 
 #include <stdarg.h>
 #include <string.h>
 
 void emit(CodeGen *gen, const char *format, ...) {
-    va_list args;
+    if (gen->error != ERR_OK) {
+        return;
+    }
 
+    va_list args;
+    va_list argsCopy;
+
+    // najprv sa zisti dlzka vysledku, potom sa zapise na koniec bufferu
     va_start(args, format);
-    vfprintf(gen->out, format, args);
+    va_copy(argsCopy, args);
+    int length = vsnprintf(NULL, 0, format, args);
     va_end(args);
+
+    if (length < 0 || !dynstr_reserve(&gen->code, (size_t)length)) {
+        gen->error = ERR_INTERNAL;
+        va_end(argsCopy);
+        return;
+    }
+
+    vsnprintf(gen->code.data + gen->code.len, (size_t)length + 1, format, argsCopy);
+    va_end(argsCopy);
+    gen->code.len += (size_t)length;
 }
 
-void emitHeader(CodeGen *gen) { emit(gen, ".IFJcode26\n"); }
+void emitHeader(CodeGen *gen) { fprintf(gen->out, ".IFJcode26\n"); }
 
 void emitHelperVars(CodeGen *gen) {
     emit(gen, "DEFVAR GF@%%t0\n");
@@ -86,7 +104,14 @@ void emitLiteral(CodeGen *gen, LiteralNode *literal) {
 void initCodeGen(CodeGen *gen, FILE *out) {
     gen->out = out;
     gen->labelCounter = 0;
+    gen->error = ERR_OK;
+
+    if (!dynstr_init(&gen->code)) {
+        gen->error = ERR_INTERNAL;
+    }
 }
+
+void freeCodeGen(CodeGen *gen) { dynstr_free(&gen->code); }
 
 int newLabel(CodeGen *gen) {
     gen->labelCounter++;
@@ -285,15 +310,24 @@ int codegenGenerate(ProgramNode *prog, FILE *out) {
 
     DefFuncNode *mainFunction = findMain(prog);
     if (mainFunction == NULL) {
-        return ERR_INTERNAL;
+        gen.error = ERR_INTERNAL;
     }
 
-    emitHeader(&gen);
-    emitHelperVars(&gen);
+    if (gen.error == ERR_OK) {
+        emitHelperVars(&gen);
 
-    // telo main sa vykona priamo v globalnom ramci
-    genStatement(&gen, mainFunction->body);
-    emit(&gen, "EXIT int@0\n");
+        // telo main sa vykona priamo v globalnom ramci
+        genStatement(&gen, mainFunction->body);
+        emit(&gen, "EXIT int@0\n");
+    }
 
-    return ERR_OK;
+    // kod sa vypise az ked je cely vygenerovany
+    if (gen.error == ERR_OK) {
+        emitHeader(&gen);
+        fputs(gen.code.data, gen.out);
+    }
+
+    int result = gen.error;
+    freeCodeGen(&gen);
+    return result;
 }
