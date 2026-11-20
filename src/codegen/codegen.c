@@ -148,6 +148,16 @@ void genBinary(CodeGen *gen, BinaryNode *binary) {
     }
 }
 
+void genUnary(CodeGen *gen, UnaryNode *unary) {
+    genExpr(gen, unary->right);
+
+    // -x sa pocita ako x * -1
+    if (unary->operator == TOK_MINUS) {
+        emit(gen, "PUSHS int@-1\n");
+        emit(gen, "MULS\n");
+    }
+}
+
 void genExpr(CodeGen *gen, ASTNode *node) {
     // kazdy vyraz necha na zasobniku presne jednu hodnotu
     if (node->kind == AST_LIT) {
@@ -158,6 +168,8 @@ void genExpr(CodeGen *gen, ASTNode *node) {
         emit(gen, "PUSHS GF@%s\n", ((IDNode *)node)->name);
     } else if (node->kind == AST_BINARY) {
         genBinary(gen, (BinaryNode *)node);
+    } else if (node->kind == AST_UNARY) {
+        genUnary(gen, (UnaryNode *)node);
     }
 }
 
