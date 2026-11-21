@@ -425,3 +425,19 @@ typedef struct {
     ASTNode node;
     ASTNode *operand; // vyraz Int
 } ConvertNode;
+
+/**
+ * @brief alokuje a vynuluje AST uzol daneho druhu
+ * @param size velkost struktury uzla v bajtoch
+ * @param kind druh uzla AST
+ * @param line riadok vo zdrojovom kode
+ * @return ukazovatel na novy uzol, alebo NULL pri chybe alokacie
+ */
+ASTNode *astAlloc(size_t size, ASTNodeKind kind, int line);
+
+/**
+ * @brief vytvori dynamicky alokovanu kopiu retazca
+ * @param text zdrojovy retazec
+ * @return kopia retazca, alebo NULL ak text je NULL alebo pri chybe alokacie
+ */
+char *astCopyString(const char *text);

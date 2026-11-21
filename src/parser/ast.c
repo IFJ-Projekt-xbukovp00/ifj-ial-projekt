@@ -29,4 +29,30 @@
 
 #include "ast.h"
 
-/* TODO: implementácia */
+#include <stdlib.h>
+#include <string.h>
+
+ASTNode *astAlloc(size_t size, ASTNodeKind kind, int line) {
+    ASTNode *node = calloc(1, size);
+    if (node == NULL) {
+        return NULL;
+    }
+    node->kind = kind;
+    node->line = line;
+    node->type = NULL;
+    return node;
+}
+
+char *astCopyString(const char *text) {
+    if (text == NULL) {
+        return NULL;
+    }
+    size_t len = strlen(text);
+    char *copy = malloc(len + 1);
+    if (copy == NULL) {
+        return NULL;
+    }
+    memcpy(copy, text, len + 1);
+    return copy;
+}
+
