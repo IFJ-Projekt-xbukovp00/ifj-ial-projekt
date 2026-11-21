@@ -158,9 +158,48 @@ static void testLiteralsAndUnary(void) {
     astFree(unit);
 }
 
+static void testAstPrint(void) {
+    ASTNode *a = astNewId("a", 1);
+    ASTNode *b = astNewId("b", 1);
+    ASTNode *two = astNewIntLit(2, 1);
+    ASTNode *mul = astNewBinary(TOK_MULTIPLY, b, two, 1);
+    ASTNode *add = astNewBinary(TOK_PLUS, a, mul, 1);
+    CHECK(add != NULL && mul != NULL && a != NULL && b != NULL && two != NULL);
+    if (add == NULL) {
+        astFree(mul);
+        astFree(a);
+        return;
+    }
+
+    FILE *out = tmpfile();
+    CHECK(out != NULL);
+    if (out != NULL) {
+        astPrint(add, 0, out);
+        astPrint(NULL, 1, out);
+        rewind(out);
+
+        char buf[512];
+        size_t n = fread(buf, 1, sizeof(buf) - 1, out);
+        buf[n] = '\0';
+        fclose(out);
+
+        CHECK(n > 0);
+        CHECK(strstr(buf, "Binary(+)") != NULL);
+        CHECK(strstr(buf, "  Id(a)") != NULL);
+        CHECK(strstr(buf, "  Binary(*)") != NULL);
+        CHECK(strstr(buf, "    Id(b)") != NULL);
+        CHECK(strstr(buf, "    Int(2)") != NULL);
+        CHECK(strstr(buf, "  (null)") != NULL);
+    }
+
+    astPrint(add, 0, NULL);
+    astFree(add);
+}
+
 int main(void) {
     testBinaryTree();
     testLiteralsAndUnary();
+    testAstPrint();
 
     if (failureCount) {
         fprintf(stderr, "test_ast: %d chyb\n", failureCount);

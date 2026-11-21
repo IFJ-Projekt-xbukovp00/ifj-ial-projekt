@@ -30,6 +30,7 @@
 #pragma once
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdio.h>
 
 #include "token.h"
 #include "types.h"
@@ -513,3 +514,11 @@ ASTNode *astNewUnary(TokenType op, ASTNode *operand, int line);
  * @param node uzol na uvolnenie (NULL je povoleny)
  */
 void astFree(ASTNode *node);
+
+/**
+ * @brief ladiaci odsadeny vypis AST stromu do suboru alebo streamu
+ * @param node korenovy uzol na vypis (NULL vypise "(null)")
+ * @param depth aktualna hlbka odsadenia
+ * @param out vystupny stream
+ */
+void astPrint(const ASTNode *node, int depth, FILE *out);
