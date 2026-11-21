@@ -167,6 +167,13 @@ int newLabel(CodeGen *gen);
 void freeCodeGen(CodeGen *gen);
 
 /**
+ * @brief funkcia na zistenie skutocneho druhu typu uzla (alias sa preskoci)
+ * @param node je uzol vyrazu, ktory uz presiel semantikou
+ * @return druh typu, pri chybajucom type TY_UNIT
+ */
+TypeKind getKind(ASTNode *node);
+
+/**
  * @brief funkcia na najdenie funkcie @main medzi definiciami programu
  * @param prog je koren AST
  * @return uzol funkcie main, alebo NULL ak v programe nie je

@@ -152,6 +152,16 @@ int newLabel(CodeGen *gen) {
     return gen->labelCounter;
 }
 
+TypeKind getKind(ASTNode *node) {
+    // typ moze byt aj alias, rozhoduje az skutocny typ
+    Type *type = getRealType(node->type);
+
+    if (type == NULL) {
+        return TY_UNIT;
+    }
+    return type->kind;
+}
+
 DefFuncNode *findMain(ProgramNode *prog) {
     for (size_t itemIndex = 0; itemIndex < prog->itemsCount; itemIndex++) {
         ASTNode *item = prog->items[itemIndex];
@@ -172,7 +182,7 @@ void genPrint(CodeGen *gen, CallNode *call) {
     emit(gen, "POPS LF@%%t0\n");
 
     // hodnota Unit je za behu nil, vypisuje sa ako "()"
-    if (arg->type->kind == TY_UNIT) {
+    if (getKind(arg) == TY_UNIT) {
         emit(gen, "WRITE string@()\n");
     } else {
         emit(gen, "WRITE LF@%%t0\n");
@@ -212,6 +222,10 @@ void genReadNumber(CodeGen *gen, const char *typeName, const char *zero) {
 
 void genValueToStr(CodeGen *gen, Type *type) {
     type = getRealType(type);
+
+    if (type == NULL) {
+        return;
+    }
 
     if (type->kind == TY_INT) {
         emit(gen, "INT2STRS\n");
@@ -371,7 +385,7 @@ void genBinary(CodeGen *gen, BinaryNode *binary) {
     genExpr(gen, binary->left);
     genExpr(gen, binary->right);
 
-    if (binary->operator == TOK_PLUS && binary->node.type->kind == TY_STRING) {
+    if (binary->operator == TOK_PLUS && getKind((ASTNode *)binary) == TY_STRING) {
         // CONCAT nema zasobnikovu verziu, operandy sa vyberu do pomocnych premennych
         emit(gen, "POPS LF@%%t1\n");
         emit(gen, "POPS LF@%%t0\n");
@@ -385,7 +399,7 @@ void genBinary(CodeGen *gen, BinaryNode *binary) {
         emit(gen, "MULS\n");
     } else if (binary->operator == TOK_DIVIDE) {
         // delenie Double je desatinne, delenie Int celociselne
-        if (binary->node.type->kind == TY_DOUBLE) {
+        if (getKind((ASTNode *)binary) == TY_DOUBLE) {
             emit(gen, "DIVS\n");
         } else {
             emit(gen, "IDIVS\n");
@@ -415,7 +429,7 @@ void genUnary(CodeGen *gen, UnaryNode *unary) {
 
     // -x sa pocita ako x * -1
     if (unary->operator == TOK_MINUS) {
-        if (unary->node.type->kind == TY_DOUBLE) {
+        if (getKind((ASTNode *)unary) == TY_DOUBLE) {
             emit(gen, "PUSHS float@%a\n", -1.0);
         } else {
             emit(gen, "PUSHS int@-1\n");
