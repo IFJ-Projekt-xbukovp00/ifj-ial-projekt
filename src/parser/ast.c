@@ -534,3 +534,33 @@ void astParamListFree(ParamList *list) {
     list->params = NULL;
     list->params_count = 0;
 }
+
+ASTNode *astNewFuncDef(const char *name, bool isMain, int line) {
+    DefFuncNode *fn = (DefFuncNode *)astAlloc(sizeof(DefFuncNode), AST_FUNCTION_DEF, line);
+    if (fn == NULL) {
+        return NULL;
+    }
+    fn->name = astCopyString(name);
+    if (fn->name == NULL) {
+        free(fn);
+        return NULL;
+    }
+    fn->isMain = isMain;
+    return (ASTNode *)fn;
+}
+
+ParamList *astFuncAddParamList(DefFuncNode *func) {
+    if (func == NULL) {
+        return NULL;
+    }
+    ParamList *tmp = realloc(func->paramList, (func->paramListCount + 1) * sizeof(ParamList));
+    if (tmp == NULL) {
+        return NULL;
+    }
+    func->paramList = tmp;
+    ParamList *added = &func->paramList[func->paramListCount];
+    added->params = NULL;
+    added->params_count = 0;
+    func->paramListCount++;
+    return added;
+}

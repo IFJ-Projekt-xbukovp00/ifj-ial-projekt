@@ -615,3 +615,19 @@ bool astParamListAdd(ParamList *list, const char *name, Type *type, int line);
 
 /** @brief uvolni mena a pole parametrov v zozname (Type * a Symbol * neuvolnuje) */
 void astParamListFree(ParamList *list);
+
+/**
+ * @brief vytvori uzol definicie funkcie (parametre cez astFuncAddParamList)
+ * @param name meno funkcie
+ * @param isMain true pre @main funkciu
+ * @param line riadok vo zdrojovom kode
+ * @return novy uzol, alebo NULL pri chybe alokacie
+ */
+ASTNode *astNewFuncDef(const char *name, bool isMain, int line);
+
+/**
+ * @brief prida prazdny zoznam parametrov k funkcii (0 pre def f, 1 pre def f())
+ * @param func uzol funkcie
+ * @return ukazovatel na novy ParamList, alebo NULL pri chybe alokacie
+ */
+ParamList *astFuncAddParamList(DefFuncNode *func);
