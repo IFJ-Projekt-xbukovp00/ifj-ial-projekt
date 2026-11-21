@@ -218,6 +218,15 @@ void genWhile(CodeGen *gen, WhileNode *whileNode);
 void genBlock(CodeGen *gen, BlockNode *block);
 
 /**
+ * @brief funkcia na vygenerovanie prikazu, ktoreho hodnota sa pouzije (napr. telo funkcie)
+ *
+ * Hodnota bloku je hodnota jeho posledneho prikazu, ostane na datovom zasobniku.
+ * @param gen je kontext generatora
+ * @param node je generovany prikaz
+ */
+void genValue(CodeGen *gen, ASTNode *node);
+
+/**
  * @brief funkcia na vygenerovanie jedneho prikazu
  * @param gen je kontext generatora
  * @param node je generovany prikaz (moze byt NULL)

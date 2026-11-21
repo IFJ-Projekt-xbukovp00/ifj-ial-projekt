@@ -337,6 +337,22 @@ void genBlock(CodeGen *gen, BlockNode *block) {
     }
 }
 
+void genValue(CodeGen *gen, ASTNode *node) {
+    if (node->kind == AST_BLOCK) {
+        BlockNode *block = (BlockNode *)node;
+
+        // hodnotu bloku urcuje jeho posledny prikaz
+        for (size_t commandIndex = 0; commandIndex + 1 < block->commandOrderCount; commandIndex++) {
+            genStatement(gen, block->commandOrder[commandIndex]);
+        }
+        genValue(gen, block->commandOrder[block->commandOrderCount - 1]);
+    } else if (node->kind == AST_EXPR_STATEMENT) {
+        genValue(gen, ((LonelyExprNode *)node)->expr);
+    } else {
+        genExpr(gen, node);
+    }
+}
+
 void genStatement(CodeGen *gen, ASTNode *node) {
     if (node == NULL) {
         return;
@@ -399,7 +415,9 @@ void genFunction(CodeGen *gen, DefFuncNode *function) {
     // pomocne premenne ma kazda funkcia vo svojom ramci
     emitHelperVars(gen);
     genParams(gen, function);
-    genStatement(gen, function->body);
+
+    // navratova hodnota je hodnota tela, ostane na zasobniku
+    genValue(gen, function->body);
 
     if (gen->error != ERR_OK) {
         return;
