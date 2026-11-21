@@ -701,7 +701,7 @@ int codegenGenerate(ProgramNode *prog, FILE *out) {
     CodeGen gen;
     initCodeGen(&gen, out);
 
-    DefFuncNode *mainFunction = findMain(prog);
+    const DefFuncNode *mainFunction = findMain(prog);
     if (mainFunction == NULL) {
         gen.error = ERR_INTERNAL;
     }
@@ -709,7 +709,8 @@ int codegenGenerate(ProgramNode *prog, FILE *out) {
     // program zacne volanim main a po navrate skonci
     if (gen.error == ERR_OK) {
         emitHeader(&gen);
-        emit(&gen, "CALL f$main\n");
+        // main sa nemusi volat main, navestie je podla skutocneho mena
+        emit(&gen, "CALL f$%s\n", mainFunction->name);
         emit(&gen, "EXIT int@0\n");
         writeBuffers(&gen);
     }
