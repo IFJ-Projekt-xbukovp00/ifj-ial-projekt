@@ -32,16 +32,18 @@
 #include "ast.h"
 #include "dynstr.h"
 
+#include <stdarg.h>
 #include <stdio.h>
 
 /**
  * @brief kontext generatora, prenasa sa medzi vsetkymi funkciami generatora
  */
 typedef struct {
-    FILE *out;        // vystupny subor
-    DynStr code;      // vygenerovany kod, vypise sa az na konci
-    int labelCounter; // pocitadlo navesti L$N
-    int error;        // ERR_INTERNAL ak zlyhala alokacia
+    FILE *out;           // vystupny subor
+    DynStr declarations; // DEFVAR vsetkych premennych, vypisu sa pred kodom
+    DynStr code;         // vygenerovany kod, vypise sa az na konci
+    int labelCounter;    // pocitadlo navesti L$N
+    int error;           // ERR_INTERNAL ak zlyhala alokacia
 } CodeGen;
 
 /**
@@ -58,6 +60,22 @@ int codegenGenerate(ProgramNode *prog, FILE *out);
  * @param format je formatovaci retazec
  */
 void emit(CodeGen *gen, const char *format, ...);
+
+/**
+ * @brief funkcia na zapis formatovaneho textu na koniec bufferu
+ * @param gen je kontext generatora
+ * @param target je buffer, do ktoreho sa zapisuje
+ * @param format je formatovaci retazec
+ * @param args su argumenty formatu
+ */
+void appendFormat(CodeGen *gen, DynStr *target, const char *format, va_list args);
+
+/**
+ * @brief funkcia na zapis definicie premennej (DEFVAR), ktora sa vypise pred kodom
+ * @param gen je kontext generatora
+ * @param format je formatovaci retazec
+ */
+void emitDeclaration(CodeGen *gen, const char *format, ...);
 
 /**
  * @brief funkcia na vypis uvodneho riadku programu priamo do vystupu

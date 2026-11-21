@@ -34,36 +34,48 @@
 #include <stdarg.h>
 #include <string.h>
 
-void emit(CodeGen *gen, const char *format, ...) {
+void appendFormat(CodeGen *gen, DynStr *target, const char *format, va_list args) {
     if (gen->error != ERR_OK) {
         return;
     }
 
-    va_list args;
     va_list argsCopy;
 
     // najprv sa zisti dlzka vysledku, potom sa zapise na koniec bufferu
-    va_start(args, format);
     va_copy(argsCopy, args);
-    int length = vsnprintf(NULL, 0, format, args);
-    va_end(args);
+    int length = vsnprintf(NULL, 0, format, argsCopy);
+    va_end(argsCopy);
 
-    if (length < 0 || !dynstr_reserve(&gen->code, (size_t)length)) {
+    if (length < 0 || !dynstr_reserve(target, (size_t)length)) {
         gen->error = ERR_INTERNAL;
-        va_end(argsCopy);
         return;
     }
 
-    vsnprintf(gen->code.data + gen->code.len, (size_t)length + 1, format, argsCopy);
-    va_end(argsCopy);
-    gen->code.len += (size_t)length;
+    vsnprintf(target->data + target->len, (size_t)length + 1, format, args);
+    target->len += (size_t)length;
+}
+
+void emit(CodeGen *gen, const char *format, ...) {
+    va_list args;
+
+    va_start(args, format);
+    appendFormat(gen, &gen->code, format, args);
+    va_end(args);
+}
+
+void emitDeclaration(CodeGen *gen, const char *format, ...) {
+    va_list args;
+
+    va_start(args, format);
+    appendFormat(gen, &gen->declarations, format, args);
+    va_end(args);
 }
 
 void emitHeader(CodeGen *gen) { fprintf(gen->out, ".IFJcode26\n"); }
 
 void emitHelperVars(CodeGen *gen) {
-    emit(gen, "DEFVAR GF@%%t0\n");
-    emit(gen, "DEFVAR GF@%%t1\n");
+    emitDeclaration(gen, "DEFVAR GF@%%t0\n");
+    emitDeclaration(gen, "DEFVAR GF@%%t1\n");
 }
 
 void emitString(CodeGen *gen, const char *text) {
@@ -106,12 +118,19 @@ void initCodeGen(CodeGen *gen, FILE *out) {
     gen->labelCounter = 0;
     gen->error = ERR_OK;
 
-    if (!dynstr_init(&gen->code)) {
+    // oba buffre sa inicializuju vzdy, aby sa dali uvolnit aj pri chybe
+    bool isCodeReady = dynstr_init(&gen->code);
+    bool isDeclarationsReady = dynstr_init(&gen->declarations);
+
+    if (!isCodeReady || !isDeclarationsReady) {
         gen->error = ERR_INTERNAL;
     }
 }
 
-void freeCodeGen(CodeGen *gen) { dynstr_free(&gen->code); }
+void freeCodeGen(CodeGen *gen) {
+    dynstr_free(&gen->code);
+    dynstr_free(&gen->declarations);
+}
 
 int newLabel(CodeGen *gen) {
     gen->labelCounter++;
@@ -235,7 +254,8 @@ void genExpr(CodeGen *gen, ASTNode *node) {
 }
 
 void genVarDef(CodeGen *gen, VarOrValNode *varDef) {
-    emit(gen, "DEFVAR GF@%s\n", varDef->name);
+    // DEFVAR ide na zaciatok, aby sa v cykle nevykonal viackrat
+    emitDeclaration(gen, "DEFVAR GF@%s\n", varDef->name);
     genExpr(gen, varDef->init);
     emit(gen, "POPS GF@%s\n", varDef->name);
 }
@@ -324,6 +344,7 @@ int codegenGenerate(ProgramNode *prog, FILE *out) {
     // kod sa vypise az ked je cely vygenerovany
     if (gen.error == ERR_OK) {
         emitHeader(&gen);
+        fputs(gen.declarations.data, gen.out);
         fputs(gen.code.data, gen.out);
     }
 
