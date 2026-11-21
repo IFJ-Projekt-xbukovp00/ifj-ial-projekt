@@ -715,3 +715,21 @@ ASTNode *astNewExtension(const char *recvName, Type *recvType, int line) {
     ext->receiver.line = line;
     return (ASTNode *)ext;
 }
+
+ASTNode *astNewMatch(ASTNode *subject, int line) {
+    MatchNode *match = (MatchNode *)astAlloc(sizeof(MatchNode), AST_MATCH, line);
+    if (match == NULL) {
+        return NULL;
+    }
+    match->subject = subject;
+    return (ASTNode *)match;
+}
+
+ASTNode *astNewCase(PatternKind kind, int line) {
+    CaseNode *caseNode = (CaseNode *)astAlloc(sizeof(CaseNode), AST_CASE, line);
+    if (caseNode == NULL) {
+        return NULL;
+    }
+    caseNode->patternKind = kind;
+    return (ASTNode *)caseNode;
+}

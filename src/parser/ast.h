@@ -693,3 +693,9 @@ ASTNode *astNewTypeAlias(const char *name, Type *aliased, int line);
  * @return novy uzol, alebo NULL pri chybe alokacie
  */
 ASTNode *astNewExtension(const char *recvName, Type *recvType, int line);
+
+/** @brief vytvori uzol match (vetvy case sa pridavaju do cases cez astAppend) */
+ASTNode *astNewMatch(ASTNode *subject, int line);
+
+/** @brief vytvori uzol vetvy case pre zadany druh vzoru */
+ASTNode *astNewCase(PatternKind kind, int line);
