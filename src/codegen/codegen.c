@@ -375,25 +375,19 @@ int codegenGenerate(ProgramNode *prog, FILE *out) {
         gen.error = ERR_INTERNAL;
     }
 
-    if (gen.error == ERR_OK) {
-        emitHelperVars(&gen);
-
-        // telo main sa vykona priamo v globalnom ramci
-        genStatement(&gen, mainFunction->body);
-        emit(&gen, "EXIT int@0\n");
-    }
-
-    // kod sa vypise az ked je cely vygenerovany
+    // program zacne volanim main a po navrate skonci
     if (gen.error == ERR_OK) {
         emitHeader(&gen);
+        emitHelperVars(&gen);
+        emit(&gen, "CALL f$main\n");
+        emit(&gen, "EXIT int@0\n");
         writeBuffers(&gen);
     }
 
-    // ostatne funkcie su za koncom hlavneho programu
     for (size_t itemIndex = 0; itemIndex < prog->itemsCount && gen.error == ERR_OK; itemIndex++) {
         ASTNode *item = prog->items[itemIndex];
 
-        if (item->kind == AST_FUNCTION_DEF && !((DefFuncNode *)item)->isMain) {
+        if (item->kind == AST_FUNCTION_DEF) {
             genFunction(&gen, (DefFuncNode *)item);
         }
     }
