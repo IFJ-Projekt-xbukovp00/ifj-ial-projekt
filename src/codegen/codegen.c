@@ -76,6 +76,7 @@ void emitHeader(CodeGen *gen) { fprintf(gen->out, ".IFJcode26\n"); }
 void emitHelperVars(CodeGen *gen) {
     emitDeclaration(gen, "DEFVAR LF@%%t0\n");
     emitDeclaration(gen, "DEFVAR LF@%%t1\n");
+    emitDeclaration(gen, "DEFVAR LF@%%trash\n");
 }
 
 void emitString(CodeGen *gen, const char *text) {
@@ -167,6 +168,9 @@ void genPrint(CodeGen *gen, CallNode *call) {
     } else {
         emit(gen, "WRITE LF@%%t0\n");
     }
+
+    // print vracia ()
+    emit(gen, "PUSHS nil@nil\n");
 }
 
 void genFunctionCall(CodeGen *gen, CallNode *call) {
@@ -379,7 +383,9 @@ void genStatement(CodeGen *gen, ASTNode *node) {
     } else if (node->kind == AST_WHILE) {
         genWhile(gen, (WhileNode *)node);
     } else if (node->kind == AST_CALL) {
+        // vysledok volania sa nepouzije, zahodi sa
         genCall(gen, (CallNode *)node);
+        emit(gen, "POPS LF@%%trash\n");
     }
 }
 
