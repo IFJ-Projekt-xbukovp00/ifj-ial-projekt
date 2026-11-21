@@ -575,3 +575,22 @@ ASTNode *astNewReturn(ASTNode *value, int line);
  * @return novy uzol, alebo NULL pri chybe alokacie
  */
 ASTNode *astNewExprStatement(ASTNode *expr, int line);
+
+/**
+ * @brief vytvori uzol podmienky if
+ * @param cond podmienka
+ * @param thenB vetva then
+ * @param elseB vetva else alebo NULL
+ * @param line riadok vo zdrojovom kode
+ * @return novy uzol, alebo NULL pri chybe alokacie
+ */
+ASTNode *astNewIf(ASTNode *cond, ASTNode *thenB, ASTNode *elseB, int line);
+
+/**
+ * @brief vytvori uzol cyklu while
+ * @param cond podmienka
+ * @param body telo cyklu
+ * @param line riadok vo zdrojovom kode
+ * @return novy uzol, alebo NULL pri chybe alokacie
+ */
+ASTNode *astNewWhile(ASTNode *cond, ASTNode *body, int line);

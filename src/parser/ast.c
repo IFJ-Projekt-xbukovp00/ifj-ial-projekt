@@ -348,3 +348,25 @@ ASTNode *astNewExprStatement(ASTNode *expr, int line) {
     stmt->expr = expr;
     return (ASTNode *)stmt;
 }
+
+ASTNode *astNewIf(ASTNode *cond, ASTNode *thenB, ASTNode *elseB, int line) {
+    IfNode *ifNode = (IfNode *)astAlloc(sizeof(IfNode), AST_IF, line);
+    if (ifNode == NULL) {
+        return NULL;
+    }
+    ifNode->condition = cond;
+    ifNode->thenBranch = thenB;
+    // else vetva moze byt NULL
+    ifNode->elseBranch = elseB;
+    return (ASTNode *)ifNode;
+}
+
+ASTNode *astNewWhile(ASTNode *cond, ASTNode *body, int line) {
+    WhileNode *whileNode = (WhileNode *)astAlloc(sizeof(WhileNode), AST_WHILE, line);
+    if (whileNode == NULL) {
+        return NULL;
+    }
+    whileNode->condition = cond;
+    whileNode->body = body;
+    return (ASTNode *)whileNode;
+}
