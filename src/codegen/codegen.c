@@ -93,6 +93,10 @@ void emitString(CodeGen *gen, const char *text) {
     }
 }
 
+void emitVar(CodeGen *gen, const char *name, Symbol *symbol) {
+    emit(gen, "GF@%s$%d", name, symbol->cgId);
+}
+
 void emitLiteral(CodeGen *gen, LiteralNode *literal) {
     if (literal->litType == LIT_INT) {
         emit(gen, "int@%lld", literal->litValue.int_value);
@@ -116,6 +120,7 @@ void emitLiteral(CodeGen *gen, LiteralNode *literal) {
 void initCodeGen(CodeGen *gen, FILE *out) {
     gen->out = out;
     gen->labelCounter = 0;
+    gen->varCounter = 0;
     gen->error = ERR_OK;
 
     // oba buffre sa inicializuju vzdy, aby sa dali uvolnit aj pri chybe
@@ -241,7 +246,11 @@ void genExpr(CodeGen *gen, ASTNode *node) {
         emitLiteral(gen, (LiteralNode *)node);
         emit(gen, "\n");
     } else if (node->kind == AST_ID) {
-        emit(gen, "PUSHS GF@%s\n", ((IDNode *)node)->name);
+        IDNode *id = (IDNode *)node;
+
+        emit(gen, "PUSHS ");
+        emitVar(gen, id->name, id->symbol);
+        emit(gen, "\n");
     } else if (node->kind == AST_BINARY) {
         genBinary(gen, (BinaryNode *)node);
     } else if (node->kind == AST_UNARY) {
@@ -254,15 +263,23 @@ void genExpr(CodeGen *gen, ASTNode *node) {
 }
 
 void genVarDef(CodeGen *gen, VarOrValNode *varDef) {
+    // kazda premenna dostane vlastne cislo, takze prekryte premenne maju rozne mena
+    gen->varCounter++;
+    varDef->symbol->cgId = gen->varCounter;
+
     // DEFVAR ide na zaciatok, aby sa v cykle nevykonal viackrat
-    emitDeclaration(gen, "DEFVAR GF@%s\n", varDef->name);
+    emitDeclaration(gen, "DEFVAR GF@%s$%d\n", varDef->name, varDef->symbol->cgId);
     genExpr(gen, varDef->init);
-    emit(gen, "POPS GF@%s\n", varDef->name);
+    emit(gen, "POPS ");
+    emitVar(gen, varDef->name, varDef->symbol);
+    emit(gen, "\n");
 }
 
 void genAssign(CodeGen *gen, AssignNode *assign) {
     genExpr(gen, assign->value);
-    emit(gen, "POPS GF@%s\n", assign->name);
+    emit(gen, "POPS ");
+    emitVar(gen, assign->name, assign->symbol);
+    emit(gen, "\n");
 }
 
 void genIf(CodeGen *gen, IfNode *ifNode) {

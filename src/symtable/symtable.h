@@ -68,6 +68,7 @@ typedef struct Symbol {
     FunctionCheckState checkState; // stav kontroly tela
     Param *receiver;               // príjemca rozširujúcej metódy, inak NULL
     struct Symbol *nextAllocated;  // zoznam všetkých symbolov, aby sa dali na konci uvoľniť
+    int cgId;                      // cislo premennej v generatore (meno x$N), 0 = nepridelene
 } Symbol;
 
 /**

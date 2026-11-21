@@ -31,6 +31,7 @@
 
 #include "ast.h"
 #include "dynstr.h"
+#include "symtable.h"
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -43,6 +44,7 @@ typedef struct {
     DynStr declarations; // DEFVAR vsetkych premennych, vypisu sa pred kodom
     DynStr code;         // vygenerovany kod, vypise sa az na konci
     int labelCounter;    // pocitadlo navesti L$N
+    int varCounter;      // pocitadlo premennych, cislo N v mene x$N
     int error;           // ERR_INTERNAL ak zlyhala alokacia
 } CodeGen;
 
@@ -95,6 +97,14 @@ void emitHelperVars(CodeGen *gen);
  * @param text je vypisovany retazec
  */
 void emitString(CodeGen *gen, const char *text);
+
+/**
+ * @brief funkcia na vypis premennej v tvare GF@meno$N
+ * @param gen je kontext generatora
+ * @param name je meno premennej zo zdrojaku
+ * @param symbol je symbol premennej, v nom je jej cislo
+ */
+void emitVar(CodeGen *gen, const char *name, Symbol *symbol);
 
 /**
  * @brief funkcia na vypis literalu ako konstanty (int@5, float@0x1p+0, ...)
