@@ -253,6 +253,13 @@ void genSubStr(CodeGen *gen, CallNode *call);
 void genSubStrHelper(CodeGen *gen);
 
 /**
+ * @brief funkcia na vyhodnotenie argumentov volania zlava doprava na zasobnik
+ * @param gen je kontext generatora
+ * @param call je uzol volania
+ */
+void genArgs(CodeGen *gen, CallNode *call);
+
+/**
  * @brief funkcia na vygenerovanie volania funkcie definovanej v programe
  * @param gen je kontext generatora
  * @param call je uzol volania

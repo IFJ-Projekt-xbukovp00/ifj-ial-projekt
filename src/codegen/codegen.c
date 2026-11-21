@@ -192,14 +192,19 @@ void genPrint(CodeGen *gen, CallNode *call) {
     emit(gen, "PUSHS nil@nil\n");
 }
 
-void genFunctionCall(CodeGen *gen, CallNode *call) {
-    DefFuncNode *function = (DefFuncNode *)call->symbol->definition;
-
-    // argumenty idu na zasobnik zlava doprava, funkcia si ich vyberie sama
+void genArgs(CodeGen *gen, CallNode *call) {
+    // argumentom moze byt lubovolny vyraz, aj dalsie volanie
+    // vyhodnocuju sa zlava doprava, kazdy necha na zasobniku jednu hodnotu
     for (size_t argIndex = 0; argIndex < call->argsCount; argIndex++) {
         genExpr(gen, call->args[argIndex]);
     }
+}
 
+void genFunctionCall(CodeGen *gen, CallNode *call) {
+    DefFuncNode *function = (DefFuncNode *)call->symbol->definition;
+
+    // funkcia si argumenty vyberie zo zasobnika sama
+    genArgs(gen, call);
     emit(gen, "CALL f$%s\n", function->name);
 }
 
@@ -246,8 +251,7 @@ void genToStr(CodeGen *gen, CallNode *call) {
 }
 
 void genOrd(CodeGen *gen, CallNode *call) {
-    genExpr(gen, call->args[0]);
-    genExpr(gen, call->args[1]);
+    genArgs(gen, call);
 
     useHelper(gen, HELPER_ORD);
     emit(gen, "CALL $ord\n");
@@ -286,10 +290,8 @@ void genJumpIfTrue(CodeGen *gen, const char *left, const char *operator, const c
 }
 
 void genSubStr(CodeGen *gen, CallNode *call) {
-    // argumenty idu na zasobnik zlava doprava ako pri beznej funkcii
-    genExpr(gen, call->args[0]);
-    genExpr(gen, call->args[1]);
-    genExpr(gen, call->args[2]);
+    // argumenty idu na zasobnik ako pri beznej funkcii
+    genArgs(gen, call);
 
     useHelper(gen, HELPER_SUBSTR);
     emit(gen, "CALL $subStr\n");
