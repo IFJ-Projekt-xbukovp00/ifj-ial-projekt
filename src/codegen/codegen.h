@@ -99,7 +99,7 @@ void emitHelperVars(CodeGen *gen);
 void emitString(CodeGen *gen, const char *text);
 
 /**
- * @brief funkcia na vypis premennej v tvare GF@meno$N
+ * @brief funkcia na vypis premennej v tvare LF@meno$N
  * @param gen je kontext generatora
  * @param name je meno premennej zo zdrojaku
  * @param symbol je symbol premennej, v nom je jej cislo

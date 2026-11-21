@@ -74,8 +74,8 @@ void emitDeclaration(CodeGen *gen, const char *format, ...) {
 void emitHeader(CodeGen *gen) { fprintf(gen->out, ".IFJcode26\n"); }
 
 void emitHelperVars(CodeGen *gen) {
-    emitDeclaration(gen, "DEFVAR GF@%%t0\n");
-    emitDeclaration(gen, "DEFVAR GF@%%t1\n");
+    emitDeclaration(gen, "DEFVAR LF@%%t0\n");
+    emitDeclaration(gen, "DEFVAR LF@%%t1\n");
 }
 
 void emitString(CodeGen *gen, const char *text) {
@@ -94,7 +94,7 @@ void emitString(CodeGen *gen, const char *text) {
 }
 
 void emitVar(CodeGen *gen, const char *name, Symbol *symbol) {
-    emit(gen, "GF@%s$%d", name, symbol->cgId);
+    emit(gen, "LF@%s$%d", name, symbol->cgId);
 }
 
 void emitLiteral(CodeGen *gen, LiteralNode *literal) {
@@ -159,13 +159,13 @@ void genPrint(CodeGen *gen, CallNode *call) {
 
     // WRITE nema zasobnikovu verziu
     genExpr(gen, arg);
-    emit(gen, "POPS GF@%%t0\n");
+    emit(gen, "POPS LF@%%t0\n");
 
     // hodnota Unit je za behu nil, vypisuje sa ako "()"
     if (arg->type->kind == TY_UNIT) {
         emit(gen, "WRITE string@()\n");
     } else {
-        emit(gen, "WRITE GF@%%t0\n");
+        emit(gen, "WRITE LF@%%t0\n");
     }
 }
 
@@ -188,10 +188,10 @@ void genBinary(CodeGen *gen, BinaryNode *binary) {
 
     if (binary->operator == TOK_PLUS && binary->node.type->kind == TY_STRING) {
         // CONCAT nema zasobnikovu verziu, operandy sa vyberu do pomocnych premennych
-        emit(gen, "POPS GF@%%t1\n");
-        emit(gen, "POPS GF@%%t0\n");
-        emit(gen, "CONCAT GF@%%t0 GF@%%t0 GF@%%t1\n");
-        emit(gen, "PUSHS GF@%%t0\n");
+        emit(gen, "POPS LF@%%t1\n");
+        emit(gen, "POPS LF@%%t0\n");
+        emit(gen, "CONCAT LF@%%t0 LF@%%t0 LF@%%t1\n");
+        emit(gen, "PUSHS LF@%%t0\n");
     } else if (binary->operator == TOK_PLUS) {
         emit(gen, "ADDS\n");
     } else if (binary->operator == TOK_MINUS) {
@@ -268,7 +268,7 @@ void genVarDef(CodeGen *gen, VarOrValNode *varDef) {
     varDef->symbol->cgId = gen->varCounter;
 
     // DEFVAR ide na zaciatok, aby sa v cykle nevykonal viackrat
-    emitDeclaration(gen, "DEFVAR GF@%s$%d\n", varDef->name, varDef->symbol->cgId);
+    emitDeclaration(gen, "DEFVAR LF@%s$%d\n", varDef->name, varDef->symbol->cgId);
     genExpr(gen, varDef->init);
     emit(gen, "POPS ");
     emitVar(gen, varDef->name, varDef->symbol);
@@ -351,6 +351,8 @@ void writeBuffers(CodeGen *gen) {
 }
 
 void genFunction(CodeGen *gen, DefFuncNode *function) {
+    // pomocne premenne ma kazda funkcia vo svojom ramci
+    emitHelperVars(gen);
     genStatement(gen, function->body);
 
     if (gen->error != ERR_OK) {
@@ -378,7 +380,6 @@ int codegenGenerate(ProgramNode *prog, FILE *out) {
     // program zacne volanim main a po navrate skonci
     if (gen.error == ERR_OK) {
         emitHeader(&gen);
-        emitHelperVars(&gen);
         emit(&gen, "CALL f$main\n");
         emit(&gen, "EXIT int@0\n");
         writeBuffers(&gen);
