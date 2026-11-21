@@ -56,3 +56,69 @@ char *astCopyString(const char *text) {
     return copy;
 }
 
+ASTNode *astNewIntLit(long long value, int line) {
+    LiteralNode *lit = (LiteralNode *)astAlloc(sizeof(LiteralNode), AST_LIT, line);
+    if (lit == NULL) {
+        return NULL;
+    }
+    lit->litType = LIT_INT;
+    lit->litValue.int_value = value;
+    return (ASTNode *)lit;
+}
+
+ASTNode *astNewDoubleLit(double value, int line) {
+    LiteralNode *lit = (LiteralNode *)astAlloc(sizeof(LiteralNode), AST_LIT, line);
+    if (lit == NULL) {
+        return NULL;
+    }
+    lit->litType = LIT_DOUBLE;
+    lit->litValue.float_value = value;
+    return (ASTNode *)lit;
+}
+
+ASTNode *astNewStringLit(const char *value, int line) {
+    LiteralNode *lit = (LiteralNode *)astAlloc(sizeof(LiteralNode), AST_LIT, line);
+    if (lit == NULL) {
+        return NULL;
+    }
+    lit->litType = LIT_STRING;
+    lit->litValue.string_value = astCopyString(value);
+    if (lit->litValue.string_value == NULL) {
+        free(lit);
+        return NULL;
+    }
+    return (ASTNode *)lit;
+}
+
+ASTNode *astNewBoolLit(bool value, int line) {
+    LiteralNode *lit = (LiteralNode *)astAlloc(sizeof(LiteralNode), AST_LIT, line);
+    if (lit == NULL) {
+        return NULL;
+    }
+    lit->litType = LIT_BOOLEAN;
+    lit->litValue.bool_value = value;
+    return (ASTNode *)lit;
+}
+
+ASTNode *astNewUnitLit(int line) {
+    LiteralNode *lit = (LiteralNode *)astAlloc(sizeof(LiteralNode), AST_LIT, line);
+    if (lit == NULL) {
+        return NULL;
+    }
+    lit->litType = LIT_UNIT;
+    return (ASTNode *)lit;
+}
+
+ASTNode *astNewId(const char *name, int line) {
+    IDNode *idNode = (IDNode *)astAlloc(sizeof(IDNode), AST_ID, line);
+    if (idNode == NULL) {
+        return NULL;
+    }
+    idNode->name = astCopyString(name);
+    if (idNode->name == NULL) {
+        free(idNode);
+        return NULL;
+    }
+    return (ASTNode *)idNode;
+}
+

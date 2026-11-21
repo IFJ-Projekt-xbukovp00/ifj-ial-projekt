@@ -441,3 +441,50 @@ ASTNode *astAlloc(size_t size, ASTNodeKind kind, int line);
  * @return kopia retazca, alebo NULL ak text je NULL alebo pri chybe alokacie
  */
 char *astCopyString(const char *text);
+
+/**
+ * @brief vytvori uzol celociselneho literalu
+ * @param value hodnota literalu
+ * @param line riadok vo zdrojovom kode
+ * @return novy uzol, alebo NULL pri chybe alokacie
+ */
+ASTNode *astNewIntLit(long long value, int line);
+
+/**
+ * @brief vytvori uzol desatinneho literalu
+ * @param value hodnota literalu
+ * @param line riadok vo zdrojovom kode
+ * @return novy uzol, alebo NULL pri chybe alokacie
+ */
+ASTNode *astNewDoubleLit(double value, int line);
+
+/**
+ * @brief vytvori uzol retazcoveho literalu s kopiou textu
+ * @param value text literalu
+ * @param line riadok vo zdrojovom kode
+ * @return novy uzol, alebo NULL pri chybe alokacie
+ */
+ASTNode *astNewStringLit(const char *value, int line);
+
+/**
+ * @brief vytvori uzol logickeho literalu
+ * @param value pravdivostna hodnota
+ * @param line riadok vo zdrojovom kode
+ * @return novy uzol, alebo NULL pri chybe alokacie
+ */
+ASTNode *astNewBoolLit(bool value, int line);
+
+/**
+ * @brief vytvori uzol unit literalu ()
+ * @param line riadok vo zdrojovom kode
+ * @return novy uzol, alebo NULL pri chybe alokacie
+ */
+ASTNode *astNewUnitLit(int line);
+
+/**
+ * @brief vytvori uzol identifikatora s kopiou mena
+ * @param name meno identifikatora
+ * @param line riadok vo zdrojovom kode
+ * @return novy uzol, alebo NULL pri chybe alokacie
+ */
+ASTNode *astNewId(const char *name, int line);
