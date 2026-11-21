@@ -190,6 +190,9 @@ void astFree(ASTNode *node) {
     case AST_RETURN:
         astFree(((ReturnNode *)node)->returnValue);
         break;
+    case AST_EXPR_STATEMENT:
+        astFree(((LonelyExprNode *)node)->expr);
+        break;
     case AST_IF: {
         IfNode *ifNode = (IfNode *)node;
         astFree(ifNode->condition);
@@ -220,6 +223,7 @@ void astFree(ASTNode *node) {
         }
         free(fn->paramList);
         astFree(fn->body);
+        free(fn->locals);
         break;
     }
     case AST_PROGRAM: {
@@ -230,7 +234,92 @@ void astFree(ASTNode *node) {
         free(prog->items);
         break;
     }
-    default:
+    case AST_EXTENSION: {
+        ExtensionNode *ext = (ExtensionNode *)node;
+        free(ext->receiver.name);
+        for (size_t i = 0; i < ext->methodsCount; i++) {
+            astFree(ext->methods[i]);
+        }
+        free(ext->methods);
+        break;
+    }
+    case AST_CLASS_DEF: {
+        ClassDefNode *cls = (ClassDefNode *)node;
+        free(cls->name);
+        astParamListFree(&cls->fields);
+        break;
+    }
+    case AST_TYPE_ALIAS:
+        free(((TypeAliasNode *)node)->name);
+        break;
+    case AST_FOR: {
+        ForNode *forNode = (ForNode *)node;
+        free(forNode->varName);
+        astFree(forNode->source);
+        for (size_t i = 0; i < forNode->guardsCount; i++) {
+            astFree(forNode->guards[i]);
+        }
+        free(forNode->guards);
+        astFree(forNode->body);
+        break;
+    }
+    case AST_MEMBER: {
+        MemberNode *mem = (MemberNode *)node;
+        astFree(mem->object);
+        free(mem->name);
+        break;
+    }
+    case AST_MATCH: {
+        MatchNode *match = (MatchNode *)node;
+        astFree(match->subject);
+        for (size_t i = 0; i < match->casesCount; i++) {
+            astFree(match->cases[i]);
+        }
+        free(match->cases);
+        break;
+    }
+    case AST_CASE: {
+        CaseNode *caseNode = (CaseNode *)node;
+        astFree(caseNode->literal);
+        free(caseNode->binder.name);
+        free(caseNode->className);
+        astParamListFree(&caseNode->ctorBinders);
+        astFree(caseNode->guard);
+        astFree(caseNode->body);
+        break;
+    }
+    case AST_LAMBDA: {
+        LambdaNode *lam = (LambdaNode *)node;
+        astParamListFree(&lam->params);
+        astFree(lam->body);
+        free(lam->locals);
+        break;
+    }
+    case AST_RANGE: {
+        RangeNode *range = (RangeNode *)node;
+        astFree(range->from);
+        astFree(range->to);
+        astFree(range->step);
+        break;
+    }
+    case AST_LIST_LIT: {
+        ListLitNode *list = (ListLitNode *)node;
+        for (size_t i = 0; i < list->elemsCount; i++) {
+            astFree(list->elems[i]);
+        }
+        free(list->elems);
+        break;
+    }
+    case AST_INTERP: {
+        InterpNode *interp = (InterpNode *)node;
+        for (size_t i = 0; i < interp->partsCount; i++) {
+            astFree(interp->parts[i]);
+        }
+        free(interp->parts);
+        break;
+    }
+    case AST_CONVERT:
+        astFree(((ConvertNode *)node)->operand);
         break;
     }
     free(node);
@@ -243,12 +332,25 @@ void astFree(ASTNode *node) {
  * Prompt 1: "Napíš pomocnú ladiacu funkciu astPrint(const ASTNode *node, int depth, FILE *out)
  *   do src/parser/ast.c pre odsadený výpis výrazových uzlov podľa ast.h."
  * Prompt 2: "Aktualizuj funkciu astPrint v src/parser/ast.c o nové druhy uzlov podľa ast.h."
+ * Prompt 3: "Doplň do funkcie astPrint v src/parser/ast.c všetky zostávajúce uzly rozšírení a
+ *   AST_CONVERT a odstráň vetvu default."
  */
 
 /* Vypíše odsadenie zodpovedajúce hĺbke vnorenia v strome. */
 static void printIndent(int depth, FILE *out) {
     for (int i = 0; i < depth; i++) {
         fprintf(out, "  ");
+    }
+}
+
+/* Vypíše mená parametrov v zozname oddelené čiarkou. */
+static void printParamNames(const ParamList *list, FILE *out) {
+    for (size_t i = 0; i < list->params_count; i++) {
+        if (i > 0) {
+            fprintf(out, ", ");
+        }
+        const char *name = list->params[i].name;
+        fprintf(out, "%s", name != NULL ? name : "");
     }
 }
 
@@ -418,13 +520,7 @@ void astPrint(const ASTNode *node, int depth, FILE *out) {
         for (size_t i = 0; i < fn->paramListCount; i++) {
             printIndent(depth + 1, out);
             fprintf(out, "Params(");
-            for (size_t j = 0; j < fn->paramList[i].params_count; j++) {
-                if (j > 0) {
-                    fprintf(out, ", ");
-                }
-                const char *pName = fn->paramList[i].params[j].name;
-                fprintf(out, "%s", pName != NULL ? pName : "");
-            }
+            printParamNames(&fn->paramList[i], out);
             fprintf(out, ")\n");
         }
         astPrint(fn->body, depth + 1, out);
@@ -439,8 +535,120 @@ void astPrint(const ASTNode *node, int depth, FILE *out) {
         }
         break;
     }
-    default:
-        fprintf(out, "?\n");
+    case AST_EXTENSION: {
+        const ExtensionNode *ext = (const ExtensionNode *)node;
+        fprintf(out, "Extension(%s)\n", ext->receiver.name != NULL ? ext->receiver.name : "");
+        // Rozširujúce metódy v poradí definície
+        for (size_t i = 0; i < ext->methodsCount; i++) {
+            astPrint(ext->methods[i], depth + 1, out);
+        }
+        break;
+    }
+    case AST_CLASS_DEF: {
+        const ClassDefNode *cls = (const ClassDefNode *)node;
+        fprintf(out, "Class(%s)\n", cls->name != NULL ? cls->name : "");
+        printIndent(depth + 1, out);
+        fprintf(out, "Fields(");
+        printParamNames(&cls->fields, out);
+        fprintf(out, ")\n");
+        break;
+    }
+    case AST_TYPE_ALIAS: {
+        const TypeAliasNode *alias = (const TypeAliasNode *)node;
+        fprintf(out, "TypeAlias(%s)\n", alias->name != NULL ? alias->name : "");
+        break;
+    }
+    case AST_FOR: {
+        const ForNode *forNode = (const ForNode *)node;
+        fprintf(out, "For(%s)\n", forNode->varName != NULL ? forNode->varName : "");
+        astPrint(forNode->source, depth + 1, out);
+        // Stráže cyklu if a následne telo
+        for (size_t i = 0; i < forNode->guardsCount; i++) {
+            astPrint(forNode->guards[i], depth + 1, out);
+        }
+        astPrint(forNode->body, depth + 1, out);
+        break;
+    }
+    case AST_MEMBER: {
+        const MemberNode *mem = (const MemberNode *)node;
+        fprintf(out, "Member(.%s)\n", mem->name != NULL ? mem->name : "");
+        astPrint(mem->object, depth + 1, out);
+        break;
+    }
+    case AST_MATCH: {
+        const MatchNode *match = (const MatchNode *)node;
+        fprintf(out, "Match\n");
+        astPrint(match->subject, depth + 1, out);
+        for (size_t i = 0; i < match->casesCount; i++) {
+            astPrint(match->cases[i], depth + 1, out);
+        }
+        break;
+    }
+    case AST_CASE: {
+        const CaseNode *caseNode = (const CaseNode *)node;
+        // Hlavička vetvy podľa použitého vzoru
+        switch (caseNode->patternKind) {
+        case PAT_WILDCARD:
+            fprintf(out, "Case(_)\n");
+            break;
+        case PAT_LITERAL:
+            fprintf(out, "Case(lit)\n");
+            astPrint(caseNode->literal, depth + 1, out);
+            break;
+        case PAT_TYPED:
+            fprintf(out, "Case(%s)\n",
+                    caseNode->binder.name != NULL ? caseNode->binder.name : "");
+            break;
+        case PAT_CONSTRUCTOR:
+            fprintf(out, "Case(%s(", caseNode->className != NULL ? caseNode->className : "");
+            printParamNames(&caseNode->ctorBinders, out);
+            fprintf(out, "))\n");
+            break;
+        }
+        if (caseNode->guard != NULL) {
+            astPrint(caseNode->guard, depth + 1, out);
+        }
+        astPrint(caseNode->body, depth + 1, out);
+        break;
+    }
+    case AST_LAMBDA: {
+        const LambdaNode *lam = (const LambdaNode *)node;
+        fprintf(out, "Lambda(");
+        printParamNames(&lam->params, out);
+        fprintf(out, ")\n");
+        astPrint(lam->body, depth + 1, out);
+        break;
+    }
+    case AST_RANGE: {
+        const RangeNode *range = (const RangeNode *)node;
+        fprintf(out, "Range(%s)\n", range->inclusive ? "to" : "until");
+        astPrint(range->from, depth + 1, out);
+        astPrint(range->to, depth + 1, out);
+        // Nepovinný krok rozsahu (by)
+        if (range->step != NULL) {
+            astPrint(range->step, depth + 1, out);
+        }
+        break;
+    }
+    case AST_LIST_LIT: {
+        const ListLitNode *list = (const ListLitNode *)node;
+        fprintf(out, "List\n");
+        for (size_t i = 0; i < list->elemsCount; i++) {
+            astPrint(list->elems[i], depth + 1, out);
+        }
+        break;
+    }
+    case AST_INTERP: {
+        const InterpNode *interp = (const InterpNode *)node;
+        fprintf(out, "Interp\n");
+        for (size_t i = 0; i < interp->partsCount; i++) {
+            astPrint(interp->parts[i], depth + 1, out);
+        }
+        break;
+    }
+    case AST_CONVERT:
+        fprintf(out, "Convert\n");
+        astPrint(((const ConvertNode *)node)->operand, depth + 1, out);
         break;
     }
 }

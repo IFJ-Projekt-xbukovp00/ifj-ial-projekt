@@ -407,6 +407,194 @@ static void testProgramAndFunction(void) {
     type_free_all();
 }
 
+static void testForRangeAndLists(void) {
+    // for (i <- 1 to 10 by 2 if i > 3) ...
+    ASTNode *range = astNewRange(astNewIntLit(1, 20), astNewIntLit(10, 20), astNewIntLit(2, 20),
+                                 true, 20);
+    ASTNode *guard = astNewBinary(TOK_GREATER, astNewId("i", 20), astNewIntLit(3, 20), 20);
+    ASTNode *forNode = astNewFor("i", range, astNewBlock(21), 20);
+    CHECK(range != NULL && guard != NULL && forNode != NULL);
+    if (forNode != NULL) {
+        ForNode *f = (ForNode *)forNode;
+        CHECK(f->node.kind == AST_FOR);
+        CHECK(strcmp(f->varName, "i") == 0);
+        CHECK(((RangeNode *)f->source)->inclusive == true);
+        CHECK(astAppend(&f->guards, &f->guardsCount, guard));
+    }
+
+    // List(1, 2) a s"x=${i}"
+    ASTNode *list = astNewListLit(22);
+    ASTNode *interp = astNewInterp(23);
+    CHECK(list != NULL && interp != NULL);
+    if (list != NULL) {
+        CHECK(astAppend(&((ListLitNode *)list)->elems, &((ListLitNode *)list)->elemsCount,
+                        astNewIntLit(1, 22)));
+        CHECK(astAppend(&((ListLitNode *)list)->elems, &((ListLitNode *)list)->elemsCount,
+                        astNewIntLit(2, 22)));
+        CHECK(((ListLitNode *)list)->elemsCount == 2);
+    }
+    if (interp != NULL) {
+        CHECK(astAppend(&((InterpNode *)interp)->parts, &((InterpNode *)interp)->partsCount,
+                        astNewStringLit("x=", 23)));
+        CHECK(astAppend(&((InterpNode *)interp)->parts, &((InterpNode *)interp)->partsCount,
+                        astNewId("i", 23)));
+        CHECK(((InterpNode *)interp)->partsCount == 2);
+    }
+
+    FILE *out = tmpfile();
+    CHECK(out != NULL);
+    if (out != NULL) {
+        astPrint(forNode, 0, out);
+        astPrint(list, 0, out);
+        astPrint(interp, 0, out);
+        rewind(out);
+        char buf[1024];
+        size_t n = fread(buf, 1, sizeof(buf) - 1, out);
+        buf[n] = '\0';
+        fclose(out);
+        CHECK(strstr(buf, "For(i)") != NULL);
+        CHECK(strstr(buf, "Range(to)") != NULL);
+        CHECK(strstr(buf, "List") != NULL);
+        CHECK(strstr(buf, "Interp") != NULL);
+    }
+
+    astFree(forNode);
+    astFree(list);
+    astFree(interp);
+}
+
+static void testMemberLambdaAndConvert(void) {
+    Type *intType = type_get_basic(TY_INT);
+    ASTNode *mem = astNewMember(astNewId("p", 30), "x", 30);
+    ASTNode *lamBody = astNewBinary(TOK_PLUS, astNewId("a", 31), astNewIntLit(1, 31), 31);
+    ASTNode *lamNode = astNewLambda(lamBody, 31);
+    ASTNode *conv = astAlloc(sizeof(ConvertNode), AST_CONVERT, 32);
+    ASTNode *fnNode = astNewFuncDef("withLocals", false, 33);
+
+    CHECK(mem != NULL && lamNode != NULL && conv != NULL && fnNode != NULL);
+    if (mem != NULL) {
+        CHECK(mem->kind == AST_MEMBER);
+        CHECK(strcmp(((MemberNode *)mem)->name, "x") == 0);
+    }
+    if (lamNode != NULL) {
+        LambdaNode *lam = (LambdaNode *)lamNode;
+        CHECK(astParamListAdd(&lam->params, "a", intType, 31));
+        lam->locals = calloc(1, sizeof(struct Symbol *));
+        lam->localsCount = 1;
+    }
+    if (conv != NULL) {
+        ((ConvertNode *)conv)->operand = astNewIntLit(5, 32);
+    }
+    if (fnNode != NULL) {
+        DefFuncNode *fn = (DefFuncNode *)fnNode;
+        fn->locals = calloc(2, sizeof(struct Symbol *));
+        fn->localsCount = 2;
+        fn->body = astNewUnitLit(33);
+    }
+
+    FILE *out = tmpfile();
+    CHECK(out != NULL);
+    if (out != NULL) {
+        astPrint(mem, 0, out);
+        astPrint(lamNode, 0, out);
+        astPrint(conv, 0, out);
+        rewind(out);
+        char buf[1024];
+        size_t n = fread(buf, 1, sizeof(buf) - 1, out);
+        buf[n] = '\0';
+        fclose(out);
+        CHECK(strstr(buf, "Member(.x)") != NULL);
+        CHECK(strstr(buf, "Lambda(a)") != NULL);
+        CHECK(strstr(buf, "Convert") != NULL);
+    }
+
+    astFree(mem);
+    astFree(lamNode);
+    astFree(conv);
+    astFree(fnNode);
+    type_free_all();
+}
+
+static void testAdtAndExtension(void) {
+    Type *intType = type_get_basic(TY_INT);
+    Type *pointType = type_create_named("Point");
+
+    ASTNode *cls = astNewClassDef("Point", 40);
+    ASTNode *alias = astNewTypeAlias("Num", intType, 41);
+    ASTNode *ext = astNewExtension("p", pointType, 42);
+    CHECK(cls != NULL && alias != NULL && ext != NULL);
+    if (cls != NULL) {
+        ClassDefNode *c = (ClassDefNode *)cls;
+        CHECK(astParamListAdd(&c->fields, "x", intType, 40));
+        CHECK(astParamListAdd(&c->fields, "y", intType, 40));
+    }
+    if (ext != NULL) {
+        ASTNode *method = astNewFuncDef("norm", false, 43);
+        ((DefFuncNode *)method)->body = astNewIntLit(0, 43);
+        CHECK(astAppend(&((ExtensionNode *)ext)->methods, &((ExtensionNode *)ext)->methodsCount,
+                        method));
+    }
+
+    ASTNode *match = astNewMatch(astNewId("p", 45), 45);
+    ASTNode *cWild = astNewCase(PAT_WILDCARD, 46);
+    ASTNode *cLit = astNewCase(PAT_LITERAL, 47);
+    ASTNode *cTyped = astNewCase(PAT_TYPED, 48);
+    ASTNode *cCtor = astNewCase(PAT_CONSTRUCTOR, 49);
+    CHECK(match != NULL && cWild && cLit && cTyped && cCtor);
+    if (match && cWild && cLit && cTyped && cCtor) {
+        ((CaseNode *)cWild)->body = astNewIntLit(0, 46);
+
+        ((CaseNode *)cLit)->literal = astNewIntLit(1, 47);
+        ((CaseNode *)cLit)->body = astNewIntLit(10, 47);
+
+        CaseNode *typed = (CaseNode *)cTyped;
+        typed->binder.name = astCopyString("n");
+        typed->binder.type = intType;
+        typed->binder.line = 48;
+        typed->body = astNewId("n", 48);
+
+        CaseNode *ctor = (CaseNode *)cCtor;
+        ctor->className = astCopyString("Point");
+        CHECK(astParamListAdd(&ctor->ctorBinders, "x", NULL, 49));
+        CHECK(astParamListAdd(&ctor->ctorBinders, "y", NULL, 49));
+        ctor->guard = astNewBinary(TOK_GREATER, astNewId("x", 49), astNewIntLit(0, 49), 49);
+        ctor->body = astNewId("x", 49);
+
+        MatchNode *m = (MatchNode *)match;
+        CHECK(astAppend(&m->cases, &m->casesCount, cWild));
+        CHECK(astAppend(&m->cases, &m->casesCount, cLit));
+        CHECK(astAppend(&m->cases, &m->casesCount, cTyped));
+        CHECK(astAppend(&m->cases, &m->casesCount, cCtor));
+    }
+
+    FILE *out = tmpfile();
+    CHECK(out != NULL);
+    if (out != NULL) {
+        astPrint(cls, 0, out);
+        astPrint(alias, 0, out);
+        astPrint(ext, 0, out);
+        astPrint(match, 0, out);
+        rewind(out);
+        char buf[1024];
+        size_t n = fread(buf, 1, sizeof(buf) - 1, out);
+        buf[n] = '\0';
+        fclose(out);
+        CHECK(strstr(buf, "Class(Point)") != NULL);
+        CHECK(strstr(buf, "Fields(x, y)") != NULL);
+        CHECK(strstr(buf, "TypeAlias(Num)") != NULL);
+        CHECK(strstr(buf, "Extension(p)") != NULL);
+        CHECK(strstr(buf, "Match") != NULL);
+        CHECK(strstr(buf, "Case(Point(x, y))") != NULL);
+        CHECK(strstr(buf, "Case(_)") != NULL);
+    }
+
+    astFree(cls);
+    astFree(alias);
+    astFree(ext);
+    astFree(match);
+    type_free_all();
+}
+
 int main(void) {
     testBinaryTree();
     testLiteralsAndUnary();
@@ -414,6 +602,9 @@ int main(void) {
     testBlockWithIfAndStatements();
     testNestedCall();
     testProgramAndFunction();
+    testForRangeAndLists();
+    testMemberLambdaAndConvert();
+    testAdtAndExtension();
 
     if (failureCount) {
         fprintf(stderr, "test_ast: %d chyb\n", failureCount);
