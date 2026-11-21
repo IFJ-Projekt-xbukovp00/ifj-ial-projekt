@@ -149,6 +149,12 @@ DefFuncNode *findMain(ProgramNode *prog);
 void genPrint(CodeGen *gen, CallNode *call);
 
 /**
+ * @brief funkcia na vygenerovanie vstavanej funkcie readLine
+ * @param gen je kontext generatora
+ */
+void genReadLine(CodeGen *gen);
+
+/**
  * @brief funkcia na vygenerovanie volania funkcie definovanej v programe
  * @param gen je kontext generatora
  * @param call je uzol volania

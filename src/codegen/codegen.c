@@ -186,6 +186,12 @@ void genFunctionCall(CodeGen *gen, CallNode *call) {
     emit(gen, "CALL f$%s\n", function->name);
 }
 
+void genReadLine(CodeGen *gen) {
+    // READ vrati riadok aj s koncom riadku, pri EOF prazdny retazec
+    emit(gen, "READ LF@%%t0 string\n");
+    emit(gen, "PUSHS LF@%%t0\n");
+}
+
 void genCall(CodeGen *gen, CallNode *call) {
     if (call->callKind == CALL_FUNC) {
         genFunctionCall(gen, call);
@@ -200,6 +206,8 @@ void genCall(CodeGen *gen, CallNode *call) {
 
     if (strcmp(name, "print") == 0) {
         genPrint(gen, call);
+    } else if (strcmp(name, "readLine") == 0) {
+        genReadLine(gen);
     }
 }
 
