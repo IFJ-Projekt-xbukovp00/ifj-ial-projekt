@@ -87,7 +87,7 @@ void emitDeclaration(CodeGen *gen, const char *format, ...);
 void emitHeader(CodeGen *gen);
 
 /**
- * @brief funkcia na definovanie pomocnych premennych %t0 az %t3 a %trash
+ * @brief funkcia na definovanie pomocnych premennych %t0 az %t4 a %trash
  * @param gen je kontext generatora
  */
 void emitHelperVars(CodeGen *gen);

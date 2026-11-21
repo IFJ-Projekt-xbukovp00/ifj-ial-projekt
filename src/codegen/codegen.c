@@ -79,6 +79,7 @@ void emitHelperVars(CodeGen *gen) {
     emitDeclaration(gen, "DEFVAR LF@%%t1\n");
     emitDeclaration(gen, "DEFVAR LF@%%t2\n");
     emitDeclaration(gen, "DEFVAR LF@%%t3\n");
+    emitDeclaration(gen, "DEFVAR LF@%%t4\n");
     emitDeclaration(gen, "DEFVAR LF@%%trash\n");
 }
 
@@ -283,9 +284,25 @@ void genSubStr(CodeGen *gen, CallNode *call) {
     emit(gen, "LABEL L$%d\n", okLabel);
     genJumpIfTrue(gen, "LF@%t2", "GTS", "LF@%t3", errorLabel);
 
-    // TODO: vyrez podretazca
-    emit(gen, "PUSHS string@\n");
+    int loopLabel = newLabel(gen);
+    int doneLabel = newLabel(gen);
     int endLabel = newLabel(gen);
+
+    // znaky od start po end - 1 sa postupne pripajaju do %t3
+    emit(gen, "MOVE LF@%%t3 string@\n");
+    emit(gen, "LABEL L$%d\n", loopLabel);
+    emit(gen, "PUSHS LF@%%t1\n");
+    emit(gen, "PUSHS LF@%%t2\n");
+    emit(gen, "LTS\n");
+    emit(gen, "PUSHS bool@false\n");
+    emit(gen, "JUMPIFEQS L$%d\n", doneLabel);
+    emit(gen, "GETCHAR LF@%%t4 LF@%%t0 LF@%%t1\n");
+    emit(gen, "CONCAT LF@%%t3 LF@%%t3 LF@%%t4\n");
+    emit(gen, "ADD LF@%%t1 LF@%%t1 int@1\n");
+    emit(gen, "JUMP L$%d\n", loopLabel);
+
+    emit(gen, "LABEL L$%d\n", doneLabel);
+    emit(gen, "PUSHS LF@%%t3\n");
     emit(gen, "JUMP L$%d\n", endLabel);
 
     emit(gen, "LABEL L$%d\n", errorLabel);
