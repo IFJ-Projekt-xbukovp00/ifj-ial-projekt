@@ -148,9 +148,13 @@ void astFree(ASTNode *node) {
         return;
     }
     switch (node->kind) {
-    case AST_LIT:
-        free(((LiteralNode *)node)->litValue.string_value);
+    case AST_LIT: {
+        LiteralNode *lit = (LiteralNode *)node;
+        if (lit->litType == LIT_STRING) {
+            free(lit->litValue.string_value);
+        }
         break;
+    }
     case AST_ID:
         free(((IDNode *)node)->name);
         break;
