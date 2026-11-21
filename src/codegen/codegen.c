@@ -246,6 +246,16 @@ void genCall(CodeGen *gen, CallNode *call) {
         genReadNumber(gen, "float", "float@0x0p+0");
     } else if (strcmp(name, "toStr") == 0) {
         genToStr(gen, call);
+    } else if (strcmp(name, "toInt") == 0) {
+        // FLOAT2INT oseka desatinnu cast
+        genExpr(gen, call->args[0]);
+        emit(gen, "FLOAT2INTS\n");
+    } else if (strcmp(name, "strLength") == 0) {
+        // STRLEN nema zasobnikovu verziu
+        genExpr(gen, call->args[0]);
+        emit(gen, "POPS LF@%%t0\n");
+        emit(gen, "STRLEN LF@%%t0 LF@%%t0\n");
+        emit(gen, "PUSHS LF@%%t0\n");
     }
 }
 
