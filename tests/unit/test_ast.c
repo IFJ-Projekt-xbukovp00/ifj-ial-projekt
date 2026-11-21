@@ -196,10 +196,124 @@ static void testAstPrint(void) {
     astFree(add);
 }
 
+static void testBlockWithIfAndStatements(void) {
+    char varName[16] = "x";
+    char assignName[16] = "x";
+
+    ASTNode *block = astNewBlock(10);
+    ASTNode *varDef = astNewVarDef(varName, true, NULL, astNewIntLit(1, 10), 10);
+    varName[0] = 'q';
+
+    ASTNode *cond = astNewBinary(TOK_LESS, astNewId("x", 11), astNewIntLit(10, 11), 11);
+    ASTNode *thenBlk = astNewBlock(11);
+    ASTNode *assign = astNewAssign(
+        assignName, astNewBinary(TOK_PLUS, astNewId("x", 12), astNewIntLit(1, 12), 12), 12);
+    assignName[0] = 'w';
+    ASTNode *elseBlk = astNewBlock(13);
+    ASTNode *retVal = astNewReturn(astNewId("x", 14), 14);
+    ASTNode *ifNode = astNewIf(cond, thenBlk, elseBlk, 11);
+
+    ASTNode *whileBlk = astNewBlock(15);
+    ASTNode *exprStmt = astNewExprStatement(astNewIntLit(42, 16), 16);
+    ASTNode *whileNode = astNewWhile(astNewBoolLit(false, 15), whileBlk, 15);
+    ASTNode *ifNoElse = astNewIf(astNewBoolLit(true, 17), astNewReturn(NULL, 17), NULL, 17);
+
+    CHECK(block != NULL && varDef != NULL && thenBlk != NULL && elseBlk != NULL && ifNode != NULL);
+    CHECK(whileBlk != NULL && exprStmt != NULL && whileNode != NULL && ifNoElse != NULL);
+    if (!block || !varDef || !thenBlk || !elseBlk || !ifNode || !whileBlk || !exprStmt ||
+        !whileNode || !ifNoElse) {
+        return;
+    }
+
+    CHECK(astAppend(&((BlockNode *)thenBlk)->commandOrder,
+                    &((BlockNode *)thenBlk)->commandOrderCount, assign));
+    CHECK(astAppend(&((BlockNode *)elseBlk)->commandOrder,
+                    &((BlockNode *)elseBlk)->commandOrderCount, retVal));
+    CHECK(astAppend(&((BlockNode *)whileBlk)->commandOrder,
+                    &((BlockNode *)whileBlk)->commandOrderCount, exprStmt));
+
+    BlockNode *blk = (BlockNode *)block;
+    CHECK(astAppend(&blk->commandOrder, &blk->commandOrderCount, varDef));
+    CHECK(astAppend(&blk->commandOrder, &blk->commandOrderCount, ifNode));
+    CHECK(astAppend(&blk->commandOrder, &blk->commandOrderCount, whileNode));
+    CHECK(astAppend(&blk->commandOrder, &blk->commandOrderCount, ifNoElse));
+    CHECK(blk->commandOrderCount == 4);
+
+    CHECK(strcmp(((VarOrValNode *)varDef)->name, "x") == 0);
+    CHECK(((VarOrValNode *)varDef)->isMutable == true);
+    CHECK(strcmp(((AssignNode *)assign)->name, "x") == 0);
+    CHECK(((IfNode *)ifNoElse)->elseBranch == NULL);
+
+    FILE *out = tmpfile();
+    CHECK(out != NULL);
+    if (out != NULL) {
+        astPrint(block, 0, out);
+        rewind(out);
+        char buf[1024];
+        size_t n = fread(buf, 1, sizeof(buf) - 1, out);
+        buf[n] = '\0';
+        fclose(out);
+        CHECK(strstr(buf, "Block") != NULL);
+        CHECK(strstr(buf, "Var(x)") != NULL);
+        CHECK(strstr(buf, "If") != NULL);
+        CHECK(strstr(buf, "Assign(x)") != NULL);
+        CHECK(strstr(buf, "Return") != NULL);
+        CHECK(strstr(buf, "While") != NULL);
+        CHECK(strstr(buf, "ExprStmt") != NULL);
+    }
+
+    astFree(block);
+}
+
+static void testNestedCall(void) {
+    // f(1)(2) sa sklada z dvoch vnorenych CallNode cez caller
+    ASTNode *call1 = astNewCall(astNewId("f", 20), 20);
+    CHECK(call1 != NULL);
+    if (call1 == NULL) {
+        return;
+    }
+    CHECK(astAppend(&((CallNode *)call1)->args, &((CallNode *)call1)->argsCount,
+                    astNewIntLit(1, 20)));
+
+    ASTNode *call2 = astNewCall(call1, 20);
+    CHECK(call2 != NULL);
+    if (call2 == NULL) {
+        astFree(call1);
+        return;
+    }
+    CHECK(astAppend(&((CallNode *)call2)->args, &((CallNode *)call2)->argsCount,
+                    astNewIntLit(2, 20)));
+
+    CallNode *outer = (CallNode *)call2;
+    CHECK(outer->node.kind == AST_CALL);
+    CHECK(outer->caller == call1);
+    CHECK(outer->argsCount == 1);
+    CHECK(((CallNode *)call1)->argsCount == 1);
+
+    FILE *out = tmpfile();
+    CHECK(out != NULL);
+    if (out != NULL) {
+        astPrint(call2, 0, out);
+        rewind(out);
+        char buf[512];
+        size_t n = fread(buf, 1, sizeof(buf) - 1, out);
+        buf[n] = '\0';
+        fclose(out);
+        CHECK(strstr(buf, "Call") != NULL);
+        CHECK(strstr(buf, "Id(f)") != NULL);
+        CHECK(strstr(buf, "Int(1)") != NULL);
+        CHECK(strstr(buf, "Int(2)") != NULL);
+    }
+
+    astFree(call2);
+}
+
 int main(void) {
     testBinaryTree();
     testLiteralsAndUnary();
     testAstPrint();
+    testBlockWithIfAndStatements();
+    testNestedCall();
 
     if (failureCount) {
         fprintf(stderr, "test_ast: %d chyb\n", failureCount);

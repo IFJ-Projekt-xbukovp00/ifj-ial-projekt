@@ -166,6 +166,52 @@ void astFree(ASTNode *node) {
     case AST_UNARY:
         astFree(((UnaryNode *)node)->right);
         break;
+    case AST_BLOCK: {
+        BlockNode *block = (BlockNode *)node;
+        // najprv prikazy, az potom pole
+        for (size_t i = 0; i < block->commandOrderCount; i++) {
+            astFree(block->commandOrder[i]);
+        }
+        free(block->commandOrder);
+        break;
+    }
+    case AST_VAR_DEF: {
+        VarOrValNode *varNode = (VarOrValNode *)node;
+        free(varNode->name);
+        astFree(varNode->init);
+        break;
+    }
+    case AST_ASSIGN: {
+        AssignNode *assign = (AssignNode *)node;
+        free(assign->name);
+        astFree(assign->value);
+        break;
+    }
+    case AST_RETURN:
+        astFree(((ReturnNode *)node)->returnValue);
+        break;
+    case AST_IF: {
+        IfNode *ifNode = (IfNode *)node;
+        astFree(ifNode->condition);
+        astFree(ifNode->thenBranch);
+        astFree(ifNode->elseBranch);
+        break;
+    }
+    case AST_WHILE: {
+        WhileNode *whileNode = (WhileNode *)node;
+        astFree(whileNode->condition);
+        astFree(whileNode->body);
+        break;
+    }
+    case AST_CALL: {
+        CallNode *call = (CallNode *)node;
+        astFree(call->caller);
+        for (size_t i = 0; i < call->argsCount; i++) {
+            astFree(call->args[i]);
+        }
+        free(call->args);
+        break;
+    }
     default:
         break;
     }
@@ -178,6 +224,7 @@ void astFree(ASTNode *node) {
  * Použitie AI: tieto ladiace funkcie vygenerovala AI (Claude Opus 5.5).
  * Prompt 1: "Napíš pomocnú ladiacu funkciu astPrint(const ASTNode *node, int depth, FILE *out)
  *   do src/parser/ast.c pre odsadený výpis výrazových uzlov podľa ast.h."
+ * Prompt 2: "Aktualizuj funkciu astPrint v src/parser/ast.c o nové druhy uzlov podľa ast.h."
  */
 
 /* Vypíše odsadenie zodpovedajúce hĺbke vnorenia v strome. */
@@ -282,6 +329,69 @@ void astPrint(const ASTNode *node, int depth, FILE *out) {
         astPrint(un->right, depth + 1, out);
         break;
     }
+    case AST_BLOCK: {
+        const BlockNode *block = (const BlockNode *)node;
+        fprintf(out, "Block\n");
+        // Všetky príkazy bloku v poradí
+        for (size_t i = 0; i < block->commandOrderCount; i++) {
+            astPrint(block->commandOrder[i], depth + 1, out);
+        }
+        break;
+    }
+    case AST_VAR_DEF: {
+        const VarOrValNode *varNode = (const VarOrValNode *)node;
+        fprintf(out, "%s(%s)\n", varNode->isMutable ? "Var" : "Val",
+                varNode->name != NULL ? varNode->name : "");
+        astPrint(varNode->init, depth + 1, out);
+        break;
+    }
+    case AST_ASSIGN: {
+        const AssignNode *assign = (const AssignNode *)node;
+        fprintf(out, "Assign(%s)\n", assign->name != NULL ? assign->name : "");
+        astPrint(assign->value, depth + 1, out);
+        break;
+    }
+    case AST_RETURN: {
+        const ReturnNode *ret = (const ReturnNode *)node;
+        fprintf(out, "Return\n");
+        // Voliteľný návratový výraz
+        if (ret->returnValue != NULL) {
+            astPrint(ret->returnValue, depth + 1, out);
+        }
+        break;
+    }
+    case AST_EXPR_STATEMENT:
+        fprintf(out, "ExprStmt\n");
+        astPrint(((const LonelyExprNode *)node)->expr, depth + 1, out);
+        break;
+    case AST_IF: {
+        const IfNode *ifNode = (const IfNode *)node;
+        fprintf(out, "If\n");
+        astPrint(ifNode->condition, depth + 1, out);
+        astPrint(ifNode->thenBranch, depth + 1, out);
+        // Vetva else je nepovinná
+        if (ifNode->elseBranch != NULL) {
+            astPrint(ifNode->elseBranch, depth + 1, out);
+        }
+        break;
+    }
+    case AST_WHILE: {
+        const WhileNode *whileNode = (const WhileNode *)node;
+        fprintf(out, "While\n");
+        astPrint(whileNode->condition, depth + 1, out);
+        astPrint(whileNode->body, depth + 1, out);
+        break;
+    }
+    case AST_CALL: {
+        const CallNode *call = (const CallNode *)node;
+        fprintf(out, "Call\n");
+        // Volaný výraz a zoznam argumentov
+        astPrint(call->caller, depth + 1, out);
+        for (size_t i = 0; i < call->argsCount; i++) {
+            astPrint(call->args[i], depth + 1, out);
+        }
+        break;
+    }
     default:
         fprintf(out, "?\n");
         break;
@@ -312,7 +422,11 @@ ASTNode *astNewVarDef(const char *name, bool isMutable, Type *declaredType, ASTN
     if (varNode == NULL) {
         return NULL;
     }
-    varNode->name = (char *)name;
+    varNode->name = astCopyString(name);
+    if (varNode->name == NULL) {
+        free(varNode);
+        return NULL;
+    }
     varNode->isMutable = isMutable;
     varNode->declaredType = declaredType;
     varNode->init = init;
@@ -324,7 +438,11 @@ ASTNode *astNewAssign(const char *name, ASTNode *value, int line) {
     if (assign == NULL) {
         return NULL;
     }
-    assign->name = (char *)name;
+    assign->name = astCopyString(name);
+    if (assign->name == NULL) {
+        free(assign);
+        return NULL;
+    }
     assign->value = value;
     return (ASTNode *)assign;
 }
