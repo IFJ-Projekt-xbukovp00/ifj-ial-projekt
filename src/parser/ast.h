@@ -661,3 +661,20 @@ ASTNode *astNewListLit(int line);
 
 /** @brief vytvori uzol interpolovaneho retazca (casti do parts cez astAppend) */
 ASTNode *astNewInterp(int line);
+
+/**
+ * @brief vytvori uzol pristupu k clenovi cez bodku
+ * @param object vyraz pred bodkou
+ * @param name meno clena (skopiruje sa)
+ * @param line riadok vo zdrojovom kode
+ * @return novy uzol, alebo NULL pri chybe alokacie
+ */
+ASTNode *astNewMember(ASTNode *object, const char *name, int line);
+
+/**
+ * @brief vytvori uzol anonymnej funkcie (parametre do params cez astParamListAdd)
+ * @param body telo lambdy
+ * @param line riadok vo zdrojovom kode
+ * @return novy uzol, alebo NULL pri chybe alokacie
+ */
+ASTNode *astNewLambda(ASTNode *body, int line);

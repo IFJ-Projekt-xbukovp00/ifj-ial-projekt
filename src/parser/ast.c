@@ -650,3 +650,26 @@ ASTNode *astNewListLit(int line) {
 ASTNode *astNewInterp(int line) {
     return astAlloc(sizeof(InterpNode), AST_INTERP, line);
 }
+
+ASTNode *astNewMember(ASTNode *object, const char *name, int line) {
+    MemberNode *mem = (MemberNode *)astAlloc(sizeof(MemberNode), AST_MEMBER, line);
+    if (mem == NULL) {
+        return NULL;
+    }
+    mem->name = astCopyString(name);
+    if (mem->name == NULL) {
+        free(mem);
+        return NULL;
+    }
+    mem->object = object;
+    return (ASTNode *)mem;
+}
+
+ASTNode *astNewLambda(ASTNode *body, int line) {
+    LambdaNode *lam = (LambdaNode *)astAlloc(sizeof(LambdaNode), AST_LAMBDA, line);
+    if (lam == NULL) {
+        return NULL;
+    }
+    lam->body = body;
+    return (ASTNode *)lam;
+}
