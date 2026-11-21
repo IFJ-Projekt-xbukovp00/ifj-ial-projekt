@@ -642,3 +642,11 @@ ASTNode *astNewFor(const char *varName, ASTNode *source, ASTNode *body, int line
     forNode->body = body;
     return (ASTNode *)forNode;
 }
+
+ASTNode *astNewListLit(int line) {
+    return astAlloc(sizeof(ListLitNode), AST_LIST_LIT, line);
+}
+
+ASTNode *astNewInterp(int line) {
+    return astAlloc(sizeof(InterpNode), AST_INTERP, line);
+}

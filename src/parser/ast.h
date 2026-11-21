@@ -655,3 +655,9 @@ ASTNode *astNewRange(ASTNode *from, ASTNode *to, ASTNode *step, bool inclusive, 
  * @return novy uzol, alebo NULL pri chybe alokacie
  */
 ASTNode *astNewFor(const char *varName, ASTNode *source, ASTNode *body, int line);
+
+/** @brief vytvori uzol zoznamu (prvky sa pridavaju do elems cez astAppend) */
+ASTNode *astNewListLit(int line);
+
+/** @brief vytvori uzol interpolovaneho retazca (casti do parts cez astAppend) */
+ASTNode *astNewInterp(int line);
