@@ -143,3 +143,27 @@ ASTNode *astNewUnary(TokenType op, ASTNode *operand, int line) {
     return (ASTNode *)un;
 }
 
+void astFree(ASTNode *node) {
+    if (node == NULL) {
+        return;
+    }
+    switch (node->kind) {
+    case AST_LIT:
+        free(((LiteralNode *)node)->litValue.string_value);
+        break;
+    case AST_ID:
+        free(((IDNode *)node)->name);
+        break;
+    case AST_BINARY:
+        astFree(((BinaryNode *)node)->left);
+        astFree(((BinaryNode *)node)->right);
+        break;
+    case AST_UNARY:
+        astFree(((UnaryNode *)node)->right);
+        break;
+    default:
+        break;
+    }
+    free(node);
+}
+

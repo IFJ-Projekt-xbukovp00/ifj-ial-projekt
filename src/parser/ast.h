@@ -507,3 +507,9 @@ ASTNode *astNewBinary(TokenType op, ASTNode *left, ASTNode *right, int line);
  * @return novy uzol, alebo NULL pri chybe alokacie
  */
 ASTNode *astNewUnary(TokenType op, ASTNode *operand, int line);
+
+/**
+ * @brief rekurzivne uvolni AST uzol a jeho poduzly (Type * a Symbol * neuvolnuje)
+ * @param node uzol na uvolnenie (NULL je povoleny)
+ */
+void astFree(ASTNode *node);
