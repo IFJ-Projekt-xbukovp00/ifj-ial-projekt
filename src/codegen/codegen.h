@@ -267,11 +267,20 @@ void genArgs(CodeGen *gen, CallNode *call);
 void genFunctionCall(CodeGen *gen, CallNode *call);
 
 /**
- * @brief funkcia na vygenerovanie volania funkcie
+ * @brief funkcia na vygenerovanie volania funkcie, vysledok ostane na zasobniku
  * @param gen je kontext generatora
  * @param call je uzol volania
  */
 void genCall(CodeGen *gen, CallNode *call);
+
+/**
+ * @brief funkcia na vygenerovanie volania vstavanej funkcie podla mena
+ * @param gen je kontext generatora
+ * @param call je uzol volania
+ * @param name je meno vstavanej funkcie
+ * @return true ak sa vstavana funkcia nasla a vygenerovala
+ */
+bool genBuiltinCall(CodeGen *gen, CallNode *call, const char *name);
 
 /**
  * @brief funkcia na vygenerovanie binarnej operacie

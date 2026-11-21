@@ -342,15 +342,16 @@ void genSubStrHelper(CodeGen *gen) {
 void genCall(CodeGen *gen, CallNode *call) {
     if (call->callKind == CALL_FUNC) {
         genFunctionCall(gen, call);
-        return;
+    } else if (call->callKind == CALL_BUILTIN && call->caller->kind == AST_ID &&
+               genBuiltinCall(gen, call, ((IDNode *)call->caller)->name)) {
+        // vstavana funkcia uz nechala vysledok na zasobniku
+    } else {
+        // volanie je aj operand vyrazu, na zasobniku musi byt vzdy jedna hodnota
+        emit(gen, "PUSHS nil@nil\n");
     }
+}
 
-    if (call->callKind != CALL_BUILTIN || call->caller->kind != AST_ID) {
-        return;
-    }
-
-    const char *name = ((IDNode *)call->caller)->name;
-
+bool genBuiltinCall(CodeGen *gen, CallNode *call, const char *name) {
     if (strcmp(name, "print") == 0) {
         genPrint(gen, call);
     } else if (strcmp(name, "readLine") == 0) {
@@ -379,7 +380,11 @@ void genCall(CodeGen *gen, CallNode *call) {
         // hodnota mimo 0 az 127 skonci chybou interpretu 58
         genExpr(gen, call->args[0]);
         emit(gen, "INT2CHARS\n");
+    } else {
+        return false;
     }
+
+    return true;
 }
 
 void genBinary(CodeGen *gen, BinaryNode *binary) {
@@ -461,7 +466,10 @@ void genExpr(CodeGen *gen, ASTNode *node) {
         genExpr(gen, ((ConvertNode *)node)->operand);
         emit(gen, "INT2FLOATS\n");
     } else if (node->kind == AST_CALL) {
+        // volanie funkcie moze byt operandom ako hocijaky iny vyraz
         genCall(gen, (CallNode *)node);
+    } else {
+        emit(gen, "PUSHS nil@nil\n");
     }
 }
 
@@ -583,12 +591,8 @@ void genStatement(CodeGen *gen, ASTNode *node) {
         genWhile(gen, (WhileNode *)node);
     } else if (node->kind == AST_RETURN) {
         genReturn(gen, (ReturnNode *)node);
-    } else if (node->kind == AST_CALL) {
-        // vysledok volania sa nepouzije, zahodi sa
-        genCall(gen, (CallNode *)node);
-        emit(gen, "POPS LF@%%trash\n");
     } else {
-        // vyraz ako prikaz sa vyhodnoti a jeho hodnota sa zahodi
+        // vyraz ako prikaz (aj volanie) sa vyhodnoti a jeho hodnota sa zahodi
         genExpr(gen, node);
         emit(gen, "POPS LF@%%trash\n");
     }
