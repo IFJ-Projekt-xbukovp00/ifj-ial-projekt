@@ -338,7 +338,10 @@ void genBlock(CodeGen *gen, BlockNode *block) {
 }
 
 void genValue(CodeGen *gen, ASTNode *node) {
-    if (node->kind == AST_BLOCK) {
+    if (node->kind == AST_BLOCK && ((BlockNode *)node)->commandOrderCount == 0) {
+        // prazdny blok ma hodnotu ()
+        emit(gen, "PUSHS nil@nil\n");
+    } else if (node->kind == AST_BLOCK) {
         BlockNode *block = (BlockNode *)node;
 
         // hodnotu bloku urcuje jeho posledny prikaz
@@ -348,6 +351,11 @@ void genValue(CodeGen *gen, ASTNode *node) {
         genValue(gen, block->commandOrder[block->commandOrderCount - 1]);
     } else if (node->kind == AST_EXPR_STATEMENT) {
         genValue(gen, ((LonelyExprNode *)node)->expr);
+    } else if (node->kind == AST_VAR_DEF || node->kind == AST_ASSIGN || node->kind == AST_WHILE ||
+               node->kind == AST_IF) {
+        // definicia, priradenie, cyklus a podmieneny prikaz nemaju hodnotu, vysledok je ()
+        genStatement(gen, node);
+        emit(gen, "PUSHS nil@nil\n");
     } else {
         genExpr(gen, node);
     }
