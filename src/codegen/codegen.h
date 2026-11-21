@@ -37,17 +37,47 @@
 #include <stdio.h>
 
 /**
+ * @brief pomocne funkcie za behu, napisane priamo v IFJcode26
+ *
+ * Vypisu sa raz na konci programu, ale len tie, ktore sa niekde pouzili.
+ */
+typedef enum {
+    HELPER_COUNT // pocet pomocnych funkcii, musi byt posledny
+} HelperKind;
+
+/**
  * @brief kontext generatora, prenasa sa medzi vsetkymi funkciami generatora
  */
 typedef struct {
-    FILE *out;             // vystupny subor
-    DynStr declarations;   // DEFVAR vsetkych premennych, vypisu sa pred kodom
-    DynStr code;           // vygenerovany kod, vypise sa az na konci
-    int labelCounter;      // pocitadlo navesti L$N
-    int varCounter;        // pocitadlo premennych, cislo N v mene x$N
-    DefFuncNode *function; // prave generovana funkcia
-    int error;             // ERR_INTERNAL ak zlyhala alokacia
+    FILE *out;                         // vystupny subor
+    DynStr declarations;               // DEFVAR vsetkych premennych, vypisu sa pred kodom
+    DynStr code;                       // vygenerovany kod, vypise sa az na konci
+    int labelCounter;                  // pocitadlo navesti L$N
+    int varCounter;                    // pocitadlo premennych, cislo N v mene x$N
+    DefFuncNode *function;             // prave generovana funkcia
+    int error;                         // ERR_INTERNAL ak zlyhala alokacia
+    bool helperUsed[HELPER_COUNT + 1]; // ktore pomocne funkcie sa maju vypisat
 } CodeGen;
+
+/**
+ * @brief funkcia na oznacenie pomocnej funkcie ako pouzitej, vypise sa na konci programu
+ * @param gen je kontext generatora
+ * @param helper je pouzita pomocna funkcia
+ */
+void useHelper(CodeGen *gen, HelperKind helper);
+
+/**
+ * @brief funkcia na vypis jednej pomocnej funkcie
+ * @param gen je kontext generatora
+ * @param helper je vypisovana pomocna funkcia
+ */
+void writeHelper(CodeGen *gen, HelperKind helper);
+
+/**
+ * @brief funkcia na vypis vsetkych pouzitych pomocnych funkcii na koniec programu
+ * @param gen je kontext generatora
+ */
+void writeHelpers(CodeGen *gen);
 
 /**
  * @brief funkcia na vygenerovanie programu v jazyku IFJcode26

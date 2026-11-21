@@ -129,6 +129,10 @@ void initCodeGen(CodeGen *gen, FILE *out) {
     gen->function = NULL;
     gen->error = ERR_OK;
 
+    for (int helper = 0; helper < HELPER_COUNT; helper++) {
+        gen->helperUsed[helper] = false;
+    }
+
     // oba buffre sa inicializuju vzdy, aby sa dali uvolnit aj pri chybe
     bool isCodeReady = dynstr_init(&gen->code);
     bool isDeclarationsReady = dynstr_init(&gen->declarations);
@@ -634,6 +638,27 @@ void genFunction(CodeGen *gen, DefFuncNode *function) {
     fprintf(gen->out, "RETURN\n");
 }
 
+void useHelper(CodeGen *gen, HelperKind helper) { gen->helperUsed[helper] = true; }
+
+void writeHelper(CodeGen *gen, HelperKind helper) {
+    // kazda pomocna funkcia ma vlastny ramec, argumenty berie zo zasobnika
+    // a vysledok necha na zasobniku, rovnako ako funkcie z programu
+    (void)helper;
+
+    if (gen->error != ERR_OK) {
+        return;
+    }
+    writeBuffers(gen);
+}
+
+void writeHelpers(CodeGen *gen) {
+    for (int helper = 0; helper < HELPER_COUNT; helper++) {
+        if (gen->helperUsed[helper]) {
+            writeHelper(gen, (HelperKind)helper);
+        }
+    }
+}
+
 int codegenGenerate(ProgramNode *prog, FILE *out) {
     CodeGen gen;
     initCodeGen(&gen, out);
@@ -657,6 +682,11 @@ int codegenGenerate(ProgramNode *prog, FILE *out) {
         if (item->kind == AST_FUNCTION_DEF) {
             genFunction(&gen, (DefFuncNode *)item);
         }
+    }
+
+    // pomocne funkcie za behu sa vypisu az za vsetkymi funkciami
+    if (gen.error == ERR_OK) {
+        writeHelpers(&gen);
     }
 
     int result = gen.error;
