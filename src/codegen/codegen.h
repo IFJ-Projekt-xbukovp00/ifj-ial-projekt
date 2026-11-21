@@ -163,6 +163,20 @@ void genReadLine(CodeGen *gen);
 void genReadNumber(CodeGen *gen, const char *typeName, const char *zero);
 
 /**
+ * @brief funkcia na prevod hodnoty na vrchu zasobnika na retazec podla jej statickeho typu
+ * @param gen je kontext generatora
+ * @param type je staticky typ hodnoty
+ */
+void genValueToStr(CodeGen *gen, Type *type);
+
+/**
+ * @brief funkcia na vygenerovanie vstavanej funkcie toStr
+ * @param gen je kontext generatora
+ * @param call je uzol volania toStr
+ */
+void genToStr(CodeGen *gen, CallNode *call);
+
+/**
  * @brief funkcia na vygenerovanie volania funkcie definovanej v programe
  * @param gen je kontext generatora
  * @param call je uzol volania

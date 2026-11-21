@@ -203,6 +203,27 @@ void genReadNumber(CodeGen *gen, const char *typeName, const char *zero) {
     emit(gen, "PUSHS LF@%%t0\n");
 }
 
+void genValueToStr(CodeGen *gen, Type *type) {
+    type = getRealType(type);
+
+    if (type->kind == TY_INT) {
+        emit(gen, "INT2STRS\n");
+    } else if (type->kind == TY_DOUBLE) {
+        // FLOAT2STR pise vo formate %.2f, presne ako toStr
+        emit(gen, "FLOAT2STRS\n");
+    } else if (type->kind == TY_UNIT) {
+        // hodnota () je nil, ako retazec je "()"
+        emit(gen, "POPS LF@%%trash\n");
+        emit(gen, "PUSHS string@()\n");
+    }
+    // retazec uz je retazec, nic sa nerobi
+}
+
+void genToStr(CodeGen *gen, CallNode *call) {
+    genExpr(gen, call->args[0]);
+    genValueToStr(gen, call->args[0]->type);
+}
+
 void genCall(CodeGen *gen, CallNode *call) {
     if (call->callKind == CALL_FUNC) {
         genFunctionCall(gen, call);
@@ -223,6 +244,8 @@ void genCall(CodeGen *gen, CallNode *call) {
         genReadNumber(gen, "int", "int@0");
     } else if (strcmp(name, "readDouble") == 0) {
         genReadNumber(gen, "float", "float@0x0p+0");
+    } else if (strcmp(name, "toStr") == 0) {
+        genToStr(gen, call);
     }
 }
 
