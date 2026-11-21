@@ -267,13 +267,20 @@ void genJumpIfTrue(CodeGen *gen, const char *left, const char *operator, const c
 }
 
 void genSubStr(CodeGen *gen, CallNode *call) {
+    // argumenty idu na zasobnik zlava doprava ako pri beznej funkcii
+    genExpr(gen, call->args[0]);
+    genExpr(gen, call->args[1]);
+    genExpr(gen, call->args[2]);
+
+    useHelper(gen, HELPER_SUBSTR);
+    emit(gen, "CALL $subStr\n");
+}
+
+void genSubStrHelper(CodeGen *gen) {
     int errorLabel = newLabel(gen);
     int okLabel = newLabel(gen);
 
     // retazec do %t0, zaciatok do %t1, koniec do %t2
-    genExpr(gen, call->args[0]);
-    genExpr(gen, call->args[1]);
-    genExpr(gen, call->args[2]);
     emit(gen, "POPS LF@%%t2\n");
     emit(gen, "POPS LF@%%t1\n");
     emit(gen, "POPS LF@%%t0\n");
@@ -290,7 +297,6 @@ void genSubStr(CodeGen *gen, CallNode *call) {
 
     int loopLabel = newLabel(gen);
     int doneLabel = newLabel(gen);
-    int endLabel = newLabel(gen);
 
     // znaky od start po end - 1 sa postupne pripajaju do %t3
     emit(gen, "MOVE LF@%%t3 string@\n");
@@ -305,13 +311,11 @@ void genSubStr(CodeGen *gen, CallNode *call) {
     emit(gen, "ADD LF@%%t1 LF@%%t1 int@1\n");
     emit(gen, "JUMP L$%d\n", loopLabel);
 
-    emit(gen, "LABEL L$%d\n", doneLabel);
-    emit(gen, "PUSHS LF@%%t3\n");
-    emit(gen, "JUMP L$%d\n", endLabel);
-
     emit(gen, "LABEL L$%d\n", errorLabel);
     emit(gen, "EXIT int@40\n");
-    emit(gen, "LABEL L$%d\n", endLabel);
+
+    emit(gen, "LABEL L$%d\n", doneLabel);
+    emit(gen, "PUSHS LF@%%t3\n");
 }
 
 void genCall(CodeGen *gen, CallNode *call) {
@@ -643,12 +647,24 @@ void useHelper(CodeGen *gen, HelperKind helper) { gen->helperUsed[helper] = true
 void writeHelper(CodeGen *gen, HelperKind helper) {
     // kazda pomocna funkcia ma vlastny ramec, argumenty berie zo zasobnika
     // a vysledok necha na zasobniku, rovnako ako funkcie z programu
-    (void)helper;
+    const char *name = "";
+    emitHelperVars(gen);
+
+    if (helper == HELPER_SUBSTR) {
+        name = "$subStr";
+        genSubStrHelper(gen);
+    }
 
     if (gen->error != ERR_OK) {
         return;
     }
+
+    fprintf(gen->out, "LABEL %s\n", name);
+    fprintf(gen->out, "CREATEFRAME\n");
+    fprintf(gen->out, "PUSHFRAME\n");
     writeBuffers(gen);
+    fprintf(gen->out, "POPFRAME\n");
+    fprintf(gen->out, "RETURN\n");
 }
 
 void writeHelpers(CodeGen *gen) {

@@ -42,21 +42,22 @@
  * Vypisu sa raz na konci programu, ale len tie, ktore sa niekde pouzili.
  */
 typedef enum {
-    HELPER_COUNT // pocet pomocnych funkcii, musi byt posledny
+    HELPER_SUBSTR, // $subStr
+    HELPER_COUNT   // pocet pomocnych funkcii, musi byt posledny
 } HelperKind;
 
 /**
  * @brief kontext generatora, prenasa sa medzi vsetkymi funkciami generatora
  */
 typedef struct {
-    FILE *out;                         // vystupny subor
-    DynStr declarations;               // DEFVAR vsetkych premennych, vypisu sa pred kodom
-    DynStr code;                       // vygenerovany kod, vypise sa az na konci
-    int labelCounter;                  // pocitadlo navesti L$N
-    int varCounter;                    // pocitadlo premennych, cislo N v mene x$N
-    DefFuncNode *function;             // prave generovana funkcia
-    int error;                         // ERR_INTERNAL ak zlyhala alokacia
-    bool helperUsed[HELPER_COUNT + 1]; // ktore pomocne funkcie sa maju vypisat
+    FILE *out;                     // vystupny subor
+    DynStr declarations;           // DEFVAR vsetkych premennych, vypisu sa pred kodom
+    DynStr code;                   // vygenerovany kod, vypise sa az na konci
+    int labelCounter;              // pocitadlo navesti L$N
+    int varCounter;                // pocitadlo premennych, cislo N v mene x$N
+    DefFuncNode *function;         // prave generovana funkcia
+    int error;                     // ERR_INTERNAL ak zlyhala alokacia
+    bool helperUsed[HELPER_COUNT]; // ktore pomocne funkcie sa maju vypisat
 } CodeGen;
 
 /**
@@ -225,11 +226,17 @@ void genJumpIfTrue(CodeGen *gen, const char *left, const char *operator, const c
                    int label);
 
 /**
- * @brief funkcia na vygenerovanie vstavanej funkcie subStr, pri zlych argumentoch skonci chybou 40
+ * @brief funkcia na vygenerovanie volania vstavanej funkcie subStr (pomocna funkcia $subStr)
  * @param gen je kontext generatora
  * @param call je uzol volania subStr
  */
 void genSubStr(CodeGen *gen, CallNode *call);
+
+/**
+ * @brief funkcia na vygenerovanie tela pomocnej funkcie $subStr
+ * @param gen je kontext generatora
+ */
+void genSubStrHelper(CodeGen *gen);
 
 /**
  * @brief funkcia na vygenerovanie volania funkcie definovanej v programe
