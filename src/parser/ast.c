@@ -212,6 +212,24 @@ void astFree(ASTNode *node) {
         free(call->args);
         break;
     }
+    case AST_FUNCTION_DEF: {
+        DefFuncNode *fn = (DefFuncNode *)node;
+        free(fn->name);
+        for (size_t i = 0; i < fn->paramListCount; i++) {
+            astParamListFree(&fn->paramList[i]);
+        }
+        free(fn->paramList);
+        astFree(fn->body);
+        break;
+    }
+    case AST_PROGRAM: {
+        ProgramNode *prog = (ProgramNode *)node;
+        for (size_t i = 0; i < prog->itemsCount; i++) {
+            astFree(prog->items[i]);
+        }
+        free(prog->items);
+        break;
+    }
     default:
         break;
     }
@@ -389,6 +407,35 @@ void astPrint(const ASTNode *node, int depth, FILE *out) {
         astPrint(call->caller, depth + 1, out);
         for (size_t i = 0; i < call->argsCount; i++) {
             astPrint(call->args[i], depth + 1, out);
+        }
+        break;
+    }
+    case AST_FUNCTION_DEF: {
+        const DefFuncNode *fn = (const DefFuncNode *)node;
+        fprintf(out, "Func(%s%s)\n", fn->isMain ? "@main " : "",
+                fn->name != NULL ? fn->name : "");
+        // Zoznamy parametrov vypíšeme prehľadne po riadkoch
+        for (size_t i = 0; i < fn->paramListCount; i++) {
+            printIndent(depth + 1, out);
+            fprintf(out, "Params(");
+            for (size_t j = 0; j < fn->paramList[i].params_count; j++) {
+                if (j > 0) {
+                    fprintf(out, ", ");
+                }
+                const char *pName = fn->paramList[i].params[j].name;
+                fprintf(out, "%s", pName != NULL ? pName : "");
+            }
+            fprintf(out, ")\n");
+        }
+        astPrint(fn->body, depth + 1, out);
+        break;
+    }
+    case AST_PROGRAM: {
+        const ProgramNode *prog = (const ProgramNode *)node;
+        fprintf(out, "Program\n");
+        // Všetky definície na najvyššej úrovni
+        for (size_t i = 0; i < prog->itemsCount; i++) {
+            astPrint(prog->items[i], depth + 1, out);
         }
         break;
     }

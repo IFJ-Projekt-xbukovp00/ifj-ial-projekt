@@ -308,12 +308,112 @@ static void testNestedCall(void) {
     astFree(call2);
 }
 
+static void testProgramAndFunction(void) {
+    Type *intType = type_get_basic(TY_INT);
+    ASTNode *prog = astNewProgram(1);
+    CHECK(prog != NULL && intType != NULL);
+    if (prog == NULL) {
+        type_free_all();
+        return;
+    }
+
+    // 1) @main def main() = { return } -> jeden prazdny zoznam parametrov
+    ASTNode *mainFnNode = astNewFuncDef("main", true, 2);
+    CHECK(mainFnNode != NULL);
+    if (mainFnNode != NULL) {
+        DefFuncNode *mainFn = (DefFuncNode *)mainFnNode;
+        ParamList *emptyList = astFuncAddParamList(mainFn);
+        CHECK(emptyList != NULL);
+        CHECK(mainFn->isMain == true);
+        CHECK(mainFn->paramListCount == 1);
+        CHECK(emptyList != NULL && emptyList->params_count == 0);
+        ASTNode *blk = astNewBlock(2);
+        CHECK(blk != NULL);
+        if (blk != NULL) {
+            CHECK(astAppend(&((BlockNode *)blk)->commandOrder,
+                            &((BlockNode *)blk)->commandOrderCount, astNewReturn(NULL, 2)));
+        }
+        mainFn->body = blk;
+        CHECK(astAppend(&((ProgramNode *)prog)->items, &((ProgramNode *)prog)->itemsCount,
+                        mainFnNode));
+    }
+
+    // 2) def add(a: Int)(b: Int): Int = { return a + b } -> dva zoznamy parametrov
+    ASTNode *addFnNode = astNewFuncDef("add", false, 5);
+    CHECK(addFnNode != NULL);
+    if (addFnNode != NULL) {
+        DefFuncNode *addFn = (DefFuncNode *)addFnNode;
+        addFn->returnType = intType;
+        char p1[8] = "a";
+        char p2[8] = "b";
+        ParamList *list1 = astFuncAddParamList(addFn);
+        CHECK(list1 != NULL);
+        if (list1 != NULL) {
+            CHECK(astParamListAdd(list1, p1, intType, 5));
+        }
+        ParamList *list2 = astFuncAddParamList(addFn);
+        CHECK(list2 != NULL);
+        if (list2 != NULL) {
+            CHECK(astParamListAdd(list2, p2, intType, 5));
+        }
+        p1[0] = 'x';
+        p2[0] = 'y';
+        if (addFn->paramListCount == 2) {
+            CHECK(strcmp(addFn->paramList[0].params[0].name, "a") == 0);
+            CHECK(strcmp(addFn->paramList[1].params[0].name, "b") == 0);
+            CHECK(addFn->paramList[0].params[0].symbol == NULL);
+            CHECK(addFn->paramList[1].params[0].type == intType);
+        }
+        CHECK(addFn->paramListCount == 2);
+        ASTNode *sum = astNewBinary(TOK_PLUS, astNewId("a", 5), astNewId("b", 5), 5);
+        addFn->body = astNewReturn(sum, 5);
+        CHECK(astAppend(&((ProgramNode *)prog)->items, &((ProgramNode *)prog)->itemsCount,
+                        addFnNode));
+    }
+
+    // 3) def answer: Int = 42 -> 0 zoznamov parametrov
+    ASTNode *ansFnNode = astNewFuncDef("answer", false, 8);
+    CHECK(ansFnNode != NULL);
+    if (ansFnNode != NULL) {
+        DefFuncNode *ansFn = (DefFuncNode *)ansFnNode;
+        ansFn->returnType = intType;
+        ansFn->body = astNewIntLit(42, 8);
+        CHECK(ansFn->paramListCount == 0);
+        CHECK(astAppend(&((ProgramNode *)prog)->items, &((ProgramNode *)prog)->itemsCount,
+                        ansFnNode));
+    }
+
+    CHECK(((ProgramNode *)prog)->itemsCount == 3);
+
+    FILE *out = tmpfile();
+    CHECK(out != NULL);
+    if (out != NULL) {
+        astPrint(prog, 0, out);
+        rewind(out);
+        char buf[1024];
+        size_t n = fread(buf, 1, sizeof(buf) - 1, out);
+        buf[n] = '\0';
+        fclose(out);
+        CHECK(strstr(buf, "Program") != NULL);
+        CHECK(strstr(buf, "Func(@main main)") != NULL);
+        CHECK(strstr(buf, "Params()") != NULL);
+        CHECK(strstr(buf, "Func(add)") != NULL);
+        CHECK(strstr(buf, "Params(a)") != NULL);
+        CHECK(strstr(buf, "Params(b)") != NULL);
+        CHECK(strstr(buf, "Func(answer)") != NULL);
+    }
+
+    astFree(prog);
+    type_free_all();
+}
+
 int main(void) {
     testBinaryTree();
     testLiteralsAndUnary();
     testAstPrint();
     testBlockWithIfAndStatements();
     testNestedCall();
+    testProgramAndFunction();
 
     if (failureCount) {
         fprintf(stderr, "test_ast: %d chyb\n", failureCount);
