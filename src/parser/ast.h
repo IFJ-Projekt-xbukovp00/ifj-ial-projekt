@@ -538,3 +538,40 @@ bool astAppend(ASTNode ***items, size_t *count, ASTNode *node);
  * @return novy uzol, alebo NULL pri chybe alokacie
  */
 ASTNode *astNewBlock(int line);
+
+/**
+ * @brief vytvori uzol definicie premennej var alebo val
+ * @param name meno premennej
+ * @param isMutable true pre var, false pre val
+ * @param declaredType deklarovany typ alebo NULL pri odvodeni
+ * @param init inicializacny vyraz
+ * @param line riadok vo zdrojovom kode
+ * @return novy uzol, alebo NULL pri chybe alokacie
+ */
+ASTNode *astNewVarDef(const char *name, bool isMutable, Type *declaredType, ASTNode *init,
+                      int line);
+
+/**
+ * @brief vytvori uzol priradenia do premennej
+ * @param name meno premennej
+ * @param value priradovany vyraz
+ * @param line riadok vo zdrojovom kode
+ * @return novy uzol, alebo NULL pri chybe alokacie
+ */
+ASTNode *astNewAssign(const char *name, ASTNode *value, int line);
+
+/**
+ * @brief vytvori uzol prikazu return
+ * @param value navratovy vyraz alebo NULL pre return bez hodnoty
+ * @param line riadok vo zdrojovom kode
+ * @return novy uzol, alebo NULL pri chybe alokacie
+ */
+ASTNode *astNewReturn(ASTNode *value, int line);
+
+/**
+ * @brief vytvori uzol samostatneho vyrazoveho prikazu
+ * @param expr vyraz
+ * @param line riadok vo zdrojovom kode
+ * @return novy uzol, alebo NULL pri chybe alokacie
+ */
+ASTNode *astNewExprStatement(ASTNode *expr, int line);

@@ -305,3 +305,46 @@ bool astAppend(ASTNode ***items, size_t *count, ASTNode *node) {
 ASTNode *astNewBlock(int line) {
     return astAlloc(sizeof(BlockNode), AST_BLOCK, line);
 }
+
+ASTNode *astNewVarDef(const char *name, bool isMutable, Type *declaredType, ASTNode *init,
+                      int line) {
+    VarOrValNode *varNode = (VarOrValNode *)astAlloc(sizeof(VarOrValNode), AST_VAR_DEF, line);
+    if (varNode == NULL) {
+        return NULL;
+    }
+    varNode->name = (char *)name;
+    varNode->isMutable = isMutable;
+    varNode->declaredType = declaredType;
+    varNode->init = init;
+    return (ASTNode *)varNode;
+}
+
+ASTNode *astNewAssign(const char *name, ASTNode *value, int line) {
+    AssignNode *assign = (AssignNode *)astAlloc(sizeof(AssignNode), AST_ASSIGN, line);
+    if (assign == NULL) {
+        return NULL;
+    }
+    assign->name = (char *)name;
+    assign->value = value;
+    return (ASTNode *)assign;
+}
+
+ASTNode *astNewReturn(ASTNode *value, int line) {
+    ReturnNode *ret = (ReturnNode *)astAlloc(sizeof(ReturnNode), AST_RETURN, line);
+    if (ret == NULL) {
+        return NULL;
+    }
+    // return bez hodnoty ma NULL
+    ret->returnValue = value;
+    return (ASTNode *)ret;
+}
+
+ASTNode *astNewExprStatement(ASTNode *expr, int line) {
+    LonelyExprNode *stmt = (LonelyExprNode *)astAlloc(sizeof(LonelyExprNode),
+                                                      AST_EXPR_STATEMENT, line);
+    if (stmt == NULL) {
+        return NULL;
+    }
+    stmt->expr = expr;
+    return (ASTNode *)stmt;
+}
