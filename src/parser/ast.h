@@ -631,3 +631,6 @@ ASTNode *astNewFuncDef(const char *name, bool isMain, int line);
  * @return ukazovatel na novy ParamList, alebo NULL pri chybe alokacie
  */
 ParamList *astFuncAddParamList(DefFuncNode *func);
+
+/** @brief vytvori korenovy uzol programu (definicie sa pridavaju cez astAppend) */
+ASTNode *astNewProgram(int line);

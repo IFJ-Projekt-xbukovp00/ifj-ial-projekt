@@ -564,3 +564,7 @@ ParamList *astFuncAddParamList(DefFuncNode *func) {
     func->paramListCount++;
     return added;
 }
+
+ASTNode *astNewProgram(int line) {
+    return astAlloc(sizeof(ProgramNode), AST_PROGRAM, line);
+}
