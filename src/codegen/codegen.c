@@ -78,6 +78,7 @@ void emitHelperVars(CodeGen *gen) {
     emitDeclaration(gen, "DEFVAR LF@%%t0\n");
     emitDeclaration(gen, "DEFVAR LF@%%t1\n");
     emitDeclaration(gen, "DEFVAR LF@%%t2\n");
+    emitDeclaration(gen, "DEFVAR LF@%%t3\n");
     emitDeclaration(gen, "DEFVAR LF@%%trash\n");
 }
 
@@ -250,6 +251,48 @@ void genOrd(CodeGen *gen, CallNode *call) {
     emit(gen, "LABEL L$%d\n", endLabel);
 }
 
+void genJumpIfTrue(CodeGen *gen, const char *left, const char *operator, const char *right,
+                   int label) {
+    // vysledok porovnania ide na zasobnik a pri true sa skace
+    emit(gen, "PUSHS %s\n", left);
+    emit(gen, "PUSHS %s\n", right);
+    emit(gen, "%s\n", operator);
+    emit(gen, "PUSHS bool@true\n");
+    emit(gen, "JUMPIFEQS L$%d\n", label);
+}
+
+void genSubStr(CodeGen *gen, CallNode *call) {
+    int errorLabel = newLabel(gen);
+    int okLabel = newLabel(gen);
+
+    // retazec do %t0, zaciatok do %t1, koniec do %t2
+    genExpr(gen, call->args[0]);
+    genExpr(gen, call->args[1]);
+    genExpr(gen, call->args[2]);
+    emit(gen, "POPS LF@%%t2\n");
+    emit(gen, "POPS LF@%%t1\n");
+    emit(gen, "POPS LF@%%t0\n");
+    emit(gen, "STRLEN LF@%%t3 LF@%%t0\n");
+
+    // start < 0, end < 0, start > end, start >= dlzka, end > dlzka
+    genJumpIfTrue(gen, "LF@%t1", "LTS", "int@0", errorLabel);
+    genJumpIfTrue(gen, "LF@%t2", "LTS", "int@0", errorLabel);
+    genJumpIfTrue(gen, "LF@%t1", "GTS", "LF@%t2", errorLabel);
+    genJumpIfTrue(gen, "LF@%t1", "LTS", "LF@%t3", okLabel);
+    emit(gen, "JUMP L$%d\n", errorLabel);
+    emit(gen, "LABEL L$%d\n", okLabel);
+    genJumpIfTrue(gen, "LF@%t2", "GTS", "LF@%t3", errorLabel);
+
+    // TODO: vyrez podretazca
+    emit(gen, "PUSHS string@\n");
+    int endLabel = newLabel(gen);
+    emit(gen, "JUMP L$%d\n", endLabel);
+
+    emit(gen, "LABEL L$%d\n", errorLabel);
+    emit(gen, "EXIT int@40\n");
+    emit(gen, "LABEL L$%d\n", endLabel);
+}
+
 void genCall(CodeGen *gen, CallNode *call) {
     if (call->callKind == CALL_FUNC) {
         genFunctionCall(gen, call);
@@ -284,6 +327,8 @@ void genCall(CodeGen *gen, CallNode *call) {
         emit(gen, "PUSHS LF@%%t0\n");
     } else if (strcmp(name, "ord") == 0) {
         genOrd(gen, call);
+    } else if (strcmp(name, "subStr") == 0) {
+        genSubStr(gen, call);
     } else if (strcmp(name, "chr") == 0) {
         // hodnota mimo 0 az 127 skonci chybou interpretu 58
         genExpr(gen, call->args[0]);

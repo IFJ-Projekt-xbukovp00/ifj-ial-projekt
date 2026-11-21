@@ -87,7 +87,7 @@ void emitDeclaration(CodeGen *gen, const char *format, ...);
 void emitHeader(CodeGen *gen);
 
 /**
- * @brief funkcia na definovanie pomocnych premennych %t0, %t1, %t2 a %trash
+ * @brief funkcia na definovanie pomocnych premennych %t0 az %t3 a %trash
  * @param gen je kontext generatora
  */
 void emitHelperVars(CodeGen *gen);
@@ -182,6 +182,24 @@ void genToStr(CodeGen *gen, CallNode *call);
  * @param call je uzol volania ord
  */
 void genOrd(CodeGen *gen, CallNode *call);
+
+/**
+ * @brief funkcia na podmieneny skok, ak plati porovnanie dvoch hodnot
+ * @param gen je kontext generatora
+ * @param left je lavy operand (premenna alebo konstanta)
+ * @param operator je zasobnikova instrukcia porovnania (LTS, GTS, EQS)
+ * @param right je pravy operand
+ * @param label je cislo navestia, kam sa skace
+ */
+void genJumpIfTrue(CodeGen *gen, const char *left, const char *operator, const char * right,
+                   int label);
+
+/**
+ * @brief funkcia na vygenerovanie vstavanej funkcie subStr, pri zlych argumentoch skonci chybou 40
+ * @param gen je kontext generatora
+ * @param call je uzol volania subStr
+ */
+void genSubStr(CodeGen *gen, CallNode *call);
 
 /**
  * @brief funkcia na vygenerovanie volania funkcie definovanej v programe
