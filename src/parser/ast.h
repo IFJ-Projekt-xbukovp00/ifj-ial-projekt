@@ -531,3 +531,10 @@ void astPrint(const ASTNode *node, int depth, FILE *out);
  * @return true pri uspechu, false pri neplatnych parametroch alebo chybe alokacie
  */
 bool astAppend(ASTNode ***items, size_t *count, ASTNode *node);
+
+/**
+ * @brief vytvori uzol bloku (prikazy sa pridavaju cez astAppend)
+ * @param line riadok vo zdrojovom kode
+ * @return novy uzol, alebo NULL pri chybe alokacie
+ */
+ASTNode *astNewBlock(int line);

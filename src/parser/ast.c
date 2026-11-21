@@ -301,3 +301,7 @@ bool astAppend(ASTNode ***items, size_t *count, ASTNode *node) {
     (*items)[*count - 1] = node;
     return true;
 }
+
+ASTNode *astNewBlock(int line) {
+    return astAlloc(sizeof(BlockNode), AST_BLOCK, line);
+}
