@@ -673,3 +673,45 @@ ASTNode *astNewLambda(ASTNode *body, int line) {
     lam->body = body;
     return (ASTNode *)lam;
 }
+
+ASTNode *astNewClassDef(const char *name, int line) {
+    ClassDefNode *cls = (ClassDefNode *)astAlloc(sizeof(ClassDefNode), AST_CLASS_DEF, line);
+    if (cls == NULL) {
+        return NULL;
+    }
+    cls->name = astCopyString(name);
+    if (cls->name == NULL) {
+        free(cls);
+        return NULL;
+    }
+    return (ASTNode *)cls;
+}
+
+ASTNode *astNewTypeAlias(const char *name, Type *aliased, int line) {
+    TypeAliasNode *alias = (TypeAliasNode *)astAlloc(sizeof(TypeAliasNode), AST_TYPE_ALIAS, line);
+    if (alias == NULL) {
+        return NULL;
+    }
+    alias->name = astCopyString(name);
+    if (alias->name == NULL) {
+        free(alias);
+        return NULL;
+    }
+    alias->aliased = aliased;
+    return (ASTNode *)alias;
+}
+
+ASTNode *astNewExtension(const char *recvName, Type *recvType, int line) {
+    ExtensionNode *ext = (ExtensionNode *)astAlloc(sizeof(ExtensionNode), AST_EXTENSION, line);
+    if (ext == NULL) {
+        return NULL;
+    }
+    ext->receiver.name = astCopyString(recvName);
+    if (ext->receiver.name == NULL) {
+        free(ext);
+        return NULL;
+    }
+    ext->receiver.type = recvType;
+    ext->receiver.line = line;
+    return (ASTNode *)ext;
+}

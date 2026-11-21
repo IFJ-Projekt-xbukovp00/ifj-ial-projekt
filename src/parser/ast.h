@@ -678,3 +678,18 @@ ASTNode *astNewMember(ASTNode *object, const char *name, int line);
  * @return novy uzol, alebo NULL pri chybe alokacie
  */
 ASTNode *astNewLambda(ASTNode *body, int line);
+
+/** @brief vytvori uzol definicie case class (atributy do fields cez astParamListAdd) */
+ASTNode *astNewClassDef(const char *name, int line);
+
+/** @brief vytvori uzol aliasu typu */
+ASTNode *astNewTypeAlias(const char *name, Type *aliased, int line);
+
+/**
+ * @brief vytvori uzol extension (metody sa pridavaju cez astAppend)
+ * @param recvName meno prijemcu (skopiruje sa)
+ * @param recvType typ prijemcu (neuvolnuje sa v AST)
+ * @param line riadok vo zdrojovom kode
+ * @return novy uzol, alebo NULL pri chybe alokacie
+ */
+ASTNode *astNewExtension(const char *recvName, Type *recvType, int line);
