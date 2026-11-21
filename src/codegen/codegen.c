@@ -169,7 +169,23 @@ void genPrint(CodeGen *gen, CallNode *call) {
     }
 }
 
+void genFunctionCall(CodeGen *gen, CallNode *call) {
+    DefFuncNode *function = (DefFuncNode *)call->symbol->definition;
+
+    // argumenty idu na zasobnik zlava doprava, funkcia si ich vyberie sama
+    for (size_t argIndex = 0; argIndex < call->argsCount; argIndex++) {
+        genExpr(gen, call->args[argIndex]);
+    }
+
+    emit(gen, "CALL f$%s\n", function->name);
+}
+
 void genCall(CodeGen *gen, CallNode *call) {
+    if (call->callKind == CALL_FUNC) {
+        genFunctionCall(gen, call);
+        return;
+    }
+
     if (call->callKind != CALL_BUILTIN || call->caller->kind != AST_ID) {
         return;
     }
@@ -259,6 +275,8 @@ void genExpr(CodeGen *gen, ASTNode *node) {
         // implicitny prevod Int na Double, ktory vlozila semantika
         genExpr(gen, ((ConvertNode *)node)->operand);
         emit(gen, "INT2FLOATS\n");
+    } else if (node->kind == AST_CALL) {
+        genCall(gen, (CallNode *)node);
     }
 }
 
