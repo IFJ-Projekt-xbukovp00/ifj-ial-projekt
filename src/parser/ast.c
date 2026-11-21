@@ -122,3 +122,24 @@ ASTNode *astNewId(const char *name, int line) {
     return (ASTNode *)idNode;
 }
 
+ASTNode *astNewBinary(TokenType op, ASTNode *left, ASTNode *right, int line) {
+    BinaryNode *bin = (BinaryNode *)astAlloc(sizeof(BinaryNode), AST_BINARY, line);
+    if (bin == NULL) {
+        return NULL;
+    }
+    bin->operator = op;
+    bin->left = left;
+    bin->right = right;
+    return (ASTNode *)bin;
+}
+
+ASTNode *astNewUnary(TokenType op, ASTNode *operand, int line) {
+    UnaryNode *un = (UnaryNode *)astAlloc(sizeof(UnaryNode), AST_UNARY, line);
+    if (un == NULL) {
+        return NULL;
+    }
+    un->operator = op;
+    un->right = operand;
+    return (ASTNode *)un;
+}
+

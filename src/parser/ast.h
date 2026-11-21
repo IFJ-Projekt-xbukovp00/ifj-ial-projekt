@@ -488,3 +488,22 @@ ASTNode *astNewUnitLit(int line);
  * @return novy uzol, alebo NULL pri chybe alokacie
  */
 ASTNode *astNewId(const char *name, int line);
+
+/**
+ * @brief vytvori uzol binarnej operacie
+ * @param op operator (TOK_PLUS, TOK_LESS, ...)
+ * @param left lavy operand (pri chybe alokacie sa neuvolni)
+ * @param right pravy operand (pri chybe alokacie sa neuvolni)
+ * @param line riadok vo zdrojovom kode
+ * @return novy uzol, alebo NULL pri chybe alokacie
+ */
+ASTNode *astNewBinary(TokenType op, ASTNode *left, ASTNode *right, int line);
+
+/**
+ * @brief vytvori uzol unarnej operacie
+ * @param op operator (TOK_MINUS, TOK_NOT, ...)
+ * @param operand operand (pri chybe alokacie sa neuvolni)
+ * @param line riadok vo zdrojovom kode
+ * @return novy uzol, alebo NULL pri chybe alokacie
+ */
+ASTNode *astNewUnary(TokenType op, ASTNode *operand, int line);
