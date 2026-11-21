@@ -224,6 +224,13 @@ void genStatement(CodeGen *gen, ASTNode *node);
 void writeBuffers(CodeGen *gen);
 
 /**
+ * @brief funkcia na definovanie parametrov funkcie a ich naplnenie z datoveho zasobnika
+ * @param gen je kontext generatora
+ * @param function je uzol definicie funkcie
+ */
+void genParams(CodeGen *gen, DefFuncNode *function);
+
+/**
  * @brief funkcia na vygenerovanie definicie funkcie (navestie f$meno)
  * @param gen je kontext generatora
  * @param function je uzol definicie funkcie

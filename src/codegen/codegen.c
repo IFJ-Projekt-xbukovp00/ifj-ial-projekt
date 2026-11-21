@@ -350,9 +350,37 @@ void writeBuffers(CodeGen *gen) {
     dynstr_clear(&gen->code);
 }
 
+void genParams(CodeGen *gen, DefFuncNode *function) {
+    for (size_t listIndex = 0; listIndex < function->paramListCount; listIndex++) {
+        ParamList *paramList = &function->paramList[listIndex];
+
+        for (size_t paramIndex = 0; paramIndex < paramList->params_count; paramIndex++) {
+            Param *param = &paramList->params[paramIndex];
+
+            gen->varCounter++;
+            param->symbol->cgId = gen->varCounter;
+            emitDeclaration(gen, "DEFVAR LF@%s$%d\n", param->name, param->symbol->cgId);
+        }
+    }
+
+    // argumenty su na zasobniku zlava doprava, takze sa vyberaju od posledneho
+    for (size_t listIndex = function->paramListCount; listIndex > 0; listIndex--) {
+        ParamList *paramList = &function->paramList[listIndex - 1];
+
+        for (size_t paramIndex = paramList->params_count; paramIndex > 0; paramIndex--) {
+            Param *param = &paramList->params[paramIndex - 1];
+
+            emit(gen, "POPS ");
+            emitVar(gen, param->name, param->symbol);
+            emit(gen, "\n");
+        }
+    }
+}
+
 void genFunction(CodeGen *gen, DefFuncNode *function) {
     // pomocne premenne ma kazda funkcia vo svojom ramci
     emitHelperVars(gen);
+    genParams(gen, function);
     genStatement(gen, function->body);
 
     if (gen->error != ERR_OK) {
