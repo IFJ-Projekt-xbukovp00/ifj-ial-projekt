@@ -284,6 +284,10 @@ void genCall(CodeGen *gen, CallNode *call) {
         emit(gen, "PUSHS LF@%%t0\n");
     } else if (strcmp(name, "ord") == 0) {
         genOrd(gen, call);
+    } else if (strcmp(name, "chr") == 0) {
+        // hodnota mimo 0 az 127 skonci chybou interpretu 58
+        genExpr(gen, call->args[0]);
+        emit(gen, "INT2CHARS\n");
     }
 }
 
