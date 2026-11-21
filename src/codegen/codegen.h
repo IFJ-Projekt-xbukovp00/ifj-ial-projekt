@@ -216,3 +216,16 @@ void genBlock(CodeGen *gen, BlockNode *block);
  * @param node je generovany prikaz (moze byt NULL)
  */
 void genStatement(CodeGen *gen, ASTNode *node);
+
+/**
+ * @brief funkcia na vypis definicii premennych a kodu z bufferov, buffre sa potom vyprazdnia
+ * @param gen je kontext generatora
+ */
+void writeBuffers(CodeGen *gen);
+
+/**
+ * @brief funkcia na vygenerovanie definicie funkcie (navestie f$meno)
+ * @param gen je kontext generatora
+ * @param function je uzol definicie funkcie
+ */
+void genFunction(CodeGen *gen, DefFuncNode *function);

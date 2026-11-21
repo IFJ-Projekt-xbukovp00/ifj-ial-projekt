@@ -341,6 +341,31 @@ void genStatement(CodeGen *gen, ASTNode *node) {
     }
 }
 
+void writeBuffers(CodeGen *gen) {
+    fputs(gen->declarations.data, gen->out);
+    fputs(gen->code.data, gen->out);
+
+    // buffre sa vyprazdnia pre dalsiu funkciu
+    dynstr_clear(&gen->declarations);
+    dynstr_clear(&gen->code);
+}
+
+void genFunction(CodeGen *gen, DefFuncNode *function) {
+    genStatement(gen, function->body);
+
+    if (gen->error != ERR_OK) {
+        return;
+    }
+
+    // kazda funkcia ma vlastny lokalny ramec
+    fprintf(gen->out, "LABEL f$%s\n", function->name);
+    fprintf(gen->out, "CREATEFRAME\n");
+    fprintf(gen->out, "PUSHFRAME\n");
+    writeBuffers(gen);
+    fprintf(gen->out, "POPFRAME\n");
+    fprintf(gen->out, "RETURN\n");
+}
+
 int codegenGenerate(ProgramNode *prog, FILE *out) {
     CodeGen gen;
     initCodeGen(&gen, out);
@@ -361,8 +386,16 @@ int codegenGenerate(ProgramNode *prog, FILE *out) {
     // kod sa vypise az ked je cely vygenerovany
     if (gen.error == ERR_OK) {
         emitHeader(&gen);
-        fputs(gen.declarations.data, gen.out);
-        fputs(gen.code.data, gen.out);
+        writeBuffers(&gen);
+    }
+
+    // ostatne funkcie su za koncom hlavneho programu
+    for (size_t itemIndex = 0; itemIndex < prog->itemsCount && gen.error == ERR_OK; itemIndex++) {
+        ASTNode *item = prog->items[itemIndex];
+
+        if (item->kind == AST_FUNCTION_DEF && !((DefFuncNode *)item)->isMain) {
+            genFunction(&gen, (DefFuncNode *)item);
+        }
     }
 
     int result = gen.error;
