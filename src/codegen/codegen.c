@@ -192,6 +192,17 @@ void genReadLine(CodeGen *gen) {
     emit(gen, "PUSHS LF@%%t0\n");
 }
 
+void genReadNumber(CodeGen *gen, const char *typeName, const char *zero) {
+    int okLabel = newLabel(gen);
+
+    // READ vrati pri chybnom vstupe alebo EOF nil, vtedy sa vracia 0
+    emit(gen, "READ LF@%%t0 %s\n", typeName);
+    emit(gen, "JUMPIFNEQ L$%d LF@%%t0 nil@nil\n", okLabel);
+    emit(gen, "MOVE LF@%%t0 %s\n", zero);
+    emit(gen, "LABEL L$%d\n", okLabel);
+    emit(gen, "PUSHS LF@%%t0\n");
+}
+
 void genCall(CodeGen *gen, CallNode *call) {
     if (call->callKind == CALL_FUNC) {
         genFunctionCall(gen, call);
@@ -208,6 +219,10 @@ void genCall(CodeGen *gen, CallNode *call) {
         genPrint(gen, call);
     } else if (strcmp(name, "readLine") == 0) {
         genReadLine(gen);
+    } else if (strcmp(name, "readInt") == 0) {
+        genReadNumber(gen, "int", "int@0");
+    } else if (strcmp(name, "readDouble") == 0) {
+        genReadNumber(gen, "float", "float@0x0p+0");
     }
 }
 

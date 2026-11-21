@@ -155,6 +155,14 @@ void genPrint(CodeGen *gen, CallNode *call);
 void genReadLine(CodeGen *gen);
 
 /**
+ * @brief funkcia na vygenerovanie vstavanej funkcie readInt alebo readDouble
+ * @param gen je kontext generatora
+ * @param typeName je typ pre instrukciu READ (int alebo float)
+ * @param zero je konstanta nuly, ktora sa vrati pri chybnom vstupe
+ */
+void genReadNumber(CodeGen *gen, const char *typeName, const char *zero);
+
+/**
  * @brief funkcia na vygenerovanie volania funkcie definovanej v programe
  * @param gen je kontext generatora
  * @param call je uzol volania
