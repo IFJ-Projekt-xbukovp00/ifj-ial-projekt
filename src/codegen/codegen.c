@@ -30,6 +30,7 @@
 #include "codegen.h"
 #include "dynstr.h"
 #include "error.h"
+#include "semantic.h"
 
 #include <stdarg.h>
 #include <string.h>
@@ -337,8 +338,14 @@ void genWhile(CodeGen *gen, WhileNode *whileNode) {
 }
 
 void genReturn(CodeGen *gen, ReturnNode *returnNode) {
-    // prazdny return vracia ()
-    if (returnNode->returnValue == NULL) {
+    if (isUnitType(gen->function->returnType)) {
+        // funkcia typu Unit vrati () az na konci, hodnota za return sa len vyhodnoti
+        if (returnNode->returnValue != NULL) {
+            genExpr(gen, returnNode->returnValue);
+            emit(gen, "POPS LF@%%trash\n");
+        }
+    } else if (returnNode->returnValue == NULL) {
+        // prazdny return vracia ()
         emit(gen, "PUSHS nil@nil\n");
     } else {
         genExpr(gen, returnNode->returnValue);
@@ -401,6 +408,10 @@ void genStatement(CodeGen *gen, ASTNode *node) {
         // vysledok volania sa nepouzije, zahodi sa
         genCall(gen, (CallNode *)node);
         emit(gen, "POPS LF@%%trash\n");
+    } else {
+        // vyraz ako prikaz sa vyhodnoti a jeho hodnota sa zahodi
+        genExpr(gen, node);
+        emit(gen, "POPS LF@%%trash\n");
     }
 }
 
@@ -447,11 +458,18 @@ void genFunction(CodeGen *gen, DefFuncNode *function) {
 
     gen->function = function;
 
-    // navratova hodnota je hodnota tela, ostane na zasobniku
-    genValue(gen, function->body);
+    if (isUnitType(function->returnType)) {
+        // pri type Unit sa hodnota tela zahodi a funkcia vrati ()
+        genStatement(gen, function->body);
+        emit(gen, "LABEL f$%s$end\n", function->name);
+        emit(gen, "PUSHS nil@nil\n");
+    } else {
+        // navratova hodnota je hodnota tela, ostane na zasobniku
+        genValue(gen, function->body);
 
-    // sem skace return, hodnota uz je na zasobniku
-    emit(gen, "LABEL f$%s$end\n", function->name);
+        // sem skace return, hodnota uz je na zasobniku
+        emit(gen, "LABEL f$%s$end\n", function->name);
+    }
 
     if (gen->error != ERR_OK) {
         return;
