@@ -40,12 +40,13 @@
  * @brief kontext generatora, prenasa sa medzi vsetkymi funkciami generatora
  */
 typedef struct {
-    FILE *out;           // vystupny subor
-    DynStr declarations; // DEFVAR vsetkych premennych, vypisu sa pred kodom
-    DynStr code;         // vygenerovany kod, vypise sa az na konci
-    int labelCounter;    // pocitadlo navesti L$N
-    int varCounter;      // pocitadlo premennych, cislo N v mene x$N
-    int error;           // ERR_INTERNAL ak zlyhala alokacia
+    FILE *out;             // vystupny subor
+    DynStr declarations;   // DEFVAR vsetkych premennych, vypisu sa pred kodom
+    DynStr code;           // vygenerovany kod, vypise sa az na konci
+    int labelCounter;      // pocitadlo navesti L$N
+    int varCounter;        // pocitadlo premennych, cislo N v mene x$N
+    DefFuncNode *function; // prave generovana funkcia
+    int error;             // ERR_INTERNAL ak zlyhala alokacia
 } CodeGen;
 
 /**
@@ -209,6 +210,13 @@ void genIf(CodeGen *gen, IfNode *ifNode);
  * @param whileNode je uzol cyklu
  */
 void genWhile(CodeGen *gen, WhileNode *whileNode);
+
+/**
+ * @brief funkcia na vygenerovanie prikazu return, skace na koniec funkcie f$meno$end
+ * @param gen je kontext generatora
+ * @param returnNode je uzol return
+ */
+void genReturn(CodeGen *gen, ReturnNode *returnNode);
 
 /**
  * @brief funkcia na vygenerovanie vsetkych prikazov bloku

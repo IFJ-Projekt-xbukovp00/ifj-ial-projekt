@@ -122,6 +122,7 @@ void initCodeGen(CodeGen *gen, FILE *out) {
     gen->out = out;
     gen->labelCounter = 0;
     gen->varCounter = 0;
+    gen->function = NULL;
     gen->error = ERR_OK;
 
     // oba buffre sa inicializuju vzdy, aby sa dali uvolnit aj pri chybe
@@ -335,6 +336,17 @@ void genWhile(CodeGen *gen, WhileNode *whileNode) {
     emit(gen, "LABEL L$%d\n", endLabel);
 }
 
+void genReturn(CodeGen *gen, ReturnNode *returnNode) {
+    // prazdny return vracia ()
+    if (returnNode->returnValue == NULL) {
+        emit(gen, "PUSHS nil@nil\n");
+    } else {
+        genExpr(gen, returnNode->returnValue);
+    }
+
+    emit(gen, "JUMP f$%s$end\n", gen->function->name);
+}
+
 void genBlock(CodeGen *gen, BlockNode *block) {
     for (size_t commandIndex = 0; commandIndex < block->commandOrderCount; commandIndex++) {
         genStatement(gen, block->commandOrder[commandIndex]);
@@ -356,8 +368,9 @@ void genValue(CodeGen *gen, ASTNode *node) {
     } else if (node->kind == AST_EXPR_STATEMENT) {
         genValue(gen, ((LonelyExprNode *)node)->expr);
     } else if (node->kind == AST_VAR_DEF || node->kind == AST_ASSIGN || node->kind == AST_WHILE ||
-               node->kind == AST_IF) {
+               node->kind == AST_IF || node->kind == AST_RETURN) {
         // definicia, priradenie, cyklus a podmieneny prikaz nemaju hodnotu, vysledok je ()
+        // za returnom sa sem program nedostane
         genStatement(gen, node);
         emit(gen, "PUSHS nil@nil\n");
     } else {
@@ -382,6 +395,8 @@ void genStatement(CodeGen *gen, ASTNode *node) {
         genIf(gen, (IfNode *)node);
     } else if (node->kind == AST_WHILE) {
         genWhile(gen, (WhileNode *)node);
+    } else if (node->kind == AST_RETURN) {
+        genReturn(gen, (ReturnNode *)node);
     } else if (node->kind == AST_CALL) {
         // vysledok volania sa nepouzije, zahodi sa
         genCall(gen, (CallNode *)node);
@@ -430,8 +445,13 @@ void genFunction(CodeGen *gen, DefFuncNode *function) {
     emitHelperVars(gen);
     genParams(gen, function);
 
+    gen->function = function;
+
     // navratova hodnota je hodnota tela, ostane na zasobniku
     genValue(gen, function->body);
+
+    // sem skace return, hodnota uz je na zasobniku
+    emit(gen, "LABEL f$%s$end\n", function->name);
 
     if (gen->error != ERR_OK) {
         return;
