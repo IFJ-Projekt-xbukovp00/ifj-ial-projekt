@@ -87,7 +87,7 @@ void emitDeclaration(CodeGen *gen, const char *format, ...);
 void emitHeader(CodeGen *gen);
 
 /**
- * @brief funkcia na definovanie pomocnych premennych %t0, %t1 a %trash
+ * @brief funkcia na definovanie pomocnych premennych %t0, %t1, %t2 a %trash
  * @param gen je kontext generatora
  */
 void emitHelperVars(CodeGen *gen);
@@ -175,6 +175,13 @@ void genValueToStr(CodeGen *gen, Type *type);
  * @param call je uzol volania toStr
  */
 void genToStr(CodeGen *gen, CallNode *call);
+
+/**
+ * @brief funkcia na vygenerovanie vstavanej funkcie ord, mimo rozsahu vracia -1
+ * @param gen je kontext generatora
+ * @param call je uzol volania ord
+ */
+void genOrd(CodeGen *gen, CallNode *call);
 
 /**
  * @brief funkcia na vygenerovanie volania funkcie definovanej v programe

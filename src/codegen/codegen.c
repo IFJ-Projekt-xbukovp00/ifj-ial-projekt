@@ -77,6 +77,7 @@ void emitHeader(CodeGen *gen) { fprintf(gen->out, ".IFJcode26\n"); }
 void emitHelperVars(CodeGen *gen) {
     emitDeclaration(gen, "DEFVAR LF@%%t0\n");
     emitDeclaration(gen, "DEFVAR LF@%%t1\n");
+    emitDeclaration(gen, "DEFVAR LF@%%t2\n");
     emitDeclaration(gen, "DEFVAR LF@%%trash\n");
 }
 
@@ -224,6 +225,31 @@ void genToStr(CodeGen *gen, CallNode *call) {
     genValueToStr(gen, call->args[0]->type);
 }
 
+void genOrd(CodeGen *gen, CallNode *call) {
+    int badLabel = newLabel(gen);
+    int endLabel = newLabel(gen);
+
+    genExpr(gen, call->args[0]);
+    genExpr(gen, call->args[1]);
+    emit(gen, "POPS LF@%%t1\n");
+    emit(gen, "POPS LF@%%t0\n");
+
+    // index mimo retazec (aj prazdny retazec) vracia -1
+    emit(gen, "LT LF@%%t2 LF@%%t1 int@0\n");
+    emit(gen, "JUMPIFEQ L$%d LF@%%t2 bool@true\n", badLabel);
+    emit(gen, "STRLEN LF@%%t2 LF@%%t0\n");
+    emit(gen, "LT LF@%%t2 LF@%%t1 LF@%%t2\n");
+    emit(gen, "JUMPIFEQ L$%d LF@%%t2 bool@false\n", badLabel);
+
+    emit(gen, "STRI2INT LF@%%t0 LF@%%t0 LF@%%t1\n");
+    emit(gen, "PUSHS LF@%%t0\n");
+    emit(gen, "JUMP L$%d\n", endLabel);
+
+    emit(gen, "LABEL L$%d\n", badLabel);
+    emit(gen, "PUSHS int@-1\n");
+    emit(gen, "LABEL L$%d\n", endLabel);
+}
+
 void genCall(CodeGen *gen, CallNode *call) {
     if (call->callKind == CALL_FUNC) {
         genFunctionCall(gen, call);
@@ -256,6 +282,8 @@ void genCall(CodeGen *gen, CallNode *call) {
         emit(gen, "POPS LF@%%t0\n");
         emit(gen, "STRLEN LF@%%t0 LF@%%t0\n");
         emit(gen, "PUSHS LF@%%t0\n");
+    } else if (strcmp(name, "ord") == 0) {
+        genOrd(gen, call);
     }
 }
 
