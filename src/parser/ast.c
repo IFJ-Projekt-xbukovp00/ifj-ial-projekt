@@ -370,3 +370,12 @@ ASTNode *astNewWhile(ASTNode *cond, ASTNode *body, int line) {
     whileNode->body = body;
     return (ASTNode *)whileNode;
 }
+
+ASTNode *astNewCall(ASTNode *caller, int line) {
+    CallNode *call = (CallNode *)astAlloc(sizeof(CallNode), AST_CALL, line);
+    if (call == NULL) {
+        return NULL;
+    }
+    call->caller = caller;
+    return (ASTNode *)call;
+}

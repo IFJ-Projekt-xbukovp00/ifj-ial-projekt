@@ -594,3 +594,11 @@ ASTNode *astNewIf(ASTNode *cond, ASTNode *thenB, ASTNode *elseB, int line);
  * @return novy uzol, alebo NULL pri chybe alokacie
  */
 ASTNode *astNewWhile(ASTNode *cond, ASTNode *body, int line);
+
+/**
+ * @brief vytvori uzol volania funkcie (argumenty cez astAppend, vnorene volania cez caller)
+ * @param caller volany vyraz alebo predchadzajuce volanie pri f(1)(2)
+ * @param line riadok vo zdrojovom kode
+ * @return novy uzol, alebo NULL pri chybe alokacie
+ */
+ASTNode *astNewCall(ASTNode *caller, int line);
