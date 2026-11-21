@@ -615,3 +615,30 @@ ParamList *astFuncAddParamList(DefFuncNode *func) {
 ASTNode *astNewProgram(int line) {
     return astAlloc(sizeof(ProgramNode), AST_PROGRAM, line);
 }
+
+ASTNode *astNewRange(ASTNode *from, ASTNode *to, ASTNode *step, bool inclusive, int line) {
+    RangeNode *range = (RangeNode *)astAlloc(sizeof(RangeNode), AST_RANGE, line);
+    if (range == NULL) {
+        return NULL;
+    }
+    range->from = from;
+    range->to = to;
+    range->step = step;
+    range->inclusive = inclusive;
+    return (ASTNode *)range;
+}
+
+ASTNode *astNewFor(const char *varName, ASTNode *source, ASTNode *body, int line) {
+    ForNode *forNode = (ForNode *)astAlloc(sizeof(ForNode), AST_FOR, line);
+    if (forNode == NULL) {
+        return NULL;
+    }
+    forNode->varName = astCopyString(varName);
+    if (forNode->varName == NULL) {
+        free(forNode);
+        return NULL;
+    }
+    forNode->source = source;
+    forNode->body = body;
+    return (ASTNode *)forNode;
+}

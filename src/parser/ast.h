@@ -634,3 +634,24 @@ ParamList *astFuncAddParamList(DefFuncNode *func);
 
 /** @brief vytvori korenovy uzol programu (definicie sa pridavaju cez astAppend) */
 ASTNode *astNewProgram(int line);
+
+/**
+ * @brief vytvori uzol rozsahu (to alebo until, step moze byt NULL)
+ * @param from dolna hranica rozsahu
+ * @param to horna hranica rozsahu
+ * @param step krok rozsahu alebo NULL (predvolene 1)
+ * @param inclusive true pre to, false pre until
+ * @param line riadok vo zdrojovom kode
+ * @return novy uzol, alebo NULL pri chybe alokacie
+ */
+ASTNode *astNewRange(ASTNode *from, ASTNode *to, ASTNode *step, bool inclusive, int line);
+
+/**
+ * @brief vytvori uzol cyklu for (straze sa pridavaju cez astAppend)
+ * @param varName meno riadiacej premennej (skopiruje sa)
+ * @param source zdroj iteracie (rozsah alebo zoznam)
+ * @param body telo cyklu
+ * @param line riadok vo zdrojovom kode
+ * @return novy uzol, alebo NULL pri chybe alokacie
+ */
+ASTNode *astNewFor(const char *varName, ASTNode *source, ASTNode *body, int line);
