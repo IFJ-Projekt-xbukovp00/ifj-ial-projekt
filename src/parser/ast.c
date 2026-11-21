@@ -402,13 +402,14 @@ bool astAppend(ASTNode ***items, size_t *count, ASTNode *node) {
     if (items == NULL || count == NULL) {
         return false;
     }
-    // zvacsi pole o jeden prvok
-    *items = realloc(*items, (*count + 1) * sizeof(ASTNode *));
-    (*count)++;
-    if (*items == NULL) {
+    // zvacsi pole o jeden prvok cez docasny ukazovatel
+    ASTNode **tmp = realloc(*items, (*count + 1) * sizeof(ASTNode *));
+    if (tmp == NULL) {
         return false;
     }
-    (*items)[*count - 1] = node;
+    *items = tmp;
+    (*items)[*count] = node;
+    (*count)++;
     return true;
 }
 
@@ -496,4 +497,40 @@ ASTNode *astNewCall(ASTNode *caller, int line) {
     }
     call->caller = caller;
     return (ASTNode *)call;
+}
+
+bool astParamListAdd(ParamList *list, const char *name, Type *type, int line) {
+    if (list == NULL || name == NULL) {
+        return false;
+    }
+    char *nameCopy = astCopyString(name);
+    if (nameCopy == NULL) {
+        return false;
+    }
+    Param *tmp = realloc(list->params, (list->params_count + 1) * sizeof(Param));
+    if (tmp == NULL) {
+        free(nameCopy);
+        return false;
+    }
+    list->params = tmp;
+    Param *param = &list->params[list->params_count];
+    param->name = nameCopy;
+    param->type = type;
+    param->line = line;
+    // symbol doplni az semantika
+    param->symbol = NULL;
+    list->params_count++;
+    return true;
+}
+
+void astParamListFree(ParamList *list) {
+    if (list == NULL) {
+        return;
+    }
+    for (size_t i = 0; i < list->params_count; i++) {
+        free(list->params[i].name);
+    }
+    free(list->params);
+    list->params = NULL;
+    list->params_count = 0;
 }

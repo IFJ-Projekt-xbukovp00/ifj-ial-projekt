@@ -602,3 +602,16 @@ ASTNode *astNewWhile(ASTNode *cond, ASTNode *body, int line);
  * @return novy uzol, alebo NULL pri chybe alokacie
  */
 ASTNode *astNewCall(ASTNode *caller, int line);
+
+/**
+ * @brief prida parameter do zoznamu parametrov (spravi kopiu mena)
+ * @param list zoznam parametrov
+ * @param name meno parametra
+ * @param type typ parametra (neuvolnuje sa v AST)
+ * @param line riadok vo zdrojovom kode
+ * @return true pri uspechu, false pri chybe alokacie alebo neplatnych parametroch
+ */
+bool astParamListAdd(ParamList *list, const char *name, Type *type, int line);
+
+/** @brief uvolni mena a pole parametrov v zozname (Type * a Symbol * neuvolnuje) */
+void astParamListFree(ParamList *list);
