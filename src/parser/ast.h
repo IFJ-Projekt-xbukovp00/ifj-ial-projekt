@@ -522,3 +522,12 @@ void astFree(ASTNode *node);
  * @param out vystupny stream
  */
 void astPrint(const ASTNode *node, int depth, FILE *out);
+
+/**
+ * @brief prida uzol na koniec dynamickeho pola ukazovatelov
+ * @param items adresa pola ukazovatelov na AST uzly
+ * @param count adresa pocitadla prvkov v poli
+ * @param node vkladany uzol
+ * @return true pri uspechu, false pri neplatnych parametroch alebo chybe alokacie
+ */
+bool astAppend(ASTNode ***items, size_t *count, ASTNode *node);

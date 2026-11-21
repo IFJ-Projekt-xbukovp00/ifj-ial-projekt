@@ -287,3 +287,17 @@ void astPrint(const ASTNode *node, int depth, FILE *out) {
         break;
     }
 }
+
+bool astAppend(ASTNode ***items, size_t *count, ASTNode *node) {
+    if (items == NULL || count == NULL) {
+        return false;
+    }
+    // zvacsi pole o jeden prvok
+    *items = realloc(*items, (*count + 1) * sizeof(ASTNode *));
+    (*count)++;
+    if (*items == NULL) {
+        return false;
+    }
+    (*items)[*count - 1] = node;
+    return true;
+}
