@@ -43,6 +43,7 @@
  */
 typedef enum {
     HELPER_SUBSTR, // $subStr
+    HELPER_ORD,    // $ord
     HELPER_COUNT   // pocet pomocnych funkcii, musi byt posledny
 } HelperKind;
 
@@ -208,11 +209,17 @@ void genValueToStr(CodeGen *gen, Type *type);
 void genToStr(CodeGen *gen, CallNode *call);
 
 /**
- * @brief funkcia na vygenerovanie vstavanej funkcie ord, mimo rozsahu vracia -1
+ * @brief funkcia na vygenerovanie volania vstavanej funkcie ord (pomocna funkcia $ord)
  * @param gen je kontext generatora
  * @param call je uzol volania ord
  */
 void genOrd(CodeGen *gen, CallNode *call);
+
+/**
+ * @brief funkcia na vygenerovanie tela pomocnej funkcie $ord
+ * @param gen je kontext generatora
+ */
+void genOrdHelper(CodeGen *gen);
 
 /**
  * @brief funkcia na podmieneny skok, ak plati porovnanie dvoch hodnot

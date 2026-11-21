@@ -232,11 +232,16 @@ void genToStr(CodeGen *gen, CallNode *call) {
 }
 
 void genOrd(CodeGen *gen, CallNode *call) {
-    int badLabel = newLabel(gen);
-    int endLabel = newLabel(gen);
-
     genExpr(gen, call->args[0]);
     genExpr(gen, call->args[1]);
+
+    useHelper(gen, HELPER_ORD);
+    emit(gen, "CALL $ord\n");
+}
+
+void genOrdHelper(CodeGen *gen) {
+    int badLabel = newLabel(gen);
+
     emit(gen, "POPS LF@%%t1\n");
     emit(gen, "POPS LF@%%t0\n");
 
@@ -249,11 +254,11 @@ void genOrd(CodeGen *gen, CallNode *call) {
 
     emit(gen, "STRI2INT LF@%%t0 LF@%%t0 LF@%%t1\n");
     emit(gen, "PUSHS LF@%%t0\n");
-    emit(gen, "JUMP L$%d\n", endLabel);
+    emit(gen, "POPFRAME\n");
+    emit(gen, "RETURN\n");
 
     emit(gen, "LABEL L$%d\n", badLabel);
     emit(gen, "PUSHS int@-1\n");
-    emit(gen, "LABEL L$%d\n", endLabel);
 }
 
 void genJumpIfTrue(CodeGen *gen, const char *left, const char *operator, const char *right,
@@ -653,6 +658,9 @@ void writeHelper(CodeGen *gen, HelperKind helper) {
     if (helper == HELPER_SUBSTR) {
         name = "$subStr";
         genSubStrHelper(gen);
+    } else if (helper == HELPER_ORD) {
+        name = "$ord";
+        genOrdHelper(gen);
     }
 
     if (gen->error != ERR_OK) {
