@@ -375,9 +375,28 @@ void genSubStrHelper(CodeGen *gen) {
     emit(gen, "PUSHS LF@%%t3\n");
 }
 
+void genExtMethodCall(CodeGen *gen, CallNode *call) {
+    CallNode *firstCall = call;
+
+    // x.plus(1)(2): najvnutornejsie volanie ma ako caller clen x.plus
+    while (firstCall->caller->kind == AST_CALL) {
+        firstCall = (CallNode *)firstCall->caller;
+    }
+
+    // prijemca ide na zasobnik ako prvy argument, za nim argumenty vsetkych zoznamov
+    genExpr(gen, ((MemberNode *)firstCall->caller)->object);
+    genArgLists(gen, call);
+
+    emit(gen, "CALL ");
+    emitFunctionLabel(gen, (DefFuncNode *)call->symbol->definition);
+    emit(gen, "\n");
+}
+
 void genCall(CodeGen *gen, CallNode *call) {
     if (call->callKind == CALL_FUNC) {
         genFunctionCall(gen, call);
+    } else if (call->callKind == CALL_EXT_METHOD) {
+        genExtMethodCall(gen, call);
     } else if (call->callKind == CALL_BUILTIN && call->caller->kind == AST_ID &&
                genBuiltinCall(gen, call, ((IDNode *)call->caller)->name)) {
         // vstavana funkcia uz nechala vysledok na zasobniku
@@ -485,6 +504,14 @@ void genMember(CodeGen *gen, MemberNode *member) {
     // je objektom dalsi clen, ten uz necha na zasobniku svoju hodnotu
     ASTNode *object = member->object;
     genExpr(gen, object);
+
+    if (member->memberKind == MEM_EXT_METHOD) {
+        // metoda bez zatvoriek, hodnota pred bodkou je prijemca
+        emit(gen, "CALL ");
+        emitFunctionLabel(gen, (DefFuncNode *)member->symbol->definition);
+        emit(gen, "\n");
+        return;
+    }
 
     if (member->memberKind != MEM_BUILTIN) {
         return;

@@ -282,6 +282,13 @@ void genArgLists(CodeGen *gen, CallNode *call);
 void genFunctionCall(CodeGen *gen, CallNode *call);
 
 /**
+ * @brief funkcia na vygenerovanie volania rozsirujucej metody x.meno(...)
+ * @param gen je kontext generatora
+ * @param call je uzol volania (posledny zoznam argumentov)
+ */
+void genExtMethodCall(CodeGen *gen, CallNode *call);
+
+/**
  * @brief funkcia na vygenerovanie volania funkcie, vysledok ostane na zasobniku
  * @param gen je kontext generatora
  * @param call je uzol volania
