@@ -459,16 +459,18 @@ void genFloor(CodeGen *gen) {
 }
 
 void genMember(CodeGen *gen, MemberNode *member) {
-    // clen sa pocita z hodnoty pred bodkou
-    genExpr(gen, member->object);
+    // clen sa pocita z hodnoty pred bodkou, pri retazeni (x.floor.toInt)
+    // je objektom dalsi clen, ten uz necha na zasobniku svoju hodnotu
+    ASTNode *object = member->object;
+    genExpr(gen, object);
 
     if (member->memberKind != MEM_BUILTIN) {
         return;
     }
 
     if (strcmp(member->name, "toString") == 0) {
-        // x.toString je to iste ako toStr(x)
-        genValueToStr(gen, member->object->type);
+        // x.toString je to iste ako toStr(x), typ je typ objektu (aj ked je to clen)
+        genValueToStr(gen, object->type);
     } else if (strcmp(member->name, "toInt") == 0) {
         // d.toInt je to iste ako toInt(d)
         emit(gen, "FLOAT2INTS\n");
