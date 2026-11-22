@@ -101,7 +101,7 @@ static ASTNode *nodeFromToken(const Token *token) {
     const char *lexeme = token->lexeme.data;
     size_t len = token->lexeme.len;
 
-    if (token->type == TOK_IDENTIFIER) {
+    if (token->type == TOK_IDENTIFIER || token->type == TOK_KW_LIST) {
         IDNode *idNode = newNode(sizeof(IDNode), AST_ID, token->line);
         if (idNode == NULL) {
             return NULL;
@@ -193,6 +193,14 @@ void expr_free(ASTNode *node) {
         free(call->args);
         break;
     }
+    case AST_LIST_LIT: {
+        ListLitNode *list = (ListLitNode *)node;
+        for (size_t i = 0; i < list->elemsCount; i++) {
+            expr_free(list->elems[i]);
+        }
+        free(list->elems);
+        break;
+    }
     case AST_RANGE:
         expr_free(((RangeNode *)node)->from);
         expr_free(((RangeNode *)node)->to);
@@ -245,6 +253,7 @@ static int peekToken(PsaState *state, Token **next) {
 static int classifyToken(PsaState *state, PtIndex *column) {
     const Token *token = state->token;
     switch (token->type) {
+    case TOK_KW_LIST: // List(...) a List.range(...) ako identifikator
     case TOK_IDENTIFIER: {
         // to/until/by chodia z lexera ako bezny identifikator
         if (strcmp(token->lexeme.data, "to") == 0) {
@@ -365,8 +374,8 @@ static bool isBinaryOperator(PtIndex ptIndex) {
     }
 }
 
-// rozparsuje ( ) alebo ( E , E , ... ) do CallNode
-static int takeArguments(StackItem *items, int count, CallNode *call) {
+// rozparsuje ( ) alebo ( E , E , ... ) do pola argumentov
+static int takeArguments(StackItem *items, int count, ASTNode ***args, size_t *argsCount) {
     if (count < 2 || !isTerminal(&items[0], PT_LPAR) || !isTerminal(&items[count - 1], PT_RPAR)) {
         return ERR_SYNTAX;
     }
@@ -388,16 +397,16 @@ static int takeArguments(StackItem *items, int count, CallNode *call) {
         }
     }
 
-    size_t argsCount = (size_t)(inner + 1) / 2;
-    call->args = malloc(argsCount * sizeof(ASTNode *));
-    if (call->args == NULL) {
+    size_t n = (size_t)(inner + 1) / 2;
+    *args = malloc(n * sizeof(ASTNode *));
+    if (*args == NULL) {
         return ERR_INTERNAL;
     }
-    for (size_t i = 0; i < argsCount; i++) {
-        call->args[i] = items[1 + 2 * i].node;
+    for (size_t i = 0; i < n; i++) {
+        (*args)[i] = items[1 + 2 * i].node;
         items[1 + 2 * i].node = NULL; // uz patri volaniu
     }
-    call->argsCount = argsCount;
+    *argsCount = n;
     return ERR_OK;
 }
 
@@ -503,13 +512,28 @@ static int reduceHandle(StackItem *handle, int count, ASTNode **result) {
         return ERR_OK;
     }
 
+    // E -> List ( prvky ), zoznam nie je volanie funkcie
+    if (count >= 3 && isTerminal(&handle[0], PT_FUNC) && handle[0].tokenType == TOK_KW_LIST) {
+        ListLitNode *list = newNode(sizeof(ListLitNode), AST_LIST_LIT, line);
+        if (list == NULL) {
+            return ERR_INTERNAL;
+        }
+        int err = takeArguments(&handle[1], count - 1, &list->elems, &list->elemsCount);
+        if (err != ERR_OK) {
+            expr_free((ASTNode *)list);
+            return err;
+        }
+        *result = (ASTNode *)list;
+        return ERR_OK;
+    }
+
     // E -> f ( args )
     if (count >= 3 && isTerminal(&handle[0], PT_FUNC)) {
         CallNode *call = newNode(sizeof(CallNode), AST_CALL, line);
         if (call == NULL) {
             return ERR_INTERNAL;
         }
-        int err = takeArguments(&handle[1], count - 1, call);
+        int err = takeArguments(&handle[1], count - 1, &call->args, &call->argsCount);
         if (err != ERR_OK) {
             expr_free((ASTNode *)call);
             return err;
@@ -533,7 +557,7 @@ static int reduceHandle(StackItem *handle, int count, ASTNode **result) {
             free(mem);
             return ERR_INTERNAL;
         }
-        int err = takeArguments(&handle[3], count - 3, call);
+        int err = takeArguments(&handle[3], count - 3, &call->args, &call->argsCount);
         if (err != ERR_OK) {
             expr_free((ASTNode *)call);
             free(mem);
