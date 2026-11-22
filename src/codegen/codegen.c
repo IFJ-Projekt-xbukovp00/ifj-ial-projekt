@@ -559,32 +559,43 @@ void genJumpIfFalse(CodeGen *gen, ASTNode *condition, int label) {
     emit(gen, "JUMPIFEQS L$%d\n", label);
 }
 
-void genIfChain(CodeGen *gen, IfNode *ifNode, int endLabel) {
+void genBranch(CodeGen *gen, ASTNode *branch, bool valueUsed) {
+    if (valueUsed) {
+        genValue(gen, branch);
+    } else {
+        genStatement(gen, branch);
+    }
+}
+
+void genIfChain(CodeGen *gen, IfNode *ifNode, int endLabel, bool valueUsed) {
     int elseLabel = newLabel(gen);
 
     // pri nepravdivej podmienke sa skace na else vetvu
     genJumpIfFalse(gen, ifNode->condition, elseLabel);
-    genStatement(gen, ifNode->thenBranch);
+    genBranch(gen, ifNode->thenBranch, valueUsed);
     emit(gen, "JUMP L$%d\n", endLabel);
     emit(gen, "LABEL L$%d\n", elseLabel);
 
     if (ifNode->elseBranch == NULL) {
-        // if bez else, pri false sa then vetva len preskoci
+        // if bez else, pri false sa then vetva len preskoci, hodnota je ()
+        if (valueUsed) {
+            emit(gen, "PUSHS nil@nil\n");
+        }
         return;
     }
 
     if (ifNode->elseBranch->kind == AST_IF) {
         // else if pokracuje v tom istom retazci, koniec je spolocny
-        genIfChain(gen, (IfNode *)ifNode->elseBranch, endLabel);
+        genIfChain(gen, (IfNode *)ifNode->elseBranch, endLabel, valueUsed);
     } else {
-        genStatement(gen, ifNode->elseBranch);
+        genBranch(gen, ifNode->elseBranch, valueUsed);
     }
 }
 
-void genIf(CodeGen *gen, IfNode *ifNode) {
+void genIf(CodeGen *gen, IfNode *ifNode, bool valueUsed) {
     int endLabel = newLabel(gen);
 
-    genIfChain(gen, ifNode, endLabel);
+    genIfChain(gen, ifNode, endLabel, valueUsed);
     emit(gen, "LABEL L$%d\n", endLabel);
 }
 
@@ -662,7 +673,7 @@ void genStatement(CodeGen *gen, ASTNode *node) {
     } else if (node->kind == AST_ASSIGN) {
         genAssign(gen, (AssignNode *)node);
     } else if (node->kind == AST_IF) {
-        genIf(gen, (IfNode *)node);
+        genIf(gen, (IfNode *)node, false);
     } else if (node->kind == AST_WHILE) {
         genWhile(gen, (WhileNode *)node);
     } else if (node->kind == AST_RETURN) {

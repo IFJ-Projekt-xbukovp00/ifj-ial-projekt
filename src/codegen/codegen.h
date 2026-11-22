@@ -340,19 +340,29 @@ void genAssign(CodeGen *gen, AssignNode *assign);
 void genJumpIfFalse(CodeGen *gen, ASTNode *condition, int label);
 
 /**
+ * @brief funkcia na vygenerovanie vetvy podmienky
+ * @param gen je kontext generatora
+ * @param branch je vetva (blok alebo jeden prikaz)
+ * @param valueUsed je true, ak ma vetva nechat hodnotu na zasobniku
+ */
+void genBranch(CodeGen *gen, ASTNode *branch, bool valueUsed);
+
+/**
  * @brief funkcia na vygenerovanie jedneho if v retazci else if
  * @param gen je kontext generatora
  * @param ifNode je uzol podmienky
  * @param endLabel je cislo spolocneho navestia za celym retazcom
+ * @param valueUsed je true, ak sa hodnota if pouzije
  */
-void genIfChain(CodeGen *gen, IfNode *ifNode, int endLabel);
+void genIfChain(CodeGen *gen, IfNode *ifNode, int endLabel, bool valueUsed);
 
 /**
- * @brief funkcia na vygenerovanie podmieneneho prikazu if/else
+ * @brief funkcia na vygenerovanie podmienky if (prikaz aj vyraz)
  * @param gen je kontext generatora
  * @param ifNode je uzol podmienky
+ * @param valueUsed je true, ak ma if nechat hodnotu na zasobniku
  */
-void genIf(CodeGen *gen, IfNode *ifNode);
+void genIf(CodeGen *gen, IfNode *ifNode, bool valueUsed);
 
 /**
  * @brief funkcia na vygenerovanie cyklu while
