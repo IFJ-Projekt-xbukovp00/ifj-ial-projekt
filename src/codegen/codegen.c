@@ -672,8 +672,15 @@ void genFor(CodeGen *gen, ForNode *forNode) {
     emit(gen, "POPS LF@%%h%d\n", endVar);
 
     if (range->step != NULL) {
+        int stepOkLabel = newLabel(gen);
+
         genExpr(gen, range->step);
         emit(gen, "POPS LF@%%h%d\n", stepVar);
+
+        // nulovy krok sa pri literali chyti uz v semantike, inak az tu za behu
+        emit(gen, "JUMPIFNEQ L$%d LF@%%h%d int@0\n", stepOkLabel, stepVar);
+        emit(gen, "EXIT int@40\n");
+        emit(gen, "LABEL L$%d\n", stepOkLabel);
     } else {
         emit(gen, "MOVE LF@%%h%d int@1\n", stepVar);
     }
