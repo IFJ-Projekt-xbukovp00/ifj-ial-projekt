@@ -141,6 +141,13 @@ void emitString(CodeGen *gen, const char *text);
 void emitVar(CodeGen *gen, const char *name, Symbol *symbol);
 
 /**
+ * @brief funkcia na vypis navestia funkcie (f$meno, pri rozsirujucej metode ext$Typ$meno)
+ * @param gen je kontext generatora
+ * @param function je uzol definicie funkcie alebo metody
+ */
+void emitFunctionLabel(CodeGen *gen, DefFuncNode *function);
+
+/**
  * @brief funkcia na vypis literalu ako konstanty (int@5, float@0x1p+0, ...)
  * @param gen je kontext generatora
  * @param literal je vypisovany literal
@@ -488,7 +495,7 @@ void writeBuffers(CodeGen *gen);
 void genParams(CodeGen *gen, DefFuncNode *function);
 
 /**
- * @brief funkcia na vygenerovanie definicie funkcie (navestie f$meno)
+ * @brief funkcia na vygenerovanie definicie funkcie alebo rozsirujucej metody
  * @param gen je kontext generatora
  * @param function je uzol definicie funkcie
  */

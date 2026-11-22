@@ -99,7 +99,19 @@ void emitString(CodeGen *gen, const char *text) {
 }
 
 void emitVar(CodeGen *gen, const char *name, Symbol *symbol) {
+    // prijemca rozsirujucej metody cislo nedostane (semantika mu pri kazdej metode
+    // vytvori novy symbol), preto je vzdy pod menom meno$0
     emit(gen, "LF@%s$%d", name, symbol->cgId);
+}
+
+void emitFunctionLabel(CodeGen *gen, DefFuncNode *function) {
+    if (function->symbol->kind == SYM_EXTENSION) {
+        // rozsirujuca metoda moze mat rovnake meno pre rozne typy
+        Param *receiver = function->symbol->receiver;
+        emit(gen, "ext$%s$%s", getTypeKeyName(receiver->type), function->name);
+    } else {
+        emit(gen, "f$%s", function->name);
+    }
 }
 
 void emitLiteral(CodeGen *gen, LiteralNode *literal) {
@@ -823,7 +835,9 @@ void genReturn(CodeGen *gen, ReturnNode *returnNode) {
         genExpr(gen, returnNode->returnValue);
     }
 
-    emit(gen, "JUMP f$%s$end\n", gen->function->name);
+    emit(gen, "JUMP ");
+    emitFunctionLabel(gen, gen->function);
+    emit(gen, "$end\n");
 }
 
 void genBlock(CodeGen *gen, BlockNode *block) {
@@ -904,6 +918,12 @@ void genParams(CodeGen *gen, DefFuncNode *function) {
         }
     }
 
+    Param *receiver = function->symbol->receiver;
+
+    if (receiver != NULL) {
+        emitDeclaration(gen, "DEFVAR LF@%s$0\n", receiver->name);
+    }
+
     // argumenty su na zasobniku zlava doprava, takze sa vyberaju od posledneho
     for (size_t listIndex = function->paramListCount; listIndex > 0; listIndex--) {
         ParamList *paramList = &function->paramList[listIndex - 1];
@@ -916,9 +936,23 @@ void genParams(CodeGen *gen, DefFuncNode *function) {
             emit(gen, "\n");
         }
     }
+
+    // prijemca metody je na zasobniku pred vsetkymi argumentmi
+    if (receiver != NULL) {
+        emit(gen, "POPS LF@%s$0\n", receiver->name);
+    }
 }
 
 void genFunction(CodeGen *gen, DefFuncNode *function) {
+    // navestie funkcie ide na zaciatok kodu, este pred DEFVAR
+    emit(gen, "LABEL ");
+    emitFunctionLabel(gen, function);
+    emit(gen, "\n");
+    emit(gen, "CREATEFRAME\n");
+    emit(gen, "PUSHFRAME\n");
+    fputs(gen->code.data, gen->out);
+    dynstr_clear(&gen->code);
+
     // pomocne premenne ma kazda funkcia vo svojom ramci
     emitHelperVars(gen);
     genParams(gen, function);
@@ -928,14 +962,18 @@ void genFunction(CodeGen *gen, DefFuncNode *function) {
     if (isUnitType(function->returnType)) {
         // pri type Unit sa hodnota tela zahodi a funkcia vrati ()
         genStatement(gen, function->body);
-        emit(gen, "LABEL f$%s$end\n", function->name);
+        emit(gen, "LABEL ");
+        emitFunctionLabel(gen, function);
+        emit(gen, "$end\n");
         emit(gen, "PUSHS nil@nil\n");
     } else {
         // navratova hodnota je hodnota tela, ostane na zasobniku
         genValue(gen, function->body);
 
         // sem skace return, hodnota uz je na zasobniku
-        emit(gen, "LABEL f$%s$end\n", function->name);
+        emit(gen, "LABEL ");
+        emitFunctionLabel(gen, function);
+        emit(gen, "$end\n");
     }
 
     if (gen->error != ERR_OK) {
@@ -943,9 +981,6 @@ void genFunction(CodeGen *gen, DefFuncNode *function) {
     }
 
     // kazda funkcia ma vlastny lokalny ramec
-    fprintf(gen->out, "LABEL f$%s\n", function->name);
-    fprintf(gen->out, "CREATEFRAME\n");
-    fprintf(gen->out, "PUSHFRAME\n");
     writeBuffers(gen);
     fprintf(gen->out, "POPFRAME\n");
     fprintf(gen->out, "RETURN\n");
@@ -1010,6 +1045,13 @@ int codegenGenerate(ProgramNode *prog, FILE *out) {
 
         if (item->kind == AST_FUNCTION_DEF) {
             genFunction(&gen, (DefFuncNode *)item);
+        } else if (item->kind == AST_EXTENSION) {
+            const ExtensionNode *extension = (const ExtensionNode *)item;
+
+            // metody su bezne funkcie s prijemcom ako prvym parametrom
+            for (size_t methodIndex = 0; methodIndex < extension->methodsCount; methodIndex++) {
+                genFunction(&gen, (DefFuncNode *)extension->methods[methodIndex]);
+            }
         }
     }
 
