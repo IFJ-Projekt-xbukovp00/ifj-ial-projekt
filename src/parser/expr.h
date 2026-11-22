@@ -29,4 +29,18 @@
 
 #pragma once
 
-/* TODO: rozhranie precedenčnej analýzy */
+#include "ast.h"
+#include "expr_stack.h"
+#include "token.h"
+
+/**
+ * @brief precedencna analyza jedneho vyrazu
+ * @param token prvy token vyrazu, na vystupe prvy token za vyrazom
+ * @param first operand uz nacitany LL parserom, inak NULL
+ * @param output koren AST vyrazu (nastavi sa pri ERR_OK)
+ * @return ERR_OK, ERR_SYNTAX, ERR_LEX alebo ERR_INTERNAL
+ */
+int expr_parse(Token *token, ASTNode *first, ASTNode **output);
+
+/** @brief docasne uvolnenie AST uzlov, kym nebude ast_free v ast.c */
+void expr_free(ASTNode *node);
