@@ -298,6 +298,13 @@ void genAnd(CodeGen *gen, BinaryNode *binary);
 void genOr(CodeGen *gen, BinaryNode *binary);
 
 /**
+ * @brief funkcia na vygenerovanie pristupu cez bodku (x.toString, ...)
+ * @param gen je kontext generatora
+ * @param member je uzol pristupu cez bodku
+ */
+void genMember(CodeGen *gen, MemberNode *member);
+
+/**
  * @brief funkcia na vygenerovanie binarnej operacie
  * @param gen je kontext generatora
  * @param binary je uzol binarnej operacie

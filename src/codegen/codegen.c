@@ -436,6 +436,16 @@ void genOr(CodeGen *gen, BinaryNode *binary) {
     emit(gen, "LABEL L$%d\n", endLabel);
 }
 
+void genMember(CodeGen *gen, MemberNode *member) {
+    // clen sa pocita z hodnoty pred bodkou
+    genExpr(gen, member->object);
+
+    if (member->memberKind == MEM_BUILTIN && strcmp(member->name, "toString") == 0) {
+        // x.toString je to iste ako toStr(x)
+        genValueToStr(gen, member->object->type);
+    }
+}
+
 void genBinary(CodeGen *gen, BinaryNode *binary) {
     if (binary->operator == TOK_AND) {
         genAnd(gen, binary);
@@ -528,6 +538,8 @@ void genExpr(CodeGen *gen, ASTNode *node) {
     } else if (node->kind == AST_CALL) {
         // volanie funkcie moze byt operandom ako hocijaky iny vyraz
         genCall(gen, (CallNode *)node);
+    } else if (node->kind == AST_MEMBER) {
+        genMember(gen, (MemberNode *)node);
     } else if (node->kind == AST_IF) {
         // if ako vyraz, kazda vetva necha na zasobniku svoju hodnotu
         genIf(gen, (IfNode *)node, true);
