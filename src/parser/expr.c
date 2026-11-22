@@ -74,8 +74,6 @@ static const PtRel precTable[PT_COUNT][PT_COUNT] = {
 };
 // clang-format on
 
-/* docasne uvolnenie AST uzlov, kym sa nahradi za astFree */
-
 // pravidlo E -> i, vytvori LiteralNode alebo IDNode z tokenu
 static ASTNode *nodeFromToken(const Token *token) {
     const char *lexeme = token->lexeme.data;
@@ -119,60 +117,6 @@ static ASTNode *nodeFromToken(const Token *token) {
     default:
         return NULL;
     }
-}
-
-void expr_free(ASTNode *node) {
-    if (node == NULL) {
-        return;
-    }
-    switch (node->kind) {
-    case AST_LIT: {
-        LiteralNode *lit = (LiteralNode *)node;
-        if (lit->litType == LIT_STRING) {
-            free(lit->litValue.string_value);
-        }
-        break;
-    }
-    case AST_ID:
-        free(((IDNode *)node)->name);
-        break;
-    case AST_BINARY:
-        expr_free(((BinaryNode *)node)->left);
-        expr_free(((BinaryNode *)node)->right);
-        break;
-    case AST_UNARY:
-        expr_free(((UnaryNode *)node)->right);
-        break;
-    case AST_MEMBER:
-        expr_free(((MemberNode *)node)->object);
-        free(((MemberNode *)node)->name);
-        break;
-    case AST_CALL: {
-        CallNode *call = (CallNode *)node;
-        expr_free(call->caller);
-        for (size_t i = 0; i < call->argsCount; i++) {
-            expr_free(call->args[i]);
-        }
-        free(call->args);
-        break;
-    }
-    case AST_LIST_LIT: {
-        ListLitNode *list = (ListLitNode *)node;
-        for (size_t i = 0; i < list->elemsCount; i++) {
-            expr_free(list->elems[i]);
-        }
-        free(list->elems);
-        break;
-    }
-    case AST_RANGE:
-        expr_free(((RangeNode *)node)->from);
-        expr_free(((RangeNode *)node)->to);
-        expr_free(((RangeNode *)node)->step);
-        break;
-    default:
-        break;
-    }
-    free(node);
 }
 
 typedef struct {
@@ -421,7 +365,7 @@ static int reduceHandle(StackItem *handle, int count, ASTNode **result) {
         if (mem == NULL) {
             return ERR_INTERNAL;
         }
-        expr_free(handle[2].node);
+        astFree(handle[2].node);
         handle[0].node = handle[2].node = NULL;
         *result = mem;
         return ERR_OK;
@@ -471,7 +415,7 @@ static int reduceHandle(StackItem *handle, int count, ASTNode **result) {
         ListLitNode *list = (ListLitNode *)listNode;
         int err = takeArguments(&handle[1], count - 1, &list->elems, &list->elemsCount);
         if (err != ERR_OK) {
-            expr_free(listNode);
+            astFree(listNode);
             return err;
         }
         *result = listNode;
@@ -487,7 +431,7 @@ static int reduceHandle(StackItem *handle, int count, ASTNode **result) {
         CallNode *call = (CallNode *)callNode;
         int err = takeArguments(&handle[1], count - 1, &call->args, &call->argsCount);
         if (err != ERR_OK) {
-            expr_free(callNode);
+            astFree(callNode);
             return err;
         }
         call->caller = handle[0].node;
@@ -508,17 +452,17 @@ static int reduceHandle(StackItem *handle, int count, ASTNode **result) {
         }
         ASTNode *callNode = astNewCall(memNode, line);
         if (callNode == NULL) {
-            expr_free(memNode);
+            astFree(memNode);
             return ERR_INTERNAL;
         }
         CallNode *call = (CallNode *)callNode;
         int err = takeArguments(&handle[3], count - 3, &call->args, &call->argsCount);
         if (err != ERR_OK) {
-            expr_free(callNode);
+            astFree(callNode);
             return err;
         }
         ((MemberNode *)memNode)->object = handle[0].node;
-        expr_free(handle[2].node);
+        astFree(handle[2].node);
         handle[0].node = handle[2].node = NULL;
         *result = callNode;
         return ERR_OK;
@@ -533,7 +477,7 @@ static int reduceHandle(StackItem *handle, int count, ASTNode **result) {
         CallNode *call = (CallNode *)callNode;
         int err = takeArguments(&handle[1], count - 1, &call->args, &call->argsCount);
         if (err != ERR_OK) {
-            expr_free(callNode);
+            astFree(callNode);
             return err;
         }
         call->caller = handle[0].node;
@@ -569,7 +513,7 @@ static int reduce(TAStack *stack) {
 
 static void freeStack(TAStack *stack, PsaState *state) {
     for (int i = 0; i < stack->top; i++) {
-        expr_free(stack->dataArray[i].node);
+        astFree(stack->dataArray[i].node);
     }
     stack->top = 0;
     if (state->hasLookahead) {
@@ -580,14 +524,14 @@ static void freeStack(TAStack *stack, PsaState *state) {
 
 int expr_parse(Token *token, ASTNode *first, ASTNode **output) {
     if (token == NULL || output == NULL) {
-        expr_free(first);
+        astFree(first);
         return ERR_INTERNAL;
     }
 
     // kazde volanie ma vlastny zasobnik, aby slo volat expr_parse aj rekurzivne
     TAStack *stack = malloc(sizeof(TAStack));
     if (stack == NULL) {
-        expr_free(first);
+        astFree(first);
         return ERR_INTERNAL;
     }
     PsaState state = {.token = token};
