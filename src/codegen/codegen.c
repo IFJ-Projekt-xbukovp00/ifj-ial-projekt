@@ -178,10 +178,14 @@ void genPrint(CodeGen *gen, CallNode *call) {
     genExpr(gen, arg);
     emit(gen, "POPS LF@%%t0\n");
 
-    // hodnota Unit je za behu nil, vypisuje sa ako "()"
-    if (getKind(arg) == TY_UNIT) {
+    TypeKind kind = getKind(arg);
+
+    if (kind == TY_UNIT) {
+        // hodnota Unit je za behu nil, vypisuje sa ako "()"
         emit(gen, "WRITE string@()\n");
     } else {
+        // Int, Double, String aj Boolean vypise WRITE rovnako ako print
+        // (bool ako true alebo false)
         emit(gen, "WRITE LF@%%t0\n");
     }
 
@@ -238,6 +242,18 @@ void genValueToStr(CodeGen *gen, Type *type) {
         // hodnota () je nil, ako retazec je "()"
         emit(gen, "POPS LF@%%trash\n");
         emit(gen, "PUSHS string@()\n");
+    } else if (type->kind == TY_BOOL) {
+        // pre bool nie je prevodna instrukcia, rozhodne sa skokom
+        int trueLabel = newLabel(gen);
+        int endLabel = newLabel(gen);
+
+        emit(gen, "PUSHS bool@true\n");
+        emit(gen, "JUMPIFEQS L$%d\n", trueLabel);
+        emit(gen, "PUSHS string@false\n");
+        emit(gen, "JUMP L$%d\n", endLabel);
+        emit(gen, "LABEL L$%d\n", trueLabel);
+        emit(gen, "PUSHS string@true\n");
+        emit(gen, "LABEL L$%d\n", endLabel);
     }
     // retazec uz je retazec, nic sa nerobi
 }
