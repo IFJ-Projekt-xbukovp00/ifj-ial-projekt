@@ -202,11 +202,21 @@ void genArgs(CodeGen *gen, CallNode *call) {
     }
 }
 
+void genArgLists(CodeGen *gen, CallNode *call) {
+    // f(a)(b) je vnorene volanie, vnutorne volanie ma prvy zoznam argumentov,
+    // argumenty vsetkych zoznamov sa daju za sebou ako jeden zoznam
+    if (call->caller->kind == AST_CALL && ((CallNode *)call->caller)->symbol == call->symbol) {
+        genArgLists(gen, (CallNode *)call->caller);
+    }
+
+    genArgs(gen, call);
+}
+
 void genFunctionCall(CodeGen *gen, CallNode *call) {
     DefFuncNode *function = (DefFuncNode *)call->symbol->definition;
 
     // funkcia si argumenty vyberie zo zasobnika sama
-    genArgs(gen, call);
+    genArgLists(gen, call);
     emit(gen, "CALL f$%s\n", function->name);
 }
 

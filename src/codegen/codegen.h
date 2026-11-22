@@ -261,6 +261,13 @@ void genSubStrHelper(CodeGen *gen);
 void genArgs(CodeGen *gen, CallNode *call);
 
 /**
+ * @brief funkcia na vyhodnotenie argumentov zo vsetkych zoznamov f(a)(b) na zasobnik
+ * @param gen je kontext generatora
+ * @param call je uzol volania s poslednym zoznamom argumentov
+ */
+void genArgLists(CodeGen *gen, CallNode *call);
+
+/**
  * @brief funkcia na vygenerovanie volania funkcie definovanej v programe
  * @param gen je kontext generatora
  * @param call je uzol volania
