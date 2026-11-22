@@ -74,27 +74,7 @@ static const PtRel precTable[PT_COUNT][PT_COUNT] = {
 };
 // clang-format on
 
-/* docasne pomocne funkcie pre AST, kym nie je ast.c */
-
-static void *newNode(size_t size, ASTNodeKind kind, int line) {
-    ASTNode *node = calloc(1, size);
-    if (node == NULL) {
-        return NULL;
-    }
-    node->kind = kind;
-    node->line = line;
-    return node;
-}
-
-static char *copyString(const char *text, size_t len) {
-    char *copy = malloc(len + 1);
-    if (copy == NULL) {
-        return NULL;
-    }
-    memcpy(copy, text, len);
-    copy[len] = '\0';
-    return copy;
-}
+/* docasne uvolnenie AST uzlov, kym sa nahradi za astFree */
 
 // pravidlo E -> i, vytvori LiteralNode alebo IDNode z tokenu
 static ASTNode *nodeFromToken(const Token *token) {
@@ -102,60 +82,43 @@ static ASTNode *nodeFromToken(const Token *token) {
     size_t len = token->lexeme.len;
 
     if (token->type == TOK_IDENTIFIER || token->type == TOK_KW_LIST) {
-        IDNode *idNode = newNode(sizeof(IDNode), AST_ID, token->line);
-        if (idNode == NULL) {
-            return NULL;
-        }
-        idNode->name = copyString(lexeme, len);
-        if (idNode->name == NULL) {
-            free(idNode);
-            return NULL;
-        }
-        return (ASTNode *)idNode;
-    }
-
-    LiteralNode *lit = newNode(sizeof(LiteralNode), AST_LIT, token->line);
-    if (lit == NULL) {
-        return NULL;
+        return astNewId(lexeme, token->line);
     }
 
     switch (token->type) {
-    case TOK_INT_LIT:
-        lit->litType = LIT_INT;
+    case TOK_INT_LIT: {
+        long long val;
         if (len > 2 && lexeme[0] == '0' && (lexeme[1] == 'x' || lexeme[1] == 'X')) {
-            lit->litValue.int_value = strtoll(lexeme + 2, NULL, 16);
+            val = strtoll(lexeme + 2, NULL, 16);
         } else {
-            lit->litValue.int_value = strtoll(lexeme, NULL, 10);
+            val = strtoll(lexeme, NULL, 10);
         }
-        break;
+        return astNewIntLit(val, token->line);
+    }
     case TOK_DOUBLE_LIT:
-        lit->litType = LIT_DOUBLE;
-        lit->litValue.float_value = strtod(lexeme, NULL);
-        break;
+        return astNewDoubleLit(strtod(lexeme, NULL), token->line);
     case TOK_BOOL_LIT:
-        lit->litType = LIT_BOOLEAN;
-        lit->litValue.bool_value = (strcmp(lexeme, "true") == 0);
-        break;
+        return astNewBoolLit(strcmp(lexeme, "true") == 0, token->line);
     case TOK_STRING_LIT: {
         // TODO: escape sekvencie v retazci, zatial len oreze uvodzovky
         size_t quotes = (len >= 6 && strncmp(lexeme, "\"\"\"", 3) == 0) ? 3 : 1;
         if (len < 2 * quotes) {
-            free(lit);
             return NULL;
         }
-        lit->litType = LIT_STRING;
-        lit->litValue.string_value = copyString(lexeme + quotes, len - 2 * quotes);
-        if (lit->litValue.string_value == NULL) {
-            free(lit);
+        size_t innerLen = len - 2 * quotes;
+        char *buf = malloc(innerLen + 1);
+        if (buf == NULL) {
             return NULL;
         }
-        break;
+        memcpy(buf, lexeme + quotes, innerLen);
+        buf[innerLen] = '\0';
+        ASTNode *lit = astNewStringLit(buf, token->line);
+        free(buf);
+        return lit;
     }
     default:
-        free(lit);
         return NULL;
     }
-    return (ASTNode *)lit;
 }
 
 void expr_free(ASTNode *node) {
@@ -397,16 +360,12 @@ static int takeArguments(StackItem *items, int count, ASTNode ***args, size_t *a
         }
     }
 
-    size_t n = (size_t)(inner + 1) / 2;
-    *args = malloc(n * sizeof(ASTNode *));
-    if (*args == NULL) {
-        return ERR_INTERNAL;
+    for (int i = 1; i <= inner; i += 2) {
+        if (!astAppend(args, argsCount, items[i].node)) {
+            return ERR_INTERNAL;
+        }
+        items[i].node = NULL; // uz patri volaniu alebo zoznamu
     }
-    for (size_t i = 0; i < n; i++) {
-        (*args)[i] = items[1 + 2 * i].node;
-        items[1 + 2 * i].node = NULL; // uz patri volaniu
-    }
-    *argsCount = n;
     return ERR_OK;
 }
 
@@ -424,25 +383,22 @@ static int reduceHandle(StackItem *handle, int count, ASTNode **result) {
     // E -> -E | !E
     if (count == 2 && handle[0].kind == SYM_TERM &&
         (handle[0].ptIndex == PT_UMINUS || handle[0].ptIndex == PT_NOT) && isExpr(&handle[1])) {
-        UnaryNode *un = newNode(sizeof(UnaryNode), AST_UNARY, line);
+        ASTNode *un = astNewUnary(handle[0].tokenType, handle[1].node, line);
         if (un == NULL) {
             return ERR_INTERNAL;
         }
-        un->operator = handle[0].tokenType;
-        un->right = handle[1].node;
         handle[1].node = NULL;
-        *result = (ASTNode *)un;
+        *result = un;
         return ERR_OK;
     }
 
     // E -> ( ), hodnota typu Unit
     if (count == 2 && isTerminal(&handle[0], PT_LPAR) && isTerminal(&handle[1], PT_RPAR)) {
-        LiteralNode *lit = newNode(sizeof(LiteralNode), AST_LIT, line);
+        ASTNode *lit = astNewUnitLit(line);
         if (lit == NULL) {
             return ERR_INTERNAL;
         }
-        lit->litType = LIT_UNIT;
-        *result = (ASTNode *)lit;
+        *result = lit;
         return ERR_OK;
     }
 
@@ -460,16 +416,14 @@ static int reduceHandle(StackItem *handle, int count, ASTNode **result) {
         if (handle[2].node == NULL || handle[2].node->kind != AST_ID) {
             return ERR_SYNTAX; // x.5 nie je platny clen
         }
-        MemberNode *mem = newNode(sizeof(MemberNode), AST_MEMBER, handle[1].line);
+        ASTNode *mem =
+            astNewMember(handle[0].node, ((IDNode *)handle[2].node)->name, handle[1].line);
         if (mem == NULL) {
             return ERR_INTERNAL;
         }
-        mem->object = handle[0].node;
-        mem->name = ((IDNode *)handle[2].node)->name;
-        ((IDNode *)handle[2].node)->name = NULL;
         expr_free(handle[2].node);
         handle[0].node = handle[2].node = NULL;
-        *result = (ASTNode *)mem;
+        *result = mem;
         return ERR_OK;
     }
 
@@ -479,14 +433,12 @@ static int reduceHandle(StackItem *handle, int count, ASTNode **result) {
         PtIndex op = handle[1].ptIndex;
 
         if (op == PT_TO || op == PT_UNTIL) {
-            RangeNode *range = newNode(sizeof(RangeNode), AST_RANGE, handle[1].line);
+            ASTNode *range = astNewRange(handle[0].node, handle[2].node, NULL, op == PT_TO,
+                                         handle[1].line);
             if (range == NULL) {
                 return ERR_INTERNAL;
             }
-            range->from = handle[0].node;
-            range->to = handle[2].node;
-            range->inclusive = (op == PT_TO);
-            *result = (ASTNode *)range;
+            *result = range;
         } else if (op == PT_BY) {
             // by moze ist len za to/until, ktore este nema krok
             if (handle[0].node == NULL || handle[0].node->kind != AST_RANGE) {
@@ -499,14 +451,12 @@ static int reduceHandle(StackItem *handle, int count, ASTNode **result) {
             range->step = handle[2].node;
             *result = handle[0].node;
         } else {
-            BinaryNode *bin = newNode(sizeof(BinaryNode), AST_BINARY, handle[1].line);
+            ASTNode *bin = astNewBinary(handle[1].tokenType, handle[0].node, handle[2].node,
+                                        handle[1].line);
             if (bin == NULL) {
                 return ERR_INTERNAL;
             }
-            bin->operator = handle[1].tokenType;
-            bin->left = handle[0].node;
-            bin->right = handle[2].node;
-            *result = (ASTNode *)bin;
+            *result = bin;
         }
         handle[0].node = handle[2].node = NULL;
         return ERR_OK;
@@ -514,33 +464,35 @@ static int reduceHandle(StackItem *handle, int count, ASTNode **result) {
 
     // E -> List ( prvky ), zoznam nie je volanie funkcie
     if (count >= 3 && isTerminal(&handle[0], PT_FUNC) && handle[0].tokenType == TOK_KW_LIST) {
-        ListLitNode *list = newNode(sizeof(ListLitNode), AST_LIST_LIT, line);
-        if (list == NULL) {
+        ASTNode *listNode = astNewListLit(line);
+        if (listNode == NULL) {
             return ERR_INTERNAL;
         }
+        ListLitNode *list = (ListLitNode *)listNode;
         int err = takeArguments(&handle[1], count - 1, &list->elems, &list->elemsCount);
         if (err != ERR_OK) {
-            expr_free((ASTNode *)list);
+            expr_free(listNode);
             return err;
         }
-        *result = (ASTNode *)list;
+        *result = listNode;
         return ERR_OK;
     }
 
     // E -> f ( args )
     if (count >= 3 && isTerminal(&handle[0], PT_FUNC)) {
-        CallNode *call = newNode(sizeof(CallNode), AST_CALL, line);
-        if (call == NULL) {
+        ASTNode *callNode = astNewCall(NULL, line);
+        if (callNode == NULL) {
             return ERR_INTERNAL;
         }
+        CallNode *call = (CallNode *)callNode;
         int err = takeArguments(&handle[1], count - 1, &call->args, &call->argsCount);
         if (err != ERR_OK) {
-            expr_free((ASTNode *)call);
+            expr_free(callNode);
             return err;
         }
         call->caller = handle[0].node;
         handle[0].node = NULL;
-        *result = (ASTNode *)call;
+        *result = callNode;
         return ERR_OK;
     }
 
@@ -550,43 +502,43 @@ static int reduceHandle(StackItem *handle, int count, ASTNode **result) {
         if (handle[2].node == NULL || handle[2].node->kind != AST_ID) {
             return ERR_SYNTAX;
         }
-        CallNode *call = newNode(sizeof(CallNode), AST_CALL, line);
-        MemberNode *mem = newNode(sizeof(MemberNode), AST_MEMBER, handle[1].line);
-        if (call == NULL || mem == NULL) {
-            free(call);
-            free(mem);
+        ASTNode *memNode = astNewMember(NULL, ((IDNode *)handle[2].node)->name, handle[1].line);
+        if (memNode == NULL) {
             return ERR_INTERNAL;
         }
+        ASTNode *callNode = astNewCall(memNode, line);
+        if (callNode == NULL) {
+            expr_free(memNode);
+            return ERR_INTERNAL;
+        }
+        CallNode *call = (CallNode *)callNode;
         int err = takeArguments(&handle[3], count - 3, &call->args, &call->argsCount);
         if (err != ERR_OK) {
-            expr_free((ASTNode *)call);
-            free(mem);
+            expr_free(callNode);
             return err;
         }
-        mem->object = handle[0].node;
-        mem->name = ((IDNode *)handle[2].node)->name;
-        ((IDNode *)handle[2].node)->name = NULL;
+        ((MemberNode *)memNode)->object = handle[0].node;
         expr_free(handle[2].node);
         handle[0].node = handle[2].node = NULL;
-        call->caller = (ASTNode *)mem;
-        *result = (ASTNode *)call;
+        *result = callNode;
         return ERR_OK;
     }
 
     // E -> E ( args ), napr. add(a)(b) alebo List(1, 2)(0)
     if (count >= 3 && isExpr(&handle[0]) && isTerminal(&handle[1], PT_LPAR)) {
-        CallNode *call = newNode(sizeof(CallNode), AST_CALL, handle[1].line);
-        if (call == NULL) {
+        ASTNode *callNode = astNewCall(NULL, handle[1].line);
+        if (callNode == NULL) {
             return ERR_INTERNAL;
         }
+        CallNode *call = (CallNode *)callNode;
         int err = takeArguments(&handle[1], count - 1, &call->args, &call->argsCount);
         if (err != ERR_OK) {
-            expr_free((ASTNode *)call);
+            expr_free(callNode);
             return err;
         }
         call->caller = handle[0].node;
         handle[0].node = NULL;
-        *result = (ASTNode *)call;
+        *result = callNode;
         return ERR_OK;
     }
 
