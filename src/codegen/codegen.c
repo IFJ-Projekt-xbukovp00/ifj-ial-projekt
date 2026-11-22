@@ -695,8 +695,16 @@ void genFor(CodeGen *gen, ForNode *forNode) {
     genForCheck(gen, forNode, endVar, false, endLabel);
     emit(gen, "LABEL L$%d\n", bodyLabel);
 
+    // ked niektora straz neplati, telo sa preskoci a ide sa na dalsiu iteraciu
+    int nextLabel = newLabel(gen);
+
+    for (size_t guardIndex = 0; guardIndex < forNode->guardsCount; guardIndex++) {
+        genJumpIfFalse(gen, forNode->guards[guardIndex], nextLabel);
+    }
+
     genStatement(gen, forNode->body);
 
+    emit(gen, "LABEL L$%d\n", nextLabel);
     emit(gen, "ADD ");
     emitVar(gen, forNode->varName, forNode->symbol);
     emit(gen, " ");
