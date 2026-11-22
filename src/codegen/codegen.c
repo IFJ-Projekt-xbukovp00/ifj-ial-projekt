@@ -440,9 +440,21 @@ void genMember(CodeGen *gen, MemberNode *member) {
     // clen sa pocita z hodnoty pred bodkou
     genExpr(gen, member->object);
 
-    if (member->memberKind == MEM_BUILTIN && strcmp(member->name, "toString") == 0) {
+    if (member->memberKind != MEM_BUILTIN) {
+        return;
+    }
+
+    if (strcmp(member->name, "toString") == 0) {
         // x.toString je to iste ako toStr(x)
         genValueToStr(gen, member->object->type);
+    } else if (strcmp(member->name, "toInt") == 0) {
+        // d.toInt je to iste ako toInt(d)
+        emit(gen, "FLOAT2INTS\n");
+    } else if (strcmp(member->name, "length") == 0) {
+        // s.length je to iste ako strLength(s)
+        emit(gen, "POPS LF@%%t0\n");
+        emit(gen, "STRLEN LF@%%t0 LF@%%t0\n");
+        emit(gen, "PUSHS LF@%%t0\n");
     }
 }
 
