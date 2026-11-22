@@ -527,6 +527,9 @@ void genExpr(CodeGen *gen, ASTNode *node) {
     } else if (node->kind == AST_CALL) {
         // volanie funkcie moze byt operandom ako hocijaky iny vyraz
         genCall(gen, (CallNode *)node);
+    } else if (node->kind == AST_IF) {
+        // if ako vyraz, kazda vetva necha na zasobniku svoju hodnotu
+        genIf(gen, (IfNode *)node, true);
     } else {
         emit(gen, "PUSHS nil@nil\n");
     }
@@ -649,8 +652,8 @@ void genValue(CodeGen *gen, ASTNode *node) {
     } else if (node->kind == AST_EXPR_STATEMENT) {
         genValue(gen, ((LonelyExprNode *)node)->expr);
     } else if (node->kind == AST_VAR_DEF || node->kind == AST_ASSIGN || node->kind == AST_WHILE ||
-               node->kind == AST_IF || node->kind == AST_RETURN) {
-        // definicia, priradenie, cyklus a podmieneny prikaz nemaju hodnotu, vysledok je ()
+               node->kind == AST_RETURN) {
+        // definicia, priradenie a cyklus nemaju hodnotu, vysledok je ()
         // za returnom sa sem program nedostane
         genStatement(gen, node);
         emit(gen, "PUSHS nil@nil\n");
