@@ -68,7 +68,7 @@ static const PtRel precTable[PT_COUNT][PT_COUNT] = {
     [PT_FUNC]   = {R_ERR, R_ERR, R_ERR, R_ERR, R_ERR, R_ERR, R_ERR, R_ERR, R_ERR, R_ERR, R_ERR, R_ERR, R_ERR, R_ERR, R_ERR, R_ERR, R_ERR, R_ERR, R_ERR, R_ERR, R_ERR , R_EQ , R_ERR, R_ERR, R_ERR},
     [PT_COMMA]  = {R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_EQ , R_LT , R_EQ , R_LT , R_ERR},
     [PT_LPAR]   = {R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_EQ , R_LT , R_EQ , R_LT , R_ERR},
-    [PT_RPAR]   = {R_GT , R_ERR, R_ERR, R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_ERR, R_GT , R_ERR, R_GT , R_ERR, R_GT},
+    [PT_RPAR]   = {R_GT , R_ERR, R_ERR, R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_ERR, R_GT , R_GT, R_GT , R_ERR, R_GT},
     [PT_ID]     = {R_GT , R_ERR, R_ERR, R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_GT , R_ERR, R_GT , R_ERR, R_GT , R_ERR, R_GT},
     [PT_DOLLAR] = {R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_LT , R_ERR, R_LT , R_ERR, R_LT , R_END},
 };
@@ -569,6 +569,23 @@ static int reduceHandle(StackItem *handle, int count, ASTNode **result) {
         expr_free(handle[2].node);
         handle[0].node = handle[2].node = NULL;
         call->caller = (ASTNode *)mem;
+        *result = (ASTNode *)call;
+        return ERR_OK;
+    }
+
+    // E -> E ( args ), napr. add(a)(b) alebo List(1, 2)(0)
+    if (count >= 3 && isExpr(&handle[0]) && isTerminal(&handle[1], PT_LPAR)) {
+        CallNode *call = newNode(sizeof(CallNode), AST_CALL, handle[1].line);
+        if (call == NULL) {
+            return ERR_INTERNAL;
+        }
+        int err = takeArguments(&handle[1], count - 1, &call->args, &call->argsCount);
+        if (err != ERR_OK) {
+            expr_free((ASTNode *)call);
+            return err;
+        }
+        call->caller = handle[0].node;
+        handle[0].node = NULL;
         *result = (ASTNode *)call;
         return ERR_OK;
     }
