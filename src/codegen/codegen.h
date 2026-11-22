@@ -324,6 +324,13 @@ void genConcat(CodeGen *gen);
 void genInterp(CodeGen *gen, InterpNode *interp);
 
 /**
+ * @brief funkcia na vygenerovanie identifikatora (premenna alebo volanie bez zatvoriek)
+ * @param gen je kontext generatora
+ * @param id je uzol identifikatora
+ */
+void genId(CodeGen *gen, IDNode *id);
+
+/**
  * @brief funkcia na vygenerovanie binarnej operacie
  * @param gen je kontext generatora
  * @param binary je uzol binarnej operacie

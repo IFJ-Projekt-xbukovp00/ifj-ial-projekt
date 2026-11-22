@@ -511,6 +511,20 @@ void genInterp(CodeGen *gen, InterpNode *interp) {
     }
 }
 
+void genId(CodeGen *gen, IDNode *id) {
+    if (id->idKind == ID_FUNC_CALL) {
+        // funkcia bez zoznamu parametrov sa vola len menom, bez zatvoriek,
+        // telo sa vyhodnoti pri kazdom pouziti znova
+        const DefFuncNode *function = (const DefFuncNode *)id->symbol->definition;
+        emit(gen, "CALL f$%s\n", function->name);
+        return;
+    }
+
+    emit(gen, "PUSHS ");
+    emitVar(gen, id->name, id->symbol);
+    emit(gen, "\n");
+}
+
 void genBinary(CodeGen *gen, BinaryNode *binary) {
     if (binary->operator == TOK_AND) {
         genAnd(gen, binary);
@@ -583,11 +597,7 @@ void genExpr(CodeGen *gen, ASTNode *node) {
         emitLiteral(gen, (LiteralNode *)node);
         emit(gen, "\n");
     } else if (node->kind == AST_ID) {
-        IDNode *id = (IDNode *)node;
-
-        emit(gen, "PUSHS ");
-        emitVar(gen, id->name, id->symbol);
-        emit(gen, "\n");
+        genId(gen, (IDNode *)node);
     } else if (node->kind == AST_BINARY) {
         genBinary(gen, (BinaryNode *)node);
     } else if (node->kind == AST_UNARY) {
