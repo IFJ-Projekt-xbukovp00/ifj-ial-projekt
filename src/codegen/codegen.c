@@ -648,14 +648,20 @@ void genFor(CodeGen *gen, ForNode *forNode) {
     genExpr(gen, range->to);
     emit(gen, "POPS LF@%%h%d\n", endVar);
 
-    // cyklus konci, ked je premenna za hornou mezou
+    // pri to cyklus konci, ked je premenna za hornou mezou (i > end),
+    // pri until uz vtedy, ked na mez dojde (!(i < end))
     emit(gen, "LABEL L$%d\n", startLabel);
     emit(gen, "PUSHS ");
     emitVar(gen, forNode->varName, forNode->symbol);
     emit(gen, "\n");
     emit(gen, "PUSHS LF@%%h%d\n", endVar);
-    emit(gen, "GTS\n");
-    emit(gen, "PUSHS bool@true\n");
+    if (range->inclusive) {
+        emit(gen, "GTS\n");
+        emit(gen, "PUSHS bool@true\n");
+    } else {
+        emit(gen, "LTS\n");
+        emit(gen, "PUSHS bool@false\n");
+    }
     emit(gen, "JUMPIFEQS L$%d\n", endLabel);
 
     genStatement(gen, forNode->body);
