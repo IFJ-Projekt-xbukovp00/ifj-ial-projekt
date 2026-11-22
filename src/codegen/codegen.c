@@ -460,6 +460,8 @@ void genUnary(CodeGen *gen, UnaryNode *unary) {
             emit(gen, "PUSHS int@-1\n");
         }
         emit(gen, "MULS\n");
+    } else if (unary->operator == TOK_NOT) {
+        emit(gen, "NOTS\n");
     }
 }
 
