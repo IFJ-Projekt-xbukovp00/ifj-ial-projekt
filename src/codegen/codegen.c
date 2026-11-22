@@ -549,14 +549,19 @@ void genAssign(CodeGen *gen, AssignNode *assign) {
     emit(gen, "\n");
 }
 
+void genJumpIfFalse(CodeGen *gen, ASTNode *condition, int label) {
+    // podmienka je lubovolny vyraz typu Boolean, jeho hodnota je na zasobniku
+    genExpr(gen, condition);
+    emit(gen, "PUSHS bool@false\n");
+    emit(gen, "JUMPIFEQS L$%d\n", label);
+}
+
 void genIf(CodeGen *gen, IfNode *ifNode) {
     int elseLabel = newLabel(gen);
     int endLabel = newLabel(gen);
 
     // pri nepravdivej podmienke sa skace na else vetvu
-    genExpr(gen, ifNode->condition);
-    emit(gen, "PUSHS bool@false\n");
-    emit(gen, "JUMPIFEQS L$%d\n", elseLabel);
+    genJumpIfFalse(gen, ifNode->condition, elseLabel);
 
     genStatement(gen, ifNode->thenBranch);
     emit(gen, "JUMP L$%d\n", endLabel);
@@ -571,9 +576,7 @@ void genWhile(CodeGen *gen, WhileNode *whileNode) {
     int endLabel = newLabel(gen);
 
     emit(gen, "LABEL L$%d\n", startLabel);
-    genExpr(gen, whileNode->condition);
-    emit(gen, "PUSHS bool@false\n");
-    emit(gen, "JUMPIFEQS L$%d\n", endLabel);
+    genJumpIfFalse(gen, whileNode->condition, endLabel);
 
     genStatement(gen, whileNode->body);
     emit(gen, "JUMP L$%d\n", startLabel);

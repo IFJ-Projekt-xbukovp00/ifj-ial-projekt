@@ -332,6 +332,14 @@ void genVarDef(CodeGen *gen, VarOrValNode *varDef);
 void genAssign(CodeGen *gen, AssignNode *assign);
 
 /**
+ * @brief funkcia na vyhodnotenie podmienky a skok, ak je nepravdiva
+ * @param gen je kontext generatora
+ * @param condition je podmienka (vyraz typu Boolean)
+ * @param label je cislo navestia, kam sa skace pri false
+ */
+void genJumpIfFalse(CodeGen *gen, ASTNode *condition, int label);
+
+/**
  * @brief funkcia na vygenerovanie podmieneneho prikazu if/else
  * @param gen je kontext generatora
  * @param ifNode je uzol podmienky
