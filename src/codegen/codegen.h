@@ -388,6 +388,16 @@ void genIf(CodeGen *gen, IfNode *ifNode, bool valueUsed);
 void genWhile(CodeGen *gen, WhileNode *whileNode);
 
 /**
+ * @brief funkcia na vygenerovanie kontroly konca cyklu for pre jeden smer
+ * @param gen je kontext generatora
+ * @param forNode je uzol cyklu
+ * @param endVar je cislo skrytej premennej s hornou mezou
+ * @param upward je true pre kladny krok
+ * @param endLabel je cislo navestia za cyklom
+ */
+void genForCheck(CodeGen *gen, ForNode *forNode, int endVar, bool upward, int endLabel);
+
+/**
  * @brief funkcia na vygenerovanie cyklu for cez rozsah
  * @param gen je kontext generatora
  * @param forNode je uzol cyklu

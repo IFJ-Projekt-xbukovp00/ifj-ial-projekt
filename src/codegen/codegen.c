@@ -631,16 +631,39 @@ void genWhile(CodeGen *gen, WhileNode *whileNode) {
     emit(gen, "LABEL L$%d\n", endLabel);
 }
 
+void genForCheck(CodeGen *gen, ForNode *forNode, int endVar, bool upward, int endLabel) {
+    RangeNode *range = (RangeNode *)forNode->source;
+
+    emit(gen, "PUSHS ");
+    emitVar(gen, forNode->varName, forNode->symbol);
+    emit(gen, "\n");
+    emit(gen, "PUSHS LF@%%h%d\n", endVar);
+
+    // smerom hore: to konci pri i > end, until pri !(i < end)
+    // smerom dole: to konci pri i < end, until pri !(i > end)
+    if (range->inclusive) {
+        emit(gen, upward ? "GTS\n" : "LTS\n");
+        emit(gen, "PUSHS bool@true\n");
+    } else {
+        emit(gen, upward ? "LTS\n" : "GTS\n");
+        emit(gen, "PUSHS bool@false\n");
+    }
+    emit(gen, "JUMPIFEQS L$%d\n", endLabel);
+}
+
 void genFor(CodeGen *gen, ForNode *forNode) {
     RangeNode *range = (RangeNode *)forNode->source;
     int endVar = newHiddenVar(gen);
+    int stepVar = newHiddenVar(gen);
     int startLabel = newLabel(gen);
+    int downLabel = newLabel(gen);
+    int bodyLabel = newLabel(gen);
     int endLabel = newLabel(gen);
 
     // riadiaca premenna je zaroven pocitadlo, v tele sa menit neda
     defineLocal(gen, forNode->varName, forNode->symbol);
 
-    // meze sa vyhodnotia len raz pred prvou iteraciou
+    // meze aj krok sa vyhodnotia len raz pred prvou iteraciou, zlava doprava
     genExpr(gen, range->from);
     emit(gen, "POPS ");
     emitVar(gen, forNode->varName, forNode->symbol);
@@ -648,21 +671,22 @@ void genFor(CodeGen *gen, ForNode *forNode) {
     genExpr(gen, range->to);
     emit(gen, "POPS LF@%%h%d\n", endVar);
 
-    // pri to cyklus konci, ked je premenna za hornou mezou (i > end),
-    // pri until uz vtedy, ked na mez dojde (!(i < end))
-    emit(gen, "LABEL L$%d\n", startLabel);
-    emit(gen, "PUSHS ");
-    emitVar(gen, forNode->varName, forNode->symbol);
-    emit(gen, "\n");
-    emit(gen, "PUSHS LF@%%h%d\n", endVar);
-    if (range->inclusive) {
-        emit(gen, "GTS\n");
-        emit(gen, "PUSHS bool@true\n");
+    if (range->step != NULL) {
+        genExpr(gen, range->step);
+        emit(gen, "POPS LF@%%h%d\n", stepVar);
     } else {
-        emit(gen, "LTS\n");
-        emit(gen, "PUSHS bool@false\n");
+        emit(gen, "MOVE LF@%%h%d int@1\n", stepVar);
     }
-    emit(gen, "JUMPIFEQS L$%d\n", endLabel);
+
+    // smer porovnania sa urci az za behu podla znamienka kroku
+    emit(gen, "LABEL L$%d\n", startLabel);
+    emit(gen, "LT LF@%%t0 LF@%%h%d int@0\n", stepVar);
+    emit(gen, "JUMPIFEQ L$%d LF@%%t0 bool@true\n", downLabel);
+    genForCheck(gen, forNode, endVar, true, endLabel);
+    emit(gen, "JUMP L$%d\n", bodyLabel);
+    emit(gen, "LABEL L$%d\n", downLabel);
+    genForCheck(gen, forNode, endVar, false, endLabel);
+    emit(gen, "LABEL L$%d\n", bodyLabel);
 
     genStatement(gen, forNode->body);
 
@@ -670,7 +694,7 @@ void genFor(CodeGen *gen, ForNode *forNode) {
     emitVar(gen, forNode->varName, forNode->symbol);
     emit(gen, " ");
     emitVar(gen, forNode->varName, forNode->symbol);
-    emit(gen, " int@1\n");
+    emit(gen, " LF@%%h%d\n", stepVar);
     emit(gen, "JUMP L$%d\n", startLabel);
     emit(gen, "LABEL L$%d\n", endLabel);
 }
