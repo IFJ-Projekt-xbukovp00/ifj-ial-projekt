@@ -56,6 +56,7 @@ typedef struct {
     DynStr code;                   // vygenerovany kod, vypise sa az na konci
     int labelCounter;              // pocitadlo navesti L$N
     int varCounter;                // pocitadlo premennych, cislo N v mene x$N
+    int hiddenCounter;             // pocitadlo skrytych premennych %hN
     DefFuncNode *function;         // prave generovana funkcia
     int error;                     // ERR_INTERNAL ak zlyhala alokacia
     bool helperUsed[HELPER_COUNT]; // ktore pomocne funkcie sa maju vypisat
@@ -316,6 +317,21 @@ void genUnary(CodeGen *gen, UnaryNode *unary);
  * @param node je generovany vyraz
  */
 void genExpr(CodeGen *gen, ASTNode *node);
+
+/**
+ * @brief funkcia na pridelenie cisla lokalnej premennej a jej DEFVAR na zaciatok funkcie
+ * @param gen je kontext generatora
+ * @param name je meno premennej zo zdrojaku
+ * @param symbol je symbol premennej
+ */
+void defineLocal(CodeGen *gen, const char *name, Symbol *symbol);
+
+/**
+ * @brief funkcia na vytvorenie skrytej lokalnej premennej LF@%hN (napr. mez cyklu for)
+ * @param gen je kontext generatora
+ * @return cislo N novej skrytej premennej
+ */
+int newHiddenVar(CodeGen *gen);
 
 /**
  * @brief funkcia na vygenerovanie definicie premennej (val aj var)

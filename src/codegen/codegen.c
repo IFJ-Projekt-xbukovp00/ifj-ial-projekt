@@ -123,6 +123,7 @@ void initCodeGen(CodeGen *gen, FILE *out) {
     gen->out = out;
     gen->labelCounter = 0;
     gen->varCounter = 0;
+    gen->hiddenCounter = 0;
     gen->function = NULL;
     gen->error = ERR_OK;
 
@@ -540,13 +541,24 @@ void genExpr(CodeGen *gen, ASTNode *node) {
     }
 }
 
-void genVarDef(CodeGen *gen, VarOrValNode *varDef) {
+void defineLocal(CodeGen *gen, const char *name, Symbol *symbol) {
     // kazda premenna dostane vlastne cislo, takze prekryte premenne maju rozne mena
     gen->varCounter++;
-    varDef->symbol->cgId = gen->varCounter;
+    symbol->cgId = gen->varCounter;
 
     // DEFVAR ide na zaciatok, aby sa v cykle nevykonal viackrat
-    emitDeclaration(gen, "DEFVAR LF@%s$%d\n", varDef->name, varDef->symbol->cgId);
+    emitDeclaration(gen, "DEFVAR LF@%s$%d\n", name, symbol->cgId);
+}
+
+int newHiddenVar(CodeGen *gen) {
+    // skryta premenna nema meno zo zdrojaku, %h sa s premennymi programu nepomiesa
+    gen->hiddenCounter++;
+    emitDeclaration(gen, "DEFVAR LF@%%h%d\n", gen->hiddenCounter);
+    return gen->hiddenCounter;
+}
+
+void genVarDef(CodeGen *gen, VarOrValNode *varDef) {
+    defineLocal(gen, varDef->name, varDef->symbol);
     genExpr(gen, varDef->init);
     emit(gen, "POPS ");
     emitVar(gen, varDef->name, varDef->symbol);
@@ -708,10 +720,7 @@ void genParams(CodeGen *gen, DefFuncNode *function) {
 
         for (size_t paramIndex = 0; paramIndex < paramList->params_count; paramIndex++) {
             Param *param = &paramList->params[paramIndex];
-
-            gen->varCounter++;
-            param->symbol->cgId = gen->varCounter;
-            emitDeclaration(gen, "DEFVAR LF@%s$%d\n", param->name, param->symbol->cgId);
+            defineLocal(gen, param->name, param->symbol);
         }
     }
 
