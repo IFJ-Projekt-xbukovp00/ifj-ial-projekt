@@ -533,7 +533,7 @@ void genExpr(CodeGen *gen, ASTNode *node) {
         genIf(gen, (IfNode *)node, true);
     } else if (node->kind == AST_BLOCK || node->kind == AST_EXPR_STATEMENT ||
                node->kind == AST_VAR_DEF || node->kind == AST_ASSIGN || node->kind == AST_WHILE ||
-               node->kind == AST_RETURN) {
+               node->kind == AST_FOR || node->kind == AST_RETURN) {
         // blok alebo prikaz na mieste hodnoty (napr. vetva if prevedena na Double)
         genValue(gen, node);
     } else {
@@ -631,6 +631,44 @@ void genWhile(CodeGen *gen, WhileNode *whileNode) {
     emit(gen, "LABEL L$%d\n", endLabel);
 }
 
+void genFor(CodeGen *gen, ForNode *forNode) {
+    RangeNode *range = (RangeNode *)forNode->source;
+    int endVar = newHiddenVar(gen);
+    int startLabel = newLabel(gen);
+    int endLabel = newLabel(gen);
+
+    // riadiaca premenna je zaroven pocitadlo, v tele sa menit neda
+    defineLocal(gen, forNode->varName, forNode->symbol);
+
+    // meze sa vyhodnotia len raz pred prvou iteraciou
+    genExpr(gen, range->from);
+    emit(gen, "POPS ");
+    emitVar(gen, forNode->varName, forNode->symbol);
+    emit(gen, "\n");
+    genExpr(gen, range->to);
+    emit(gen, "POPS LF@%%h%d\n", endVar);
+
+    // cyklus konci, ked je premenna za hornou mezou
+    emit(gen, "LABEL L$%d\n", startLabel);
+    emit(gen, "PUSHS ");
+    emitVar(gen, forNode->varName, forNode->symbol);
+    emit(gen, "\n");
+    emit(gen, "PUSHS LF@%%h%d\n", endVar);
+    emit(gen, "GTS\n");
+    emit(gen, "PUSHS bool@true\n");
+    emit(gen, "JUMPIFEQS L$%d\n", endLabel);
+
+    genStatement(gen, forNode->body);
+
+    emit(gen, "ADD ");
+    emitVar(gen, forNode->varName, forNode->symbol);
+    emit(gen, " ");
+    emitVar(gen, forNode->varName, forNode->symbol);
+    emit(gen, " int@1\n");
+    emit(gen, "JUMP L$%d\n", startLabel);
+    emit(gen, "LABEL L$%d\n", endLabel);
+}
+
 void genReturn(CodeGen *gen, ReturnNode *returnNode) {
     if (isUnitType(gen->function->returnType)) {
         // funkcia typu Unit vrati () az na konci, hodnota za return sa len vyhodnoti
@@ -669,8 +707,8 @@ void genValue(CodeGen *gen, ASTNode *node) {
     } else if (node->kind == AST_EXPR_STATEMENT) {
         genValue(gen, ((LonelyExprNode *)node)->expr);
     } else if (node->kind == AST_VAR_DEF || node->kind == AST_ASSIGN || node->kind == AST_WHILE ||
-               node->kind == AST_RETURN) {
-        // definicia, priradenie a cyklus nemaju hodnotu, vysledok je ()
+               node->kind == AST_FOR || node->kind == AST_RETURN) {
+        // definicia, priradenie a cykly nemaju hodnotu, vysledok je ()
         // za returnom sa sem program nedostane
         genStatement(gen, node);
         emit(gen, "PUSHS nil@nil\n");
@@ -696,6 +734,8 @@ void genStatement(CodeGen *gen, ASTNode *node) {
         genIf(gen, (IfNode *)node, false);
     } else if (node->kind == AST_WHILE) {
         genWhile(gen, (WhileNode *)node);
+    } else if (node->kind == AST_FOR) {
+        genFor(gen, (ForNode *)node);
     } else if (node->kind == AST_RETURN) {
         genReturn(gen, (ReturnNode *)node);
     } else {

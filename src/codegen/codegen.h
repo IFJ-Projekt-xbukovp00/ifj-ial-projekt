@@ -388,6 +388,13 @@ void genIf(CodeGen *gen, IfNode *ifNode, bool valueUsed);
 void genWhile(CodeGen *gen, WhileNode *whileNode);
 
 /**
+ * @brief funkcia na vygenerovanie cyklu for cez rozsah
+ * @param gen je kontext generatora
+ * @param forNode je uzol cyklu
+ */
+void genFor(CodeGen *gen, ForNode *forNode);
+
+/**
  * @brief funkcia na vygenerovanie prikazu return, skace na koniec funkcie f$meno$end
  * @param gen je kontext generatora
  * @param returnNode je uzol return
