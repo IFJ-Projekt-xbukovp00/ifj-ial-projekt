@@ -556,24 +556,32 @@ void genJumpIfFalse(CodeGen *gen, ASTNode *condition, int label) {
     emit(gen, "JUMPIFEQS L$%d\n", label);
 }
 
-void genIf(CodeGen *gen, IfNode *ifNode) {
+void genIfChain(CodeGen *gen, IfNode *ifNode, int endLabel) {
     int elseLabel = newLabel(gen);
 
     // pri nepravdivej podmienke sa skace na else vetvu
     genJumpIfFalse(gen, ifNode->condition, elseLabel);
     genStatement(gen, ifNode->thenBranch);
+    emit(gen, "JUMP L$%d\n", endLabel);
+    emit(gen, "LABEL L$%d\n", elseLabel);
 
-    // if bez else, pri false sa then vetva len preskoci
     if (ifNode->elseBranch == NULL) {
-        emit(gen, "LABEL L$%d\n", elseLabel);
+        // if bez else, pri false sa then vetva len preskoci
         return;
     }
 
-    int endLabel = newLabel(gen);
-    emit(gen, "JUMP L$%d\n", endLabel);
+    if (ifNode->elseBranch->kind == AST_IF) {
+        // else if pokracuje v tom istom retazci, koniec je spolocny
+        genIfChain(gen, (IfNode *)ifNode->elseBranch, endLabel);
+    } else {
+        genStatement(gen, ifNode->elseBranch);
+    }
+}
 
-    emit(gen, "LABEL L$%d\n", elseLabel);
-    genStatement(gen, ifNode->elseBranch);
+void genIf(CodeGen *gen, IfNode *ifNode) {
+    int endLabel = newLabel(gen);
+
+    genIfChain(gen, ifNode, endLabel);
     emit(gen, "LABEL L$%d\n", endLabel);
 }
 

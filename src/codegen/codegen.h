@@ -340,6 +340,14 @@ void genAssign(CodeGen *gen, AssignNode *assign);
 void genJumpIfFalse(CodeGen *gen, ASTNode *condition, int label);
 
 /**
+ * @brief funkcia na vygenerovanie jedneho if v retazci else if
+ * @param gen je kontext generatora
+ * @param ifNode je uzol podmienky
+ * @param endLabel je cislo spolocneho navestia za celym retazcom
+ */
+void genIfChain(CodeGen *gen, IfNode *ifNode, int endLabel);
+
+/**
  * @brief funkcia na vygenerovanie podmieneneho prikazu if/else
  * @param gen je kontext generatora
  * @param ifNode je uzol podmienky
