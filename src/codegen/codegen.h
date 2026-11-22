@@ -298,6 +298,12 @@ void genAnd(CodeGen *gen, BinaryNode *binary);
 void genOr(CodeGen *gen, BinaryNode *binary);
 
 /**
+ * @brief funkcia na zaokruhlenie Double na vrchu zasobnika nadol (clen floor)
+ * @param gen je kontext generatora
+ */
+void genFloor(CodeGen *gen);
+
+/**
  * @brief funkcia na vygenerovanie pristupu cez bodku (x.toString, ...)
  * @param gen je kontext generatora
  * @param member je uzol pristupu cez bodku

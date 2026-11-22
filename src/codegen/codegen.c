@@ -436,6 +436,28 @@ void genOr(CodeGen *gen, BinaryNode *binary) {
     emit(gen, "LABEL L$%d\n", endLabel);
 }
 
+void genFloor(CodeGen *gen) {
+    int doneLabel = newLabel(gen);
+    int notLessLabel = newLabel(gen);
+
+    // cele cislo (aj -0.0) ostava tak, ako je
+    emit(gen, "POPS LF@%%t0\n");
+    emit(gen, "ISINT LF@%%t1 LF@%%t0\n");
+    emit(gen, "JUMPIFEQ L$%d LF@%%t1 bool@true\n", doneLabel);
+
+    // orezanie desatinnej casti ide k nule, pri zapornom cisle treba este odcitat 1
+    emit(gen, "FLOAT2INT LF@%%t1 LF@%%t0\n");
+    emit(gen, "INT2FLOAT LF@%%t1 LF@%%t1\n");
+    emit(gen, "LT LF@%%t2 LF@%%t0 LF@%%t1\n");
+    emit(gen, "JUMPIFEQ L$%d LF@%%t2 bool@false\n", notLessLabel);
+    emit(gen, "SUB LF@%%t1 LF@%%t1 float@%a\n", 1.0);
+    emit(gen, "LABEL L$%d\n", notLessLabel);
+    emit(gen, "MOVE LF@%%t0 LF@%%t1\n");
+
+    emit(gen, "LABEL L$%d\n", doneLabel);
+    emit(gen, "PUSHS LF@%%t0\n");
+}
+
 void genMember(CodeGen *gen, MemberNode *member) {
     // clen sa pocita z hodnoty pred bodkou
     genExpr(gen, member->object);
@@ -450,6 +472,8 @@ void genMember(CodeGen *gen, MemberNode *member) {
     } else if (strcmp(member->name, "toInt") == 0) {
         // d.toInt je to iste ako toInt(d)
         emit(gen, "FLOAT2INTS\n");
+    } else if (strcmp(member->name, "floor") == 0) {
+        genFloor(gen);
     } else if (strcmp(member->name, "length") == 0) {
         // s.length je to iste ako strLength(s)
         emit(gen, "POPS LF@%%t0\n");
