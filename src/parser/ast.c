@@ -128,7 +128,7 @@ ASTNode *astNewBinary(TokenType op, ASTNode *left, ASTNode *right, int line) {
     if (bin == NULL) {
         return NULL;
     }
-    bin->operator = op;
+    bin->operator= op;
     bin->left = left;
     bin->right = right;
     return (ASTNode *)bin;
@@ -139,7 +139,7 @@ ASTNode *astNewUnary(TokenType op, ASTNode *operand, int line) {
     if (un == NULL) {
         return NULL;
     }
-    un->operator = op;
+    un->operator= op;
     un->right = operand;
     return (ASTNode *)un;
 }
@@ -514,8 +514,7 @@ void astPrint(const ASTNode *node, int depth, FILE *out) {
     }
     case AST_FUNCTION_DEF: {
         const DefFuncNode *fn = (const DefFuncNode *)node;
-        fprintf(out, "Func(%s%s)\n", fn->isMain ? "@main " : "",
-                fn->name != NULL ? fn->name : "");
+        fprintf(out, "Func(%s%s)\n", fn->isMain ? "@main " : "", fn->name != NULL ? fn->name : "");
         // Zoznamy parametrov vypíšeme prehľadne po riadkoch
         for (size_t i = 0; i < fn->paramListCount; i++) {
             printIndent(depth + 1, out);
@@ -596,8 +595,7 @@ void astPrint(const ASTNode *node, int depth, FILE *out) {
             astPrint(caseNode->literal, depth + 1, out);
             break;
         case PAT_TYPED:
-            fprintf(out, "Case(%s)\n",
-                    caseNode->binder.name != NULL ? caseNode->binder.name : "");
+            fprintf(out, "Case(%s)\n", caseNode->binder.name != NULL ? caseNode->binder.name : "");
             break;
         case PAT_CONSTRUCTOR:
             fprintf(out, "Case(%s(", caseNode->className != NULL ? caseNode->className : "");
@@ -668,9 +666,7 @@ bool astAppend(ASTNode ***items, size_t *count, ASTNode *node) {
     return true;
 }
 
-ASTNode *astNewBlock(int line) {
-    return astAlloc(sizeof(BlockNode), AST_BLOCK, line);
-}
+ASTNode *astNewBlock(int line) { return astAlloc(sizeof(BlockNode), AST_BLOCK, line); }
 
 ASTNode *astNewVarDef(const char *name, bool isMutable, Type *declaredType, ASTNode *init,
                       int line) {
@@ -714,8 +710,8 @@ ASTNode *astNewReturn(ASTNode *value, int line) {
 }
 
 ASTNode *astNewExprStatement(ASTNode *expr, int line) {
-    LonelyExprNode *stmt = (LonelyExprNode *)astAlloc(sizeof(LonelyExprNode),
-                                                      AST_EXPR_STATEMENT, line);
+    LonelyExprNode *stmt =
+        (LonelyExprNode *)astAlloc(sizeof(LonelyExprNode), AST_EXPR_STATEMENT, line);
     if (stmt == NULL) {
         return NULL;
     }
@@ -820,9 +816,7 @@ ParamList *astFuncAddParamList(DefFuncNode *func) {
     return added;
 }
 
-ASTNode *astNewProgram(int line) {
-    return astAlloc(sizeof(ProgramNode), AST_PROGRAM, line);
-}
+ASTNode *astNewProgram(int line) { return astAlloc(sizeof(ProgramNode), AST_PROGRAM, line); }
 
 ASTNode *astNewRange(ASTNode *from, ASTNode *to, ASTNode *step, bool inclusive, int line) {
     RangeNode *range = (RangeNode *)astAlloc(sizeof(RangeNode), AST_RANGE, line);
@@ -851,13 +845,9 @@ ASTNode *astNewFor(const char *varName, ASTNode *source, ASTNode *body, int line
     return (ASTNode *)forNode;
 }
 
-ASTNode *astNewListLit(int line) {
-    return astAlloc(sizeof(ListLitNode), AST_LIST_LIT, line);
-}
+ASTNode *astNewListLit(int line) { return astAlloc(sizeof(ListLitNode), AST_LIST_LIT, line); }
 
-ASTNode *astNewInterp(int line) {
-    return astAlloc(sizeof(InterpNode), AST_INTERP, line);
-}
+ASTNode *astNewInterp(int line) { return astAlloc(sizeof(InterpNode), AST_INTERP, line); }
 
 ASTNode *astNewMember(ASTNode *object, const char *name, int line) {
     MemberNode *mem = (MemberNode *)astAlloc(sizeof(MemberNode), AST_MEMBER, line);
