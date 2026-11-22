@@ -484,6 +484,33 @@ void genMember(CodeGen *gen, MemberNode *member) {
     }
 }
 
+void genConcat(CodeGen *gen) {
+    // CONCAT nema zasobnikovu verziu, operandy sa vyberu do pomocnych premennych
+    emit(gen, "POPS LF@%%t1\n");
+    emit(gen, "POPS LF@%%t0\n");
+    emit(gen, "CONCAT LF@%%t0 LF@%%t0 LF@%%t1\n");
+    emit(gen, "PUSHS LF@%%t0\n");
+}
+
+void genInterp(CodeGen *gen, InterpNode *interp) {
+    if (interp->partsCount == 0) {
+        emit(gen, "PUSHS string@\n");
+        return;
+    }
+
+    // kazda cast sa prevedie ako cez toStr a pripoji sa k doterajsiemu retazcu
+    for (size_t partIndex = 0; partIndex < interp->partsCount; partIndex++) {
+        ASTNode *part = interp->parts[partIndex];
+
+        genExpr(gen, part);
+        genValueToStr(gen, part->type);
+
+        if (partIndex > 0) {
+            genConcat(gen);
+        }
+    }
+}
+
 void genBinary(CodeGen *gen, BinaryNode *binary) {
     if (binary->operator == TOK_AND) {
         genAnd(gen, binary);
@@ -499,11 +526,7 @@ void genBinary(CodeGen *gen, BinaryNode *binary) {
     genExpr(gen, binary->right);
 
     if (binary->operator == TOK_PLUS && getKind((ASTNode *)binary) == TY_STRING) {
-        // CONCAT nema zasobnikovu verziu, operandy sa vyberu do pomocnych premennych
-        emit(gen, "POPS LF@%%t1\n");
-        emit(gen, "POPS LF@%%t0\n");
-        emit(gen, "CONCAT LF@%%t0 LF@%%t0 LF@%%t1\n");
-        emit(gen, "PUSHS LF@%%t0\n");
+        genConcat(gen);
     } else if (binary->operator == TOK_PLUS) {
         emit(gen, "ADDS\n");
     } else if (binary->operator == TOK_MINUS) {
@@ -578,6 +601,8 @@ void genExpr(CodeGen *gen, ASTNode *node) {
         genCall(gen, (CallNode *)node);
     } else if (node->kind == AST_MEMBER) {
         genMember(gen, (MemberNode *)node);
+    } else if (node->kind == AST_INTERP) {
+        genInterp(gen, (InterpNode *)node);
     } else if (node->kind == AST_IF) {
         // if ako vyraz, kazda vetva necha na zasobniku svoju hodnotu
         genIf(gen, (IfNode *)node, true);

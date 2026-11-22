@@ -311,6 +311,19 @@ void genFloor(CodeGen *gen);
 void genMember(CodeGen *gen, MemberNode *member);
 
 /**
+ * @brief funkcia na spojenie dvoch retazcov z vrchu zasobnika
+ * @param gen je kontext generatora
+ */
+void genConcat(CodeGen *gen);
+
+/**
+ * @brief funkcia na vygenerovanie interpolovaneho retazca s"..."
+ * @param gen je kontext generatora
+ * @param interp je uzol interpolovaneho retazca
+ */
+void genInterp(CodeGen *gen, InterpNode *interp);
+
+/**
  * @brief funkcia na vygenerovanie binarnej operacie
  * @param gen je kontext generatora
  * @param binary je uzol binarnej operacie
