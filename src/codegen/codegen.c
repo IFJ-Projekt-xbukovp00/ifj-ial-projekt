@@ -530,6 +530,11 @@ void genExpr(CodeGen *gen, ASTNode *node) {
     } else if (node->kind == AST_IF) {
         // if ako vyraz, kazda vetva necha na zasobniku svoju hodnotu
         genIf(gen, (IfNode *)node, true);
+    } else if (node->kind == AST_BLOCK || node->kind == AST_EXPR_STATEMENT ||
+               node->kind == AST_VAR_DEF || node->kind == AST_ASSIGN || node->kind == AST_WHILE ||
+               node->kind == AST_RETURN) {
+        // blok alebo prikaz na mieste hodnoty (napr. vetva if prevedena na Double)
+        genValue(gen, node);
     } else {
         emit(gen, "PUSHS nil@nil\n");
     }
