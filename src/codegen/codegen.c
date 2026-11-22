@@ -111,11 +111,8 @@ void emitLiteral(CodeGen *gen, LiteralNode *literal) {
     } else if (literal->litType == LIT_STRING) {
         emitString(gen, literal->litValue.string_value);
     } else if (literal->litType == LIT_BOOLEAN) {
-        if (literal->litValue.bool_value) {
-            emit(gen, "bool@true");
-        } else {
-            emit(gen, "bool@false");
-        }
+        // true a false su priamo konstanty bool
+        emit(gen, "bool@%s", literal->litValue.bool_value ? "true" : "false");
     } else if (literal->litType == LIT_UNIT) {
         // hodnota () je za behu nil
         emit(gen, "nil@nil");
@@ -428,6 +425,11 @@ void genBinary(CodeGen *gen, BinaryNode *binary) {
     } else if (binary->operator == TOK_NOT_EQUAL) {
         emit(gen, "EQS\n");
         emit(gen, "NOTS\n");
+    } else if (binary->operator == TOK_AND) {
+        // zatial sa vyhodnotia vzdy oba operandy
+        emit(gen, "ANDS\n");
+    } else if (binary->operator == TOK_OR) {
+        emit(gen, "ORS\n");
     }
 }
 
