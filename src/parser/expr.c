@@ -615,17 +615,22 @@ int expr_parse(Token *token, ASTNode *first, ASTNode **output) {
         return ERR_INTERNAL;
     }
 
-    static TAStack stack;
+    // kazde volanie ma vlastny zasobnik, aby slo volat expr_parse aj rekurzivne
+    TAStack *stack = malloc(sizeof(TAStack));
+    if (stack == NULL) {
+        expr_free(first);
+        return ERR_INTERNAL;
+    }
     PsaState state = {.token = token};
     int err;
 
-    A_InitStack(&stack);
+    A_InitStack(stack);
     StackItem dollar = {.kind = SYM_TERM, .ptIndex = PT_DOLLAR, .line = token->line};
-    A_Push(&stack, dollar);
+    A_Push(stack, dollar);
 
     if (first != NULL) { // LL parser uz nacital prvy operand
         StackItem expr = {.kind = SYM_EXPR, .node = first, .line = first->line};
-        A_Push(&stack, expr);
+        A_Push(stack, expr);
         state.afterOperand = true;
     }
 
@@ -635,7 +640,7 @@ int expr_parse(Token *token, ASTNode *first, ASTNode **output) {
     }
 
     for (;;) {
-        const StackItem *topTerm = A_TopTerminal(&stack);
+        const StackItem *topTerm = A_TopTerminal(stack);
         if (topTerm == NULL) {
             err = ERR_INTERNAL;
             goto fail;
@@ -643,7 +648,7 @@ int expr_parse(Token *token, ASTNode *first, ASTNode **output) {
         PtRel rel = precTable[topTerm->ptIndex][input];
 
         if (rel == R_LT || rel == R_EQ) {
-            if (A_IsFull(&stack) || (rel == R_LT && !A_InsertMark(&stack)) || A_IsFull(&stack)) {
+            if (A_IsFull(stack) || (rel == R_LT && !A_InsertMark(stack)) || A_IsFull(stack)) {
                 err = ERR_INTERNAL;
                 goto fail;
             }
@@ -657,7 +662,7 @@ int expr_parse(Token *token, ASTNode *first, ASTNode **output) {
                     goto fail;
                 }
             }
-            A_Push(&stack, term);
+            A_Push(stack, term);
 
             if (input == PT_LPAR) {
                 state.parenDepth++;
@@ -674,21 +679,22 @@ int expr_parse(Token *token, ASTNode *first, ASTNode **output) {
                 goto fail;
             }
         } else if (rel == R_GT) {
-            if ((err = reduce(&stack)) != ERR_OK) {
+            if ((err = reduce(stack)) != ERR_OK) {
                 goto fail;
             }
         } else if (rel == R_END) {
             // na zasobniku musi ostat len $ E
-            if (stack.top != 2 || !isExpr(&stack.dataArray[1])) {
+            if (stack->top != 2 || !isExpr(&stack->dataArray[1])) {
                 err = ERR_SYNTAX;
                 goto fail;
             }
-            *output = stack.dataArray[1].node;
-            stack.top = 0;
+            *output = stack->dataArray[1].node;
+            stack->top = 0;
             if (state.hasLookahead) {
                 dynstr_free(&state.lookahead.lexeme);
                 state.hasLookahead = false;
             }
+            free(stack);
             return ERR_OK;
         } else {
             err = ERR_SYNTAX;
@@ -697,6 +703,7 @@ int expr_parse(Token *token, ASTNode *first, ASTNode **output) {
     }
 
 fail:
-    freeStack(&stack, &state);
+    freeStack(stack, &state);
+    free(stack);
     return err;
 }
