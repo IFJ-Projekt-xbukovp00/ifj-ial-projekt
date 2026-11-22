@@ -426,6 +426,17 @@ static int reduceHandle(StackItem *handle, int count, ASTNode **result) {
         return ERR_OK;
     }
 
+    // E -> ( ), hodnota typu Unit
+    if (count == 2 && isTerminal(&handle[0], PT_LPAR) && isTerminal(&handle[1], PT_RPAR)) {
+        LiteralNode *lit = newNode(sizeof(LiteralNode), AST_LIT, line);
+        if (lit == NULL) {
+            return ERR_INTERNAL;
+        }
+        lit->litType = LIT_UNIT;
+        *result = (ASTNode *)lit;
+        return ERR_OK;
+    }
+
     // E -> ( E )
     if (count == 3 && isTerminal(&handle[0], PT_LPAR) && isExpr(&handle[1]) &&
         isTerminal(&handle[2], PT_RPAR)) {
