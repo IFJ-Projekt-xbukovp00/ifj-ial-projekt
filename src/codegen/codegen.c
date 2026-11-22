@@ -373,6 +373,9 @@ bool genBuiltinCall(CodeGen *gen, CallNode *call, const char *name) {
         genReadNumber(gen, "int", "int@0");
     } else if (strcmp(name, "readDouble") == 0) {
         genReadNumber(gen, "float", "float@0x0p+0");
+    } else if (strcmp(name, "readBoolean") == 0) {
+        // READ bool vrati true len pre "true", inak nil, to sa berie ako false
+        genReadNumber(gen, "bool", "bool@false");
     } else if (strcmp(name, "toStr") == 0) {
         genToStr(gen, call);
     } else if (strcmp(name, "toInt") == 0) {
