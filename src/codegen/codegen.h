@@ -283,6 +283,13 @@ void genCall(CodeGen *gen, CallNode *call);
 bool genBuiltinCall(CodeGen *gen, CallNode *call, const char *name);
 
 /**
+ * @brief funkcia na vygenerovanie skratoveho &&
+ * @param gen je kontext generatora
+ * @param binary je uzol operacie &&
+ */
+void genAnd(CodeGen *gen, BinaryNode *binary);
+
+/**
  * @brief funkcia na vygenerovanie binarnej operacie
  * @param gen je kontext generatora
  * @param binary je uzol binarnej operacie

@@ -400,7 +400,28 @@ bool genBuiltinCall(CodeGen *gen, CallNode *call, const char *name) {
     return true;
 }
 
+void genAnd(CodeGen *gen, BinaryNode *binary) {
+    int falseLabel = newLabel(gen);
+    int endLabel = newLabel(gen);
+
+    // skratove vyhodnotenie, pri false vlavo sa pravy operand nevyhodnoti
+    genExpr(gen, binary->left);
+    emit(gen, "PUSHS bool@false\n");
+    emit(gen, "JUMPIFEQS L$%d\n", falseLabel);
+    genExpr(gen, binary->right);
+    emit(gen, "JUMP L$%d\n", endLabel);
+
+    emit(gen, "LABEL L$%d\n", falseLabel);
+    emit(gen, "PUSHS bool@false\n");
+    emit(gen, "LABEL L$%d\n", endLabel);
+}
+
 void genBinary(CodeGen *gen, BinaryNode *binary) {
+    if (binary->operator == TOK_AND) {
+        genAnd(gen, binary);
+        return;
+    }
+
     // operandy sa vyhodnocuju zlava doprava, pravy je na vrchu zasobnika
     genExpr(gen, binary->left);
     genExpr(gen, binary->right);
@@ -441,10 +462,8 @@ void genBinary(CodeGen *gen, BinaryNode *binary) {
     } else if (binary->operator == TOK_NOT_EQUAL) {
         emit(gen, "EQS\n");
         emit(gen, "NOTS\n");
-    } else if (binary->operator == TOK_AND) {
-        // zatial sa vyhodnotia vzdy oba operandy
-        emit(gen, "ANDS\n");
     } else if (binary->operator == TOK_OR) {
+        // zatial sa vyhodnotia vzdy oba operandy
         emit(gen, "ORS\n");
     }
 }
