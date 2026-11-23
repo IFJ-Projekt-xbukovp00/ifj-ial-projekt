@@ -510,6 +510,23 @@ const char *getRuntimeTypeName(Type *type);
 void genLiteralPattern(CodeGen *gen, CaseNode *caseNode, int subjectVar, int nextLabel);
 
 /**
+ * @brief funkcia na kontrolu typu hodnoty za behu, pri inom type skoci na failLabel
+ * @param gen je kontext generatora
+ * @param type je ocakavany typ (moze byt aj zjednotenie)
+ * @param subjectVar je cislo skrytej premennej s hodnotou
+ * @param failLabel je cislo navestia pri nezhode
+ */
+void genTypeTest(CodeGen *gen, Type *type, int subjectVar, int failLabel);
+
+/**
+ * @brief funkcia na ulozenie porovnavanej hodnoty do premennej zo vzoru
+ * @param gen je kontext generatora
+ * @param binder je premenna zo vzoru
+ * @param subjectVar je cislo skrytej premennej s hodnotou
+ */
+void genBindSubject(CodeGen *gen, Param *binder, int subjectVar);
+
+/**
  * @brief funkcia na test vzoru vetvy case, pri nezhode skoci na dalsiu vetvu
  * @param gen je kontext generatora
  * @param caseNode je vetva case

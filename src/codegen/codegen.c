@@ -1029,6 +1029,42 @@ void genLiteralPattern(CodeGen *gen, CaseNode *caseNode, int subjectVar, int nex
     emit(gen, "JUMPIFNEQ L$%d LF@%%h%d LF@%%t1\n", nextLabel, subjectVar);
 }
 
+void genTypeTest(CodeGen *gen, Type *type, int subjectVar, int failLabel) {
+    type = getRealType(type);
+
+    if (type->kind == TY_UNION) {
+        // hodnota patri do zjednotenia, ak patri do niektoreho jeho clena
+        int okLabel = newLabel(gen);
+
+        for (size_t memberIndex = 0; memberIndex < type->members.len; memberIndex++) {
+            int memberFailLabel = newLabel(gen);
+
+            genTypeTest(gen, type->members.items[memberIndex], subjectVar, memberFailLabel);
+            emit(gen, "JUMP L$%d\n", okLabel);
+            emit(gen, "LABEL L$%d\n", memberFailLabel);
+        }
+
+        emit(gen, "JUMP L$%d\n", failLabel);
+        emit(gen, "LABEL L$%d\n", okLabel);
+        return;
+    }
+
+    emit(gen, "TYPE LF@%%t0 LF@%%h%d\n", subjectVar);
+    emit(gen, "JUMPIFNEQ L$%d LF@%%t0 string@%s\n", failLabel, getRuntimeTypeName(type));
+}
+
+void genBindSubject(CodeGen *gen, Param *binder, int subjectVar) {
+    // vazba _ premennu nevytvara
+    if (binder->symbol == NULL) {
+        return;
+    }
+
+    defineLocal(gen, binder->name, binder->symbol);
+    emit(gen, "MOVE ");
+    emitVar(gen, binder->name, binder->symbol);
+    emit(gen, " LF@%%h%d\n", subjectVar);
+}
+
 void genPattern(CodeGen *gen, CaseNode *caseNode, int subjectVar, int nextLabel) {
     if (caseNode->patternKind == PAT_WILDCARD) {
         // vzor _ uspeje vzdy
@@ -1037,6 +1073,13 @@ void genPattern(CodeGen *gen, CaseNode *caseNode, int subjectVar, int nextLabel)
 
     if (caseNode->patternKind == PAT_LITERAL) {
         genLiteralPattern(gen, caseNode, subjectVar, nextLabel);
+        return;
+    }
+
+    if (caseNode->patternKind == PAT_TYPED) {
+        // n: Int, hodnota sa po kontrole typu ulozi do novej premennej
+        genTypeTest(gen, caseNode->binder.type, subjectVar, nextLabel);
+        genBindSubject(gen, &caseNode->binder, subjectVar);
         return;
     }
 
