@@ -74,6 +74,44 @@ static const PtRel precTable[PT_COUNT][PT_COUNT] = {
 };
 // clang-format on
 
+// dekoduje escape sekvencie v retazcovom literali
+static char *decodeStringLiteral(const char *src, size_t len) {
+    char *out = malloc(len + 1);
+    if (out == NULL) {
+        return NULL;
+    }
+    size_t j = 0;
+    for (size_t i = 0; i < len; i++) {
+        if (src[i] == '\\' && i + 1 < len) {
+            i++;
+            switch (src[i]) {
+            case 'n':
+                out[j++] = '\n';
+                break;
+            case 'r':
+                out[j++] = '\r';
+                break;
+            case 't':
+                out[j++] = '\t';
+                break;
+            case '\\':
+                out[j++] = '\\';
+                break;
+            case '"':
+                out[j++] = '"';
+                break;
+            default:
+                out[j++] = src[i];
+                break;
+            }
+        } else {
+            out[j++] = src[i];
+        }
+    }
+    out[j] = '\0';
+    return out;
+}
+
 // pravidlo E -> i, vytvori LiteralNode alebo IDNode z tokenu
 static ASTNode *nodeFromToken(const Token *token) {
     const char *lexeme = token->lexeme.data;
@@ -98,20 +136,16 @@ static ASTNode *nodeFromToken(const Token *token) {
     case TOK_BOOL_LIT:
         return astNewBoolLit(strcmp(lexeme, "true") == 0, token->line);
     case TOK_STRING_LIT: {
-        // TODO: escape sekvencie v retazci, zatial len oreze uvodzovky
         size_t quotes = (len >= 6 && strncmp(lexeme, "\"\"\"", 3) == 0) ? 3 : 1;
         if (len < 2 * quotes) {
             return NULL;
         }
-        size_t innerLen = len - 2 * quotes;
-        char *buf = malloc(innerLen + 1);
-        if (buf == NULL) {
+        char *decoded = decodeStringLiteral(lexeme + quotes, len - 2 * quotes);
+        if (decoded == NULL) {
             return NULL;
         }
-        memcpy(buf, lexeme + quotes, innerLen);
-        buf[innerLen] = '\0';
-        ASTNode *lit = astNewStringLit(buf, token->line);
-        free(buf);
+        ASTNode *lit = astNewStringLit(decoded, token->line);
+        free(decoded);
         return lit;
     }
     default:
