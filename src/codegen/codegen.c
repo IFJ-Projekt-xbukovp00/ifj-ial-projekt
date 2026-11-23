@@ -473,6 +473,18 @@ void genConstructor(CodeGen *gen, CallNode *call) {
     emit(gen, "PUSHS LF@%%t0\n");
 }
 
+void genValueCall(CodeGen *gen, CallNode *call) {
+    int calleeVar = newHiddenVar(gen);
+
+    // volana hodnota (retazec s navestim) sa vyhodnoti pred argumentmi
+    // a odlozi sa, aby ju argumenty neprepisali
+    genExpr(gen, call->caller);
+    emit(gen, "POPS LF@%%h%d\n", calleeVar);
+
+    genArgs(gen, call);
+    emit(gen, "CALL LF@%%h%d\n", calleeVar);
+}
+
 const char *getBuiltinName(CallNode *call) {
     if (call->caller->kind == AST_ID) {
         return ((IDNode *)call->caller)->name;
@@ -500,6 +512,9 @@ void genCall(CodeGen *gen, CallNode *call) {
         break;
     case CALL_CONSTRUCTOR:
         genConstructor(gen, call);
+        break;
+    case CALL_VALUE:
+        genValueCall(gen, call);
         break;
     case CALL_BUILTIN:
         isGenerated = genBuiltinCall(gen, call, getBuiltinName(call));
