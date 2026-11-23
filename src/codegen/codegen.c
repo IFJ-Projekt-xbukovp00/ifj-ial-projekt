@@ -582,6 +582,28 @@ void genFloor(CodeGen *gen) {
     emit(gen, "PUSHS LF@%%t0\n");
 }
 
+size_t getFieldIndex(const ClassDefNode *classDef, const char *name) {
+    for (size_t fieldIndex = 0; fieldIndex < classDef->fields.params_count; fieldIndex++) {
+        if (strcmp(classDef->fields.params[fieldIndex].name, name) == 0) {
+            return fieldIndex;
+        }
+    }
+
+    // sem sa po semantike neda dostat
+    return 0;
+}
+
+void genFieldAccess(CodeGen *gen, MemberNode *member) {
+    const ClassDefNode *classDef = (const ClassDefNode *)member->symbol->definition;
+
+    // na indexe 0 je meno triedy, atributy idu az za nim
+    size_t index = getFieldIndex(classDef, member->name) + 1;
+
+    emit(gen, "POPS LF@%%t0\n");
+    emit(gen, "ARRAYGET LF@%%t0 LF@%%t0 int@%zu\n", index);
+    emit(gen, "PUSHS LF@%%t0\n");
+}
+
 void genMember(CodeGen *gen, MemberNode *member) {
     // clen sa pocita z hodnoty pred bodkou, pri retazeni (x.floor.toInt)
     // je objektom dalsi clen, ten uz necha na zasobniku svoju hodnotu
@@ -593,6 +615,11 @@ void genMember(CodeGen *gen, MemberNode *member) {
         emit(gen, "CALL ");
         emitFunctionLabel(gen, (DefFuncNode *)member->symbol->definition);
         emit(gen, "\n");
+        return;
+    }
+
+    if (member->memberKind == MEM_FIELD) {
+        genFieldAccess(gen, member);
         return;
     }
 

@@ -339,6 +339,21 @@ void genOr(CodeGen *gen, BinaryNode *binary);
 void genFloor(CodeGen *gen);
 
 /**
+ * @brief funkcia na najdenie poradia atributu v case class
+ * @param classDef je definicia triedy
+ * @param name je meno atributu
+ * @return index atributu od nuly
+ */
+size_t getFieldIndex(const ClassDefNode *classDef, const char *name);
+
+/**
+ * @brief funkcia na pristup k atributu case class (ARRAYGET), objekt je na zasobniku
+ * @param gen je kontext generatora
+ * @param member je uzol pristupu k atributu
+ */
+void genFieldAccess(CodeGen *gen, MemberNode *member);
+
+/**
  * @brief funkcia na vygenerovanie pristupu cez bodku (x.toString, ...)
  * @param gen je kontext generatora
  * @param member je uzol pristupu cez bodku
