@@ -498,6 +498,11 @@ bool genBuiltinCall(CodeGen *gen, CallNode *call, const char *name) {
         genReadNumber(gen, "int", "int@0");
     } else if (strcmp(name, "readDouble") == 0) {
         genReadNumber(gen, "float", "float@0x0p+0");
+    } else if (strcmp(name, "readIntMaybe") == 0 || strcmp(name, "readDoubleMaybe") == 0) {
+        // pri chybnom vstupe READ vrati nil, co je presne hodnota () typu Unit
+        bool isInt = strcmp(name, "readIntMaybe") == 0;
+        emit(gen, "READ LF@%%t0 %s\n", isInt ? "int" : "float");
+        emit(gen, "PUSHS LF@%%t0\n");
     } else if (strcmp(name, "readBoolean") == 0) {
         // READ bool vrati true len pre "true", inak nil, to sa berie ako false
         genReadNumber(gen, "bool", "bool@false");
