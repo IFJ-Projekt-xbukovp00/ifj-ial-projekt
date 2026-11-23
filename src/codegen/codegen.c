@@ -450,8 +450,33 @@ void genToStrAnyHelper(CodeGen *gen) {
     emit(gen, "LABEL L$%d\n", endLabel);
 }
 
+void genConstructor(CodeGen *gen, CallNode *call) {
+    const ClassDefNode *classDef = (const ClassDefNode *)call->symbol->definition;
+    size_t fieldCount = classDef->fields.params_count;
+
+    // atributy sa vyhodnotia najprv vsetky, aby si vnorene konstruktory
+    // neprepisali pomocne premenne
+    genArgs(gen, call);
+
+    // hodnota triedy je pole ["Meno", atribut1, atribut2, ...]
+    emit(gen, "NEWARRAY LF@%%t0 int@%zu\n", fieldCount + 1);
+    emit(gen, "ARRAYSET LF@%%t0 int@0 ");
+    emitString(gen, classDef->name);
+    emit(gen, "\n");
+
+    // posledny atribut je na vrchu zasobnika
+    for (size_t fieldIndex = fieldCount; fieldIndex > 0; fieldIndex--) {
+        emit(gen, "POPS LF@%%t1\n");
+        emit(gen, "ARRAYSET LF@%%t0 int@%zu LF@%%t1\n", fieldIndex);
+    }
+
+    emit(gen, "PUSHS LF@%%t0\n");
+}
+
 void genCall(CodeGen *gen, CallNode *call) {
-    if (call->callKind == CALL_FUNC) {
+    if (call->callKind == CALL_CONSTRUCTOR) {
+        genConstructor(gen, call);
+    } else if (call->callKind == CALL_FUNC) {
         genFunctionCall(gen, call);
     } else if (call->callKind == CALL_EXT_METHOD) {
         genExtMethodCall(gen, call);

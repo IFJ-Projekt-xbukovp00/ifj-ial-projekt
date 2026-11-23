@@ -296,6 +296,13 @@ void genExtMethodCall(CodeGen *gen, CallNode *call);
 void genToStrAnyHelper(CodeGen *gen);
 
 /**
+ * @brief funkcia na vygenerovanie konstruktora case class, vytvori pole ["Meno", ...]
+ * @param gen je kontext generatora
+ * @param call je uzol volania konstruktora
+ */
+void genConstructor(CodeGen *gen, CallNode *call);
+
+/**
  * @brief funkcia na vygenerovanie volania funkcie, vysledok ostane na zasobniku
  * @param gen je kontext generatora
  * @param call je uzol volania
