@@ -112,6 +112,22 @@ static char *decodeStringLiteral(const char *src, size_t len) {
     return out;
 }
 
+// odstrani oddelovacie podciarkovniky z ciselneho literalu pre strtoll/strtod
+static char *stripUnderscores(const char *src, size_t len) {
+    char *out = malloc(len + 1);
+    if (out == NULL) {
+        return NULL;
+    }
+    size_t j = 0;
+    for (size_t i = 0; i < len; i++) {
+        if (src[i] != '_') {
+            out[j++] = src[i];
+        }
+    }
+    out[j] = '\0';
+    return out;
+}
+
 // pravidlo E -> i, vytvori LiteralNode alebo IDNode z tokenu
 static ASTNode *nodeFromToken(const Token *token) {
     const char *lexeme = token->lexeme.data;
@@ -123,16 +139,24 @@ static ASTNode *nodeFromToken(const Token *token) {
 
     switch (token->type) {
     case TOK_INT_LIT: {
-        long long val;
-        if (len > 2 && lexeme[0] == '0' && (lexeme[1] == 'x' || lexeme[1] == 'X')) {
-            val = strtoll(lexeme + 2, NULL, 16);
-        } else {
-            val = strtoll(lexeme, NULL, 10);
+        char *clean = stripUnderscores(lexeme, len);
+        if (clean == NULL) {
+            return NULL;
         }
+        long long val = strtoll(clean, NULL, 10);
+        free(clean);
         return astNewIntLit(val, token->line);
     }
-    case TOK_DOUBLE_LIT:
-        return astNewDoubleLit(strtod(lexeme, NULL), token->line);
+    case TOK_DOUBLE_LIT: {
+        char *clean = stripUnderscores(lexeme, len);
+        if (clean == NULL) {
+            return NULL;
+        }
+        // strtod sa sam zastavi na pripone d/D
+        double val = strtod(clean, NULL);
+        free(clean);
+        return astNewDoubleLit(val, token->line);
+    }
     case TOK_BOOL_LIT:
         return astNewBoolLit(strcmp(lexeme, "true") == 0, token->line);
     case TOK_STRING_LIT: {
