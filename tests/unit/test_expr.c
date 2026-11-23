@@ -55,10 +55,11 @@ static bool doubleNear(double a, double b, double eps) {
     return diff < eps && diff > -eps;
 }
 
-static int parseExprString(const char *src, ASTNode **out, TokenType *nextTok) {
+static int parseExprWithFirst(const char *src, ASTNode *first, ASTNode **out, TokenType *nextTok) {
     *out = NULL;
     FILE *in = tmpfile();
     if (in == NULL) {
+        astFree(first);
         return ERR_INTERNAL;
     }
     fputs(src, in);
@@ -68,15 +69,21 @@ static int parseExprString(const char *src, ASTNode **out, TokenType *nextTok) {
     Token tok = {0};
     int err = scanner_get_token(&tok);
     if (err == ERR_OK) {
-        err = expr_parse(&tok, NULL, out);
+        err = expr_parse(&tok, first, out);
         if (nextTok != NULL) {
             *nextTok = tok.type;
         }
+    } else {
+        astFree(first);
     }
     dynstr_free(&tok.lexeme);
     scanner_free();
     fclose(in);
     return err;
+}
+
+static int parseExprString(const char *src, ASTNode **out, TokenType *nextTok) {
+    return parseExprWithFirst(src, NULL, out, nextTok);
 }
 
 static void testPrecedenceAndAssoc(void) {
@@ -711,6 +718,146 @@ static void testLambdas(void) {
     type_free_all();
 }
 
+static void testSyntaxErrorsAndBoundaries(void) {
+    ASTNode *root = NULL;
+    TokenType nextTok = TOK_EOF;
+
+    // neplatne vyrazy musia vratit ERR_SYNTAX a *output == NULL
+    const char *invalidExprs[] = {
+        "",        "1 +",          "(1 + 2",     "1 < 2 < 3",   "1 == 2 == 3",
+        "1 to 5 by 2 by 3",        "1 by 2",     "x.5",         "f(1, )",
+        "s\"a ${}\"", "(a: ) => 1", "(a: Int) 1", "(a: Int, ) => 1", "a b",
+    };
+    size_t invalidCount = sizeof(invalidExprs) / sizeof(invalidExprs[0]);
+    for (size_t i = 0; i < invalidCount; i++) {
+        root = (ASTNode *)0x1;
+        CHECK(parseExprString(invalidExprs[i], &root, NULL) == ERR_SYNTAX);
+        CHECK(root == NULL);
+    }
+
+    // hranice vyrazov: PSA nesmie pohltit oddelovac za vyrazom
+    CHECK(parseExprString("x < 10 then y", &root, &nextTok) == ERR_OK);
+    CHECK(nextTok == TOK_KW_THEN);
+    CHECK(root != NULL && root->kind == AST_BINARY);
+    astFree(root);
+
+    CHECK(parseExprString("x > 0 do y", &root, &nextTok) == ERR_OK);
+    CHECK(nextTok == TOK_KW_DO);
+    CHECK(root != NULL && root->kind == AST_BINARY);
+    astFree(root);
+
+    CHECK(parseExprString("a + b)", &root, &nextTok) == ERR_OK);
+    CHECK(nextTok == TOK_RPAREN);
+    CHECK(root != NULL && root->kind == AST_BINARY);
+    astFree(root);
+
+    CHECK(parseExprString("a + b, c", &root, &nextTok) == ERR_OK);
+    CHECK(nextTok == TOK_COMMA);
+    CHECK(root != NULL && root->kind == AST_BINARY);
+    astFree(root);
+
+    CHECK(parseExprString("a + b\nc", &root, &nextTok) == ERR_OK);
+    CHECK(nextTok == TOK_EOL);
+    CHECK(root != NULL && root->kind == AST_BINARY);
+    astFree(root);
+
+    CHECK(parseExprString("()\nx", &root, &nextTok) == ERR_OK);
+    CHECK(nextTok == TOK_EOL);
+    CHECK(root != NULL && root->kind == AST_LIT && ((LiteralNode *)root)->litType == LIT_UNIT);
+    astFree(root);
+
+    CHECK(parseExprString("() => 42\nx", &root, &nextTok) == ERR_OK);
+    CHECK(nextTok == TOK_EOL);
+    CHECK(root != NULL && root->kind == AST_LAMBDA);
+    astFree(root);
+
+    // pokracovanie vyrazu s vopred nacitanym prvym operandom first
+    ASTNode *first = astNewId("f", 1);
+    CHECK(first != NULL);
+    CHECK(parseExprWithFirst("(1, 2)", first, &root, &nextTok) == ERR_OK);
+    CHECK(nextTok == TOK_EOL);
+    CHECK(root != NULL && root->kind == AST_CALL);
+    if (root != NULL && root->kind == AST_CALL) {
+        CallNode *call = (CallNode *)root;
+        CHECK(call->caller != NULL && call->caller->kind == AST_ID);
+        CHECK(strcmp(((IDNode *)call->caller)->name, "f") == 0);
+        CHECK(call->argsCount == 2);
+    }
+    astFree(root);
+
+    first = astNewId("x", 1);
+    CHECK(first != NULL);
+    CHECK(parseExprWithFirst("+ 3", first, &root, NULL) == ERR_OK);
+    CHECK(root != NULL && root->kind == AST_BINARY);
+    if (root != NULL && root->kind == AST_BINARY) {
+        BinaryNode *bin = (BinaryNode *)root;
+        CHECK(bin->operator == TOK_PLUS);
+        CHECK(bin->left != NULL && bin->left->kind == AST_ID);
+        CHECK(bin->right != NULL && bin->right->kind == AST_LIT);
+    }
+    astFree(root);
+
+    first = astNewId("obj", 1);
+    CHECK(first != NULL);
+    CHECK(parseExprWithFirst(".prop", first, &root, NULL) == ERR_OK);
+    CHECK(root != NULL && root->kind == AST_MEMBER);
+    if (root != NULL && root->kind == AST_MEMBER) {
+        MemberNode *mem = (MemberNode *)root;
+        CHECK(strcmp(mem->name, "prop") == 0);
+        CHECK(mem->object != NULL && mem->object->kind == AST_ID);
+    }
+    astFree(root);
+
+    first = astNewId("obj", 1);
+    CHECK(first != NULL);
+    CHECK(parseExprWithFirst(".step(1)", first, &root, NULL) == ERR_OK);
+    CHECK(root != NULL && root->kind == AST_CALL);
+    if (root != NULL && root->kind == AST_CALL) {
+        CallNode *call = (CallNode *)root;
+        CHECK(call->caller != NULL && call->caller->kind == AST_MEMBER);
+        CHECK(call->argsCount == 1);
+    }
+    astFree(root);
+
+    first = astNewId("x", 1);
+    CHECK(first != NULL);
+    CHECK(parseExprWithFirst("then y", first, &root, &nextTok) == ERR_OK);
+    CHECK(nextTok == TOK_KW_THEN);
+    CHECK(root != NULL && root->kind == AST_ID);
+    if (root != NULL && root->kind == AST_ID) {
+        CHECK(strcmp(((IDNode *)root)->name, "x") == 0);
+    }
+    astFree(root);
+
+    // priamy prechod z LL parsera na "x\ny": x uz je nacitane a dalsi token je EOL
+    FILE *in = tmpfile();
+    CHECK(in != NULL);
+    if (in != NULL) {
+        fputs("x\ny", in);
+        rewind(in);
+        scanner_init(in);
+        Token tok = {0};
+        CHECK(scanner_get_token(&tok) == ERR_OK);
+        CHECK(tok.type == TOK_IDENTIFIER);
+        ASTNode *preRead = astNewId(tok.lexeme.data, tok.line);
+        CHECK(preRead != NULL);
+        CHECK(scanner_get_token(&tok) == ERR_OK);
+        CHECK(tok.type == TOK_EOL);
+        CHECK(expr_parse(&tok, preRead, &root) == ERR_OK);
+        CHECK(tok.type == TOK_EOL);
+        CHECK(root != NULL && root->kind == AST_ID);
+        if (root != NULL && root->kind == AST_ID) {
+            CHECK(strcmp(((IDNode *)root)->name, "x") == 0);
+        }
+        astFree(root);
+        dynstr_free(&tok.lexeme);
+        scanner_free();
+        fclose(in);
+    }
+
+    type_free_all();
+}
+
 int main(void) {
     testPrecedenceAndAssoc();
     testUnaryOps();
@@ -718,6 +865,7 @@ int main(void) {
     testCallsMembersListsRanges();
     testInterpolatedStrings();
     testLambdas();
+    testSyntaxErrorsAndBoundaries();
 
     if (failureCount) {
         fprintf(stderr, "test_expr: %d chyb\n", failureCount);
