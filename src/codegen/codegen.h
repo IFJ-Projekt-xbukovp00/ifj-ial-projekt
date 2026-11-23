@@ -494,6 +494,23 @@ void genForCheck(CodeGen *gen, ForNode *forNode, int endVar, bool upward, int en
 void genFor(CodeGen *gen, ForNode *forNode);
 
 /**
+ * @brief funkcia na test vzoru vetvy case, pri nezhode skoci na dalsiu vetvu
+ * @param gen je kontext generatora
+ * @param caseNode je vetva case
+ * @param subjectVar je cislo skrytej premennej s porovnavanou hodnotou
+ * @param nextLabel je cislo navestia dalsej vetvy
+ */
+void genPattern(CodeGen *gen, CaseNode *caseNode, int subjectVar, int nextLabel);
+
+/**
+ * @brief funkcia na vygenerovanie vyrazu match
+ * @param gen je kontext generatora
+ * @param match je uzol match
+ * @param valueUsed je true, ak ma match nechat hodnotu na zasobniku
+ */
+void genMatch(CodeGen *gen, MatchNode *match, bool valueUsed);
+
+/**
  * @brief funkcia na vygenerovanie prikazu return, skace na koniec funkcie f$meno$end
  * @param gen je kontext generatora
  * @param returnNode je uzol return

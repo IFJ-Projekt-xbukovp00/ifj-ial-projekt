@@ -987,6 +987,40 @@ void genFor(CodeGen *gen, ForNode *forNode) {
     emit(gen, "LABEL L$%d\n", endLabel);
 }
 
+void genPattern(CodeGen *gen, CaseNode *caseNode, int subjectVar, int nextLabel) {
+    (void)subjectVar;
+
+    if (caseNode->patternKind == PAT_WILDCARD) {
+        // vzor _ uspeje vzdy
+        return;
+    }
+
+    // ostatne vzory zatial nie su, vetva sa preskoci
+    emit(gen, "JUMP L$%d\n", nextLabel);
+}
+
+void genMatch(CodeGen *gen, MatchNode *match, bool valueUsed) {
+    int subjectVar = newHiddenVar(gen);
+    int endLabel = newLabel(gen);
+
+    // porovnavana hodnota sa vyhodnoti raz a ulozi do skrytej premennej
+    genExpr(gen, match->subject);
+    emit(gen, "POPS LF@%%h%d\n", subjectVar);
+
+    // vetvy sa skusaju postupne, vykona sa prva, ktorej vzor sedi
+    for (size_t caseIndex = 0; caseIndex < match->casesCount; caseIndex++) {
+        CaseNode *caseNode = (CaseNode *)match->cases[caseIndex];
+        int nextLabel = newLabel(gen);
+
+        genPattern(gen, caseNode, subjectVar, nextLabel);
+        genBranch(gen, caseNode->body, valueUsed);
+        emit(gen, "JUMP L$%d\n", endLabel);
+        emit(gen, "LABEL L$%d\n", nextLabel);
+    }
+
+    emit(gen, "LABEL L$%d\n", endLabel);
+}
+
 void genReturn(CodeGen *gen, ReturnNode *returnNode) {
     if (isUnitType(gen->function->returnType)) {
         // funkcia typu Unit vrati () az na konci, hodnota za return sa len vyhodnoti
@@ -1056,6 +1090,8 @@ void genStatement(CodeGen *gen, ASTNode *node) {
         genWhile(gen, (WhileNode *)node);
     } else if (node->kind == AST_FOR) {
         genFor(gen, (ForNode *)node);
+    } else if (node->kind == AST_MATCH) {
+        genMatch(gen, (MatchNode *)node, false);
     } else if (node->kind == AST_RETURN) {
         genReturn(gen, (ReturnNode *)node);
     } else {
