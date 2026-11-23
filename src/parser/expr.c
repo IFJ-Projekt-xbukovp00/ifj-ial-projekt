@@ -114,9 +114,7 @@ static bool isIdentStart(char c) {
     return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
 }
 
-static bool isIdentChar(char c) {
-    return isIdentStart(c) || (c >= '0' && c <= '9');
-}
+static bool isIdentChar(char c) { return isIdentStart(c) || (c >= '0' && c <= '9'); }
 
 static bool appendInterpText(InterpNode *interp, const char *text, size_t len, int line) {
     if (len == 0) {
@@ -510,8 +508,7 @@ static int parseLambda(PsaState *state, ASTNode **out) {
                 return ERR_SYNTAX;
             }
             int paramLine = state->token->line;
-            const char *lexeme =
-                state->token->lexeme.data != NULL ? state->token->lexeme.data : "";
+            const char *lexeme = state->token->lexeme.data != NULL ? state->token->lexeme.data : "";
             char *paramName = astCopyString(lexeme);
             if (paramName == NULL) {
                 astFree(node);
