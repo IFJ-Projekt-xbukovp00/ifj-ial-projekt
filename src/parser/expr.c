@@ -297,29 +297,63 @@ static int peekToken(PsaState *state, Token **next) {
 }
 
 static int parseInterpString(PsaState *state, ASTNode **out) {
-    const char *lexeme = state->token->lexeme.data;
-    size_t len = state->token->lexeme.len;
     int line = state->token->line;
-    bool isMulti = (len >= 4 && strncmp(lexeme, "s\"\"\"", 4) == 0);
-    size_t prefix = isMulti ? 4 : 2;
-
-    if (len >= prefix + 2 && lexeme[len - 2] == '$' && lexeme[len - 1] == '{') {
-        return ERR_SYNTAX;
-    }
-    size_t suffix = isMulti ? 3 : 1;
-    if (len < prefix + suffix) {
-        return ERR_SYNTAX;
-    }
+    const char *startLexeme = state->token->lexeme.data;
+    size_t startLen = state->token->lexeme.len;
+    bool isMulti = (startLen >= 4 && strncmp(startLexeme, "s\"\"\"", 4) == 0);
 
     ASTNode *node = astNewInterp(line);
     if (node == NULL) {
         return ERR_INTERNAL;
     }
     InterpNode *interp = (InterpNode *)node;
-    if (!appendInterpChunk(interp, lexeme + prefix, len - prefix - suffix, isMulti, line)) {
-        astFree(node);
-        return ERR_INTERNAL;
+
+    bool first = true;
+    for (;;) {
+        const char *lexeme = state->token->lexeme.data;
+        size_t len = state->token->lexeme.len;
+        size_t prefix = first ? (isMulti ? 4 : 2) : 1;
+        bool hasExpr = (len >= prefix + 2 && lexeme[len - 2] == '$' && lexeme[len - 1] == '{');
+        size_t suffix = hasExpr ? 2 : (isMulti ? 3 : 1);
+
+        if (len < prefix + suffix) {
+            astFree(node);
+            return ERR_SYNTAX;
+        }
+        if (!appendInterpChunk(interp, lexeme + prefix, len - prefix - suffix, isMulti,
+                               state->token->line)) {
+            astFree(node);
+            return ERR_INTERNAL;
+        }
+        if (!hasExpr) {
+            break;
+        }
+
+        // za ${ nasleduje vnoreny vyraz ukonceny castou zacinajucou }
+        int err = nextToken(state);
+        if (err != ERR_OK) {
+            astFree(node);
+            return err;
+        }
+        ASTNode *subExpr = NULL;
+        err = expr_parse(state->token, NULL, &subExpr);
+        if (err != ERR_OK) {
+            astFree(node);
+            return err;
+        }
+        if (!astAppend(&interp->parts, &interp->partsCount, subExpr)) {
+            astFree(subExpr);
+            astFree(node);
+            return ERR_INTERNAL;
+        }
+        if (state->token->type != TOK_INTERP_STRING || state->token->lexeme.data == NULL ||
+            state->token->lexeme.data[0] != '}') {
+            astFree(node);
+            return ERR_SYNTAX;
+        }
+        first = false;
     }
+
     if (interp->partsCount == 0) {
         ASTNode *empty = astNewStringLit("", line);
         if (empty == NULL || !astAppend(&interp->parts, &interp->partsCount, empty)) {
