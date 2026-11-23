@@ -473,18 +473,44 @@ void genConstructor(CodeGen *gen, CallNode *call) {
     emit(gen, "PUSHS LF@%%t0\n");
 }
 
+const char *getBuiltinName(CallNode *call) {
+    if (call->caller->kind == AST_ID) {
+        return ((IDNode *)call->caller)->name;
+    }
+
+    // List.range je clen mena List
+    if (call->caller->kind == AST_MEMBER &&
+        strcmp(((MemberNode *)call->caller)->name, "range") == 0) {
+        return "List.range";
+    }
+
+    return "";
+}
+
 void genCall(CodeGen *gen, CallNode *call) {
-    if (call->callKind == CALL_CONSTRUCTOR) {
-        genConstructor(gen, call);
-    } else if (call->callKind == CALL_FUNC) {
+    bool isGenerated = true;
+
+    // podla semantiky sa rozlisi, co sa vlastne vola
+    switch (call->callKind) {
+    case CALL_FUNC:
         genFunctionCall(gen, call);
-    } else if (call->callKind == CALL_EXT_METHOD) {
+        break;
+    case CALL_EXT_METHOD:
         genExtMethodCall(gen, call);
-    } else if (call->callKind == CALL_BUILTIN && call->caller->kind == AST_ID &&
-               genBuiltinCall(gen, call, ((IDNode *)call->caller)->name)) {
-        // vstavana funkcia uz nechala vysledok na zasobniku
-    } else {
-        // volanie je aj operand vyrazu, na zasobniku musi byt vzdy jedna hodnota
+        break;
+    case CALL_CONSTRUCTOR:
+        genConstructor(gen, call);
+        break;
+    case CALL_BUILTIN:
+        isGenerated = genBuiltinCall(gen, call, getBuiltinName(call));
+        break;
+    default:
+        isGenerated = false;
+        break;
+    }
+
+    // volanie je aj operand vyrazu, na zasobniku musi byt vzdy jedna hodnota
+    if (!isGenerated) {
         emit(gen, "PUSHS nil@nil\n");
     }
 }

@@ -303,6 +303,13 @@ void genToStrAnyHelper(CodeGen *gen);
 void genConstructor(CodeGen *gen, CallNode *call);
 
 /**
+ * @brief funkcia na zistenie mena volanej vstavanej funkcie
+ * @param call je uzol volania vstavanej funkcie
+ * @return meno funkcie (aj "List.range"), inak prazdny retazec
+ */
+const char *getBuiltinName(CallNode *call);
+
+/**
  * @brief funkcia na vygenerovanie volania funkcie, vysledok ostane na zasobniku
  * @param gen je kontext generatora
  * @param call je uzol volania
