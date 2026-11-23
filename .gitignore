@@ -43,3 +43,6 @@ ifj26
 /tests/unit/test_semantic_global
 /tests/unit/test_types
 /tests/unit/test_semantic_body
+/tests/unit/test_ast
+/tests/unit/test_expr
+
