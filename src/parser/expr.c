@@ -264,38 +264,52 @@ static ASTNode *nodeFromToken(const Token *token) {
 
 typedef struct {
     Token *token;
-    Token lookahead;   // lookahead na rozlisenie f( od i
-    bool hasLookahead;
+    Token lookahead[2]; // 2-tokenovy lookahead pre f( a lambdu () => / (a: T)
+    int lookaheadCount;
     int parenDepth;    // pocet otvorenych ( v ramci vyrazu
-    bool afterOperand; // posledny bol i alebo ), takze - je binarne
+    bool afterOperand; // posledny bol i alebo ), takze -/+ je binarne
 } PsaState;
 
+static void freeLookahead(PsaState *state) {
+    for (int i = 0; i < state->lookaheadCount; i++) {
+        dynstr_free(&state->lookahead[i].lexeme);
+    }
+    state->lookaheadCount = 0;
+}
+
 static int nextToken(PsaState *state) {
-    if (state->hasLookahead) {
+    if (state->lookaheadCount > 0) {
         dynstr_free(&state->token->lexeme);
-        *state->token = state->lookahead;
-        memset(&state->lookahead, 0, sizeof(Token));
-        state->hasLookahead = false;
+        *state->token = state->lookahead[0];
+        if (state->lookaheadCount == 2) {
+            state->lookahead[0] = state->lookahead[1];
+        }
+        state->lookaheadCount--;
+        memset(&state->lookahead[state->lookaheadCount], 0, sizeof(Token));
         return ERR_OK;
     }
     return scanner_get_token(state->token);
 }
 
-// nacita dalsi token bez posunu aktualneho
-static int peekToken(PsaState *state, Token **next) {
-    if (!state->hasLookahead) {
-        memset(&state->lookahead, 0, sizeof(Token));
-        if (!dynstr_init(&state->lookahead.lexeme)) {
+// nacita token s offsetom 0 alebo 1 bez posunu aktualneho
+static int peekTokenAt(PsaState *state, int offset, Token **next) {
+    if (offset < 0 || offset >= 2) {
+        return ERR_INTERNAL;
+    }
+    while (state->lookaheadCount <= offset) {
+        Token *slot = &state->lookahead[state->lookaheadCount];
+        memset(slot, 0, sizeof(Token));
+        if (!dynstr_init(&slot->lexeme)) {
             return ERR_INTERNAL;
         }
-        int err = scanner_get_token(&state->lookahead);
+        int err = scanner_get_token(slot);
         if (err != ERR_OK) {
-            dynstr_free(&state->lookahead.lexeme);
+            dynstr_free(&slot->lexeme);
             return err;
         }
-        state->hasLookahead = true;
+        state->lookaheadCount++;
     }
-    *next = &state->lookahead;
+    *next = &state->lookahead[offset];
     return ERR_OK;
 }
 
@@ -388,8 +402,12 @@ static int classifyToken(PsaState *state, PtIndex *column) {
             *column = PT_BY;
             return ERR_OK;
         }
+        if (state->afterOperand) {
+            *column = PT_ID;
+            return ERR_OK;
+        }
         Token *next;
-        int err = peekToken(state, &next);
+        int err = peekTokenAt(state, 0, &next);
         if (err != ERR_OK) {
             return err;
         }
@@ -734,10 +752,7 @@ static void freeStack(TAStack *stack, PsaState *state) {
         astFree(stack->dataArray[i].node);
     }
     stack->top = 0;
-    if (state->hasLookahead) {
-        dynstr_free(&state->lookahead.lexeme);
-        state->hasLookahead = false;
-    }
+    freeLookahead(state);
 }
 
 int expr_parse(Token *token, ASTNode *first, ASTNode **output) {
@@ -745,6 +760,7 @@ int expr_parse(Token *token, ASTNode *first, ASTNode **output) {
         astFree(first);
         return ERR_INTERNAL;
     }
+    *output = NULL;
 
     // kazde volanie ma vlastny zasobnik, aby slo volat expr_parse aj rekurzivne
     TAStack *stack = malloc(sizeof(TAStack));
@@ -825,10 +841,7 @@ int expr_parse(Token *token, ASTNode *first, ASTNode **output) {
             }
             *output = stack->dataArray[1].node;
             stack->top = 0;
-            if (state.hasLookahead) {
-                dynstr_free(&state.lookahead.lexeme);
-                state.hasLookahead = false;
-            }
+            freeLookahead(&state);
             free(stack);
             return ERR_OK;
         } else {
