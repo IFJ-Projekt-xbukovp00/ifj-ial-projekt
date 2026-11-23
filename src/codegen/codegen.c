@@ -804,6 +804,9 @@ void genExpr(CodeGen *gen, ASTNode *node) {
     } else if (node->kind == AST_IF) {
         // if ako vyraz, kazda vetva necha na zasobniku svoju hodnotu
         genIf(gen, (IfNode *)node, true);
+    } else if (node->kind == AST_MATCH) {
+        // match ako vyraz, hodnotu necha vykonana vetva
+        genMatch(gen, (MatchNode *)node, true);
     } else if (node->kind == AST_BLOCK || node->kind == AST_EXPR_STATEMENT ||
                node->kind == AST_VAR_DEF || node->kind == AST_ASSIGN || node->kind == AST_WHILE ||
                node->kind == AST_FOR || node->kind == AST_RETURN) {
