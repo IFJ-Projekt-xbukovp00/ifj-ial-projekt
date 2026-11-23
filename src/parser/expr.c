@@ -74,6 +74,23 @@ static const PtRel precTable[PT_COUNT][PT_COUNT] = {
 };
 // clang-format on
 
+static char decodeEscapeChar(char c) {
+    switch (c) {
+    case 'n':
+        return '\n';
+    case 'r':
+        return '\r';
+    case 't':
+        return '\t';
+    case '\\':
+        return '\\';
+    case '"':
+        return '"';
+    default:
+        return c;
+    }
+}
+
 // dekoduje escape sekvencie v retazcovom literali
 static char *decodeStringLiteral(const char *src, size_t len) {
     char *out = malloc(len + 1);
@@ -84,32 +101,86 @@ static char *decodeStringLiteral(const char *src, size_t len) {
     for (size_t i = 0; i < len; i++) {
         if (src[i] == '\\' && i + 1 < len) {
             i++;
-            switch (src[i]) {
-            case 'n':
-                out[j++] = '\n';
-                break;
-            case 'r':
-                out[j++] = '\r';
-                break;
-            case 't':
-                out[j++] = '\t';
-                break;
-            case '\\':
-                out[j++] = '\\';
-                break;
-            case '"':
-                out[j++] = '"';
-                break;
-            default:
-                out[j++] = src[i];
-                break;
-            }
+            out[j++] = decodeEscapeChar(src[i]);
         } else {
             out[j++] = src[i];
         }
     }
     out[j] = '\0';
     return out;
+}
+
+static bool isIdentStart(char c) {
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
+}
+
+static bool isIdentChar(char c) {
+    return isIdentStart(c) || (c >= '0' && c <= '9');
+}
+
+static bool appendInterpText(InterpNode *interp, const char *text, size_t len, int line) {
+    if (len == 0) {
+        return true;
+    }
+    char *buf = malloc(len + 1);
+    if (buf == NULL) {
+        return false;
+    }
+    memcpy(buf, text, len);
+    buf[len] = '\0';
+    ASTNode *lit = astNewStringLit(buf, line);
+    free(buf);
+    if (lit == NULL || !astAppend(&interp->parts, &interp->partsCount, lit)) {
+        astFree(lit);
+        return false;
+    }
+    return true;
+}
+
+static bool appendInterpChunk(InterpNode *interp, const char *src, size_t len, bool isMulti,
+                              int line) {
+    char *buf = malloc(len + 1);
+    if (buf == NULL) {
+        return false;
+    }
+    size_t bufLen = 0;
+    for (size_t i = 0; i < len; i++) {
+        if (!isMulti && src[i] == '\\' && i + 1 < len) {
+            i++;
+            buf[bufLen++] = decodeEscapeChar(src[i]);
+        } else if (src[i] == '$' && i + 1 < len && isIdentStart(src[i + 1])) {
+            if (!appendInterpText(interp, buf, bufLen, line)) {
+                free(buf);
+                return false;
+            }
+            bufLen = 0;
+            size_t start = i + 1;
+            size_t end = start;
+            while (end < len && isIdentChar(src[end])) {
+                end++;
+            }
+            char *idBuf = malloc(end - start + 1);
+            if (idBuf == NULL) {
+                free(buf);
+                return false;
+            }
+            memcpy(idBuf, src + start, end - start);
+            idBuf[end - start] = '\0';
+            ASTNode *id = astNewId(idBuf, line);
+            free(idBuf);
+            if (id == NULL || !astAppend(&interp->parts, &interp->partsCount, id)) {
+                astFree(id);
+                free(buf);
+                return false;
+            }
+            i = end - 1;
+        } else {
+            buf[bufLen++] = src[i];
+        }
+    }
+    bool ok = appendInterpText(interp, buf, bufLen, line);
+    free(buf);
+    return ok;
 }
 
 // odstrani oddelovacie podciarkovniky z ciselneho literalu pre strtoll/strtod
@@ -225,6 +296,42 @@ static int peekToken(PsaState *state, Token **next) {
     return ERR_OK;
 }
 
+static int parseInterpString(PsaState *state, ASTNode **out) {
+    const char *lexeme = state->token->lexeme.data;
+    size_t len = state->token->lexeme.len;
+    int line = state->token->line;
+    bool isMulti = (len >= 4 && strncmp(lexeme, "s\"\"\"", 4) == 0);
+    size_t prefix = isMulti ? 4 : 2;
+
+    if (len >= prefix + 2 && lexeme[len - 2] == '$' && lexeme[len - 1] == '{') {
+        return ERR_SYNTAX;
+    }
+    size_t suffix = isMulti ? 3 : 1;
+    if (len < prefix + suffix) {
+        return ERR_SYNTAX;
+    }
+
+    ASTNode *node = astNewInterp(line);
+    if (node == NULL) {
+        return ERR_INTERNAL;
+    }
+    InterpNode *interp = (InterpNode *)node;
+    if (!appendInterpChunk(interp, lexeme + prefix, len - prefix - suffix, isMulti, line)) {
+        astFree(node);
+        return ERR_INTERNAL;
+    }
+    if (interp->partsCount == 0) {
+        ASTNode *empty = astNewStringLit("", line);
+        if (empty == NULL || !astAppend(&interp->parts, &interp->partsCount, empty)) {
+            astFree(empty);
+            astFree(node);
+            return ERR_INTERNAL;
+        }
+    }
+    *out = node;
+    return ERR_OK;
+}
+
 // zaradi token do stlpca tabulky, vsetko mimo vyrazu je $
 static int classifyToken(PsaState *state, PtIndex *column) {
     const Token *token = state->token;
@@ -257,6 +364,9 @@ static int classifyToken(PsaState *state, PtIndex *column) {
     case TOK_STRING_LIT:
     case TOK_BOOL_LIT:
         *column = PT_ID;
+        break;
+    case TOK_INTERP_STRING:
+        *column = (token->lexeme.data != NULL && token->lexeme.data[0] == 's') ? PT_ID : PT_DOLLAR;
         break;
     case TOK_MINUS:
         *column = state->afterOperand ? PT_SUB : PT_UMINUS;
@@ -639,7 +749,11 @@ int expr_parse(Token *token, ASTNode *first, ASTNode **output) {
             StackItem term = {
                 .kind = SYM_TERM, .ptIndex = input, .tokenType = token->type, .line = token->line};
             // uzol robime hned pri shifte, kym mame lexem
-            if (input == PT_ID || input == PT_FUNC) {
+            if (input == PT_ID && token->type == TOK_INTERP_STRING) {
+                if ((err = parseInterpString(&state, &term.node)) != ERR_OK) {
+                    goto fail;
+                }
+            } else if (input == PT_ID || input == PT_FUNC) {
                 term.node = nodeFromToken(token);
                 if (term.node == NULL) {
                     err = ERR_INTERNAL;
