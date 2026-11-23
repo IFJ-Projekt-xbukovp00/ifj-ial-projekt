@@ -1134,6 +1134,12 @@ void genMatch(CodeGen *gen, MatchNode *match, bool valueUsed) {
         int nextLabel = newLabel(gen);
 
         genPattern(gen, caseNode, subjectVar, nextLabel);
+
+        // straz sa vyhodnoti az po vzore, uz vidi jeho premenne
+        if (caseNode->guard != NULL) {
+            genJumpIfFalse(gen, caseNode->guard, nextLabel);
+        }
+
         genBranch(gen, caseNode->body, valueUsed);
         emit(gen, "JUMP L$%d\n", endLabel);
         emit(gen, "LABEL L$%d\n", nextLabel);
