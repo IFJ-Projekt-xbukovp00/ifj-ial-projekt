@@ -397,6 +397,7 @@ void genToStrAnyHelper(CodeGen *gen) {
     int floatLabel = newLabel(gen);
     int boolLabel = newLabel(gen);
     int trueLabel = newLabel(gen);
+    int nilLabel = newLabel(gen);
     int endLabel = newLabel(gen);
 
     // hodnota zjednotenia nema staticky typ, rozhoduje sa podla TYPE za behu
@@ -405,6 +406,7 @@ void genToStrAnyHelper(CodeGen *gen) {
     emit(gen, "JUMPIFEQ L$%d LF@%%t1 string@int\n", intLabel);
     emit(gen, "JUMPIFEQ L$%d LF@%%t1 string@float\n", floatLabel);
     emit(gen, "JUMPIFEQ L$%d LF@%%t1 string@bool\n", boolLabel);
+    emit(gen, "JUMPIFEQ L$%d LF@%%t1 string@nil\n", nilLabel);
 
     // retazec sa vrati tak, ako je
     emit(gen, "PUSHS LF@%%t0\n");
@@ -426,6 +428,11 @@ void genToStrAnyHelper(CodeGen *gen) {
     emit(gen, "JUMP L$%d\n", endLabel);
     emit(gen, "LABEL L$%d\n", trueLabel);
     emit(gen, "PUSHS string@true\n");
+    emit(gen, "JUMP L$%d\n", endLabel);
+
+    // hodnota () typu Unit je za behu nil
+    emit(gen, "LABEL L$%d\n", nilLabel);
+    emit(gen, "PUSHS string@()\n");
 
     emit(gen, "LABEL L$%d\n", endLabel);
 }
