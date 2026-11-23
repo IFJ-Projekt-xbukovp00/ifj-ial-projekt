@@ -494,6 +494,22 @@ void genForCheck(CodeGen *gen, ForNode *forNode, int endVar, bool upward, int en
 void genFor(CodeGen *gen, ForNode *forNode);
 
 /**
+ * @brief funkcia na zistenie mena typu za behu (ako ho vracia instrukcia TYPE)
+ * @param type je staticky typ
+ * @return int, float, string, bool, nil alebo array
+ */
+const char *getRuntimeTypeName(Type *type);
+
+/**
+ * @brief funkcia na test literaloveho vzoru (najprv typ, potom hodnota)
+ * @param gen je kontext generatora
+ * @param caseNode je vetva case
+ * @param subjectVar je cislo skrytej premennej s porovnavanou hodnotou
+ * @param nextLabel je cislo navestia dalsej vetvy
+ */
+void genLiteralPattern(CodeGen *gen, CaseNode *caseNode, int subjectVar, int nextLabel);
+
+/**
  * @brief funkcia na test vzoru vetvy case, pri nezhode skoci na dalsiu vetvu
  * @param gen je kontext generatora
  * @param caseNode je vetva case

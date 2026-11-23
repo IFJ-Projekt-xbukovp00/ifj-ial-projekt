@@ -990,11 +990,53 @@ void genFor(CodeGen *gen, ForNode *forNode) {
     emit(gen, "LABEL L$%d\n", endLabel);
 }
 
-void genPattern(CodeGen *gen, CaseNode *caseNode, int subjectVar, int nextLabel) {
-    (void)subjectVar;
+const char *getRuntimeTypeName(Type *type) {
+    type = getRealType(type);
 
+    if (type == NULL) {
+        return "";
+    }
+
+    // rovnake mena, ake vracia instrukcia TYPE
+    switch (type->kind) {
+    case TY_INT:
+        return "int";
+    case TY_DOUBLE:
+        return "float";
+    case TY_STRING:
+        return "string";
+    case TY_BOOL:
+        return "bool";
+    case TY_UNIT:
+        return "nil";
+    case TY_CLASS:
+    case TY_LIST:
+        return "array";
+    default:
+        return "";
+    }
+}
+
+void genLiteralPattern(CodeGen *gen, CaseNode *caseNode, int subjectVar, int nextLabel) {
+    // hodnota zjednotenia moze mat iny typ ako literal, EQ by skoncil chybou 53
+    emit(gen, "TYPE LF@%%t0 LF@%%h%d\n", subjectVar);
+    emit(gen, "JUMPIFNEQ L$%d LF@%%t0 string@%s\n", nextLabel,
+         getRuntimeTypeName(caseNode->literal->type));
+
+    // literal moze byt aj -1, preto sa vyhodnoti ako vyraz
+    genExpr(gen, caseNode->literal);
+    emit(gen, "POPS LF@%%t1\n");
+    emit(gen, "JUMPIFNEQ L$%d LF@%%h%d LF@%%t1\n", nextLabel, subjectVar);
+}
+
+void genPattern(CodeGen *gen, CaseNode *caseNode, int subjectVar, int nextLabel) {
     if (caseNode->patternKind == PAT_WILDCARD) {
         // vzor _ uspeje vzdy
+        return;
+    }
+
+    if (caseNode->patternKind == PAT_LITERAL) {
+        genLiteralPattern(gen, caseNode, subjectVar, nextLabel);
         return;
     }
 
