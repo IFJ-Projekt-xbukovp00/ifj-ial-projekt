@@ -510,6 +510,24 @@ const char *getRuntimeTypeName(Type *type);
 void genLiteralPattern(CodeGen *gen, CaseNode *caseNode, int subjectVar, int nextLabel);
 
 /**
+ * @brief funkcia na kontrolu, ze hodnota je pole s danym menom na indexe 0 (trieda)
+ * @param gen je kontext generatora
+ * @param tag je ocakavane meno (meno triedy)
+ * @param subjectVar je cislo skrytej premennej s hodnotou
+ * @param failLabel je cislo navestia pri nezhode
+ */
+void genTagTest(CodeGen *gen, const char *tag, int subjectVar, int failLabel);
+
+/**
+ * @brief funkcia na test vzoru konstruktora Point(x, y) a naviazanie atributov
+ * @param gen je kontext generatora
+ * @param caseNode je vetva case
+ * @param subjectVar je cislo skrytej premennej s porovnavanou hodnotou
+ * @param nextLabel je cislo navestia dalsej vetvy
+ */
+void genConstructorPattern(CodeGen *gen, CaseNode *caseNode, int subjectVar, int nextLabel);
+
+/**
  * @brief funkcia na kontrolu typu hodnoty za behu, pri inom type skoci na failLabel
  * @param gen je kontext generatora
  * @param type je ocakavany typ (moze byt aj zjednotenie)

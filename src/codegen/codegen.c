@@ -1029,6 +1029,16 @@ void genLiteralPattern(CodeGen *gen, CaseNode *caseNode, int subjectVar, int nex
     emit(gen, "JUMPIFNEQ L$%d LF@%%h%d LF@%%t1\n", nextLabel, subjectVar);
 }
 
+void genTagTest(CodeGen *gen, const char *tag, int subjectVar, int failLabel) {
+    // trieda je pole, na indexe 0 je jej meno
+    emit(gen, "TYPE LF@%%t0 LF@%%h%d\n", subjectVar);
+    emit(gen, "JUMPIFNEQ L$%d LF@%%t0 string@array\n", failLabel);
+    emit(gen, "ARRAYGET LF@%%t0 LF@%%h%d int@0\n", subjectVar);
+    emit(gen, "JUMPIFNEQ L$%d LF@%%t0 ", failLabel);
+    emitString(gen, tag);
+    emit(gen, "\n");
+}
+
 void genTypeTest(CodeGen *gen, Type *type, int subjectVar, int failLabel) {
     type = getRealType(type);
 
@@ -1049,8 +1059,31 @@ void genTypeTest(CodeGen *gen, Type *type, int subjectVar, int failLabel) {
         return;
     }
 
+    if (type->kind == TY_CLASS) {
+        genTagTest(gen, ((ClassDefNode *)type->cls->definition)->name, subjectVar, failLabel);
+        return;
+    }
+
     emit(gen, "TYPE LF@%%t0 LF@%%h%d\n", subjectVar);
     emit(gen, "JUMPIFNEQ L$%d LF@%%t0 string@%s\n", failLabel, getRuntimeTypeName(type));
+}
+
+void genConstructorPattern(CodeGen *gen, CaseNode *caseNode, int subjectVar, int nextLabel) {
+    genTagTest(gen, caseNode->className, subjectVar, nextLabel);
+
+    // kazda vazba dostane hodnotu atributu na rovnakom mieste
+    for (size_t binderIndex = 0; binderIndex < caseNode->ctorBinders.params_count; binderIndex++) {
+        Param *binder = &caseNode->ctorBinders.params[binderIndex];
+
+        if (binder->symbol == NULL) {
+            continue;
+        }
+
+        defineLocal(gen, binder->name, binder->symbol);
+        emit(gen, "ARRAYGET ");
+        emitVar(gen, binder->name, binder->symbol);
+        emit(gen, " LF@%%h%d int@%zu\n", subjectVar, binderIndex + 1);
+    }
 }
 
 void genBindSubject(CodeGen *gen, Param *binder, int subjectVar) {
@@ -1083,8 +1116,8 @@ void genPattern(CodeGen *gen, CaseNode *caseNode, int subjectVar, int nextLabel)
         return;
     }
 
-    // ostatne vzory zatial nie su, vetva sa preskoci
-    emit(gen, "JUMP L$%d\n", nextLabel);
+    // Point(x, y)
+    genConstructorPattern(gen, caseNode, subjectVar, nextLabel);
 }
 
 void genMatch(CodeGen *gen, MatchNode *match, bool valueUsed) {
