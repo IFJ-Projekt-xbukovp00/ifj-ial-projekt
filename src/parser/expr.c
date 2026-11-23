@@ -462,6 +462,133 @@ static int parseLambdaType(PsaState *state, Type **out) {
     return ERR_OK;
 }
 
+static int isLambdaStart(PsaState *state, bool *isLambda) {
+    *isLambda = false;
+    Token *t1 = NULL;
+    int err = peekTokenAt(state, 0, &t1);
+    if (err != ERR_OK) {
+        return err;
+    }
+    if (t1->type == TOK_RPAREN) {
+        Token *t2 = NULL;
+        err = peekTokenAt(state, 1, &t2);
+        if (err != ERR_OK) {
+            return err;
+        }
+        *isLambda = (t2->type == TOK_ARROW);
+        return ERR_OK;
+    }
+    if (t1->type == TOK_IDENTIFIER) {
+        Token *t2 = NULL;
+        err = peekTokenAt(state, 1, &t2);
+        if (err != ERR_OK) {
+            return err;
+        }
+        *isLambda = (t2->type == TOK_COLON);
+        return ERR_OK;
+    }
+    return ERR_OK;
+}
+
+static int parseLambda(PsaState *state, ASTNode **out) {
+    int line = state->token->line;
+    ASTNode *node = astNewLambda(NULL, line);
+    if (node == NULL) {
+        return ERR_INTERNAL;
+    }
+    LambdaNode *lam = (LambdaNode *)node;
+
+    int err = nextToken(state);
+    if (err != ERR_OK) {
+        astFree(node);
+        return err;
+    }
+    if (state->token->type != TOK_RPAREN) {
+        for (;;) {
+            if (state->token->type != TOK_IDENTIFIER) {
+                astFree(node);
+                return ERR_SYNTAX;
+            }
+            int paramLine = state->token->line;
+            const char *lexeme =
+                state->token->lexeme.data != NULL ? state->token->lexeme.data : "";
+            char *paramName = astCopyString(lexeme);
+            if (paramName == NULL) {
+                astFree(node);
+                return ERR_INTERNAL;
+            }
+            err = nextToken(state);
+            if (err != ERR_OK) {
+                free(paramName);
+                astFree(node);
+                return err;
+            }
+            if (state->token->type != TOK_COLON) {
+                free(paramName);
+                astFree(node);
+                return ERR_SYNTAX;
+            }
+            err = nextToken(state);
+            if (err != ERR_OK) {
+                free(paramName);
+                astFree(node);
+                return err;
+            }
+            Type *paramType = NULL;
+            err = parseLambdaType(state, &paramType);
+            if (err != ERR_OK) {
+                free(paramName);
+                astFree(node);
+                return err;
+            }
+            bool ok = astParamListAdd(&lam->params, paramName, paramType, paramLine);
+            free(paramName);
+            if (!ok) {
+                astFree(node);
+                return ERR_INTERNAL;
+            }
+            if (state->token->type == TOK_COMMA) {
+                err = nextToken(state);
+                if (err != ERR_OK) {
+                    astFree(node);
+                    return err;
+                }
+            } else {
+                break;
+            }
+        }
+    }
+
+    if (state->token->type != TOK_RPAREN) {
+        astFree(node);
+        return ERR_SYNTAX;
+    }
+    err = nextToken(state);
+    if (err != ERR_OK) {
+        astFree(node);
+        return err;
+    }
+    if (state->token->type != TOK_ARROW) {
+        astFree(node);
+        return ERR_SYNTAX;
+    }
+    err = nextToken(state);
+    if (err != ERR_OK) {
+        astFree(node);
+        return err;
+    }
+
+    ASTNode *body = NULL;
+    err = expr_parse(state->token, NULL, &body);
+    if (err != ERR_OK) {
+        astFree(node);
+        return err;
+    }
+    lam->body = body;
+    *out = node;
+    return ERR_OK;
+}
+
 static int parseInterpString(PsaState *state, ASTNode **out) {
     int line = state->token->line;
     const char *startLexeme = state->token->lexeme.data;
@@ -618,6 +745,17 @@ static int classifyToken(PsaState *state, PtIndex *column) {
         *column = PT_DOT;
         break;
     case TOK_LPAREN:
+        if (!state->afterOperand) {
+            bool isLambda = false;
+            int err = isLambdaStart(state, &isLambda);
+            if (err != ERR_OK) {
+                return err;
+            }
+            if (isLambda) {
+                *column = PT_ID;
+                return ERR_OK;
+            }
+        }
         *column = PT_LPAR;
         break;
     // ) a , mimo nasich zatvoriek uz patria parseru
@@ -953,6 +1091,10 @@ int expr_parse(Token *token, ASTNode *first, ASTNode **output) {
             // uzol robime hned pri shifte, kym mame lexem
             if (input == PT_ID && token->type == TOK_INTERP_STRING) {
                 if ((err = parseInterpString(&state, &term.node)) != ERR_OK) {
+                    goto fail;
+                }
+            } else if (input == PT_ID && token->type == TOK_LPAREN) {
+                if ((err = parseLambda(&state, &term.node)) != ERR_OK) {
                     goto fail;
                 }
             } else if (input == PT_ID || input == PT_FUNC) {
