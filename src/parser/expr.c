@@ -174,6 +174,9 @@ static bool appendInterpChunk(InterpNode *interp, const char *src, size_t len, b
                 return false;
             }
             i = end - 1;
+        } else if (src[i] == '$' && i + 1 < len && src[i + 1] == '$') {
+            buf[bufLen++] = '$';
+            i++;
         } else {
             buf[bufLen++] = src[i];
         }

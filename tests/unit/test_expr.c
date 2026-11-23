@@ -395,11 +395,148 @@ static void testCallsMembersListsRanges(void) {
     astFree(root);
 }
 
+static void testInterpolatedStrings(void) {
+    ASTNode *root = NULL;
+
+    // s"" -> jeden prazdny retazec
+    CHECK(parseExprString("s\"\"", &root, NULL) == ERR_OK);
+    CHECK(root != NULL && root->kind == AST_INTERP);
+    if (root != NULL && root->kind == AST_INTERP) {
+        InterpNode *in = (InterpNode *)root;
+        CHECK(in->partsCount == 1);
+        CHECK(in->parts[0]->kind == AST_LIT);
+        CHECK(strcmp(((LiteralNode *)in->parts[0])->litValue.string_value, "") == 0);
+    }
+    astFree(root);
+
+    // s"plain"
+    CHECK(parseExprString("s\"plain\"", &root, NULL) == ERR_OK);
+    CHECK(root != NULL && root->kind == AST_INTERP);
+    if (root != NULL && root->kind == AST_INTERP) {
+        InterpNode *in = (InterpNode *)root;
+        CHECK(in->partsCount == 1);
+        CHECK(strcmp(((LiteralNode *)in->parts[0])->litValue.string_value, "plain") == 0);
+    }
+    astFree(root);
+
+    // s"$course$year" -> 2 identifikatory bez prazdnych stringov medzi nimi
+    CHECK(parseExprString("s\"$course$year\"", &root, NULL) == ERR_OK);
+    CHECK(root != NULL && root->kind == AST_INTERP);
+    if (root != NULL && root->kind == AST_INTERP) {
+        InterpNode *in = (InterpNode *)root;
+        CHECK(in->partsCount == 2);
+        CHECK(in->parts[0]->kind == AST_ID &&
+              strcmp(((IDNode *)in->parts[0])->name, "course") == 0);
+        CHECK(in->parts[1]->kind == AST_ID && strcmp(((IDNode *)in->parts[1])->name, "year") == 0);
+    }
+    astFree(root);
+
+    // s"$name!"
+    CHECK(parseExprString("s\"$name!\"", &root, NULL) == ERR_OK);
+    CHECK(root != NULL && root->kind == AST_INTERP);
+    if (root != NULL && root->kind == AST_INTERP) {
+        InterpNode *in = (InterpNode *)root;
+        CHECK(in->partsCount == 2);
+        CHECK(in->parts[0]->kind == AST_ID && strcmp(((IDNode *)in->parts[0])->name, "name") == 0);
+        CHECK(in->parts[1]->kind == AST_LIT);
+        CHECK(strcmp(((LiteralNode *)in->parts[1])->litValue.string_value, "!") == 0);
+    }
+    astFree(root);
+
+    // s"\"q\"\n"
+    CHECK(parseExprString("s\"\\\"q\\\"\\n\"", &root, NULL) == ERR_OK);
+    CHECK(root != NULL && root->kind == AST_INTERP);
+    if (root != NULL && root->kind == AST_INTERP) {
+        InterpNode *in = (InterpNode *)root;
+        CHECK(in->partsCount == 1);
+        CHECK(strcmp(((LiteralNode *)in->parts[0])->litValue.string_value, "\"q\"\n") == 0);
+    }
+    astFree(root);
+
+    // s"cost $$0" -> escapovany dolar
+    CHECK(parseExprString("s\"cost $$0\"", &root, NULL) == ERR_OK);
+    CHECK(root != NULL && root->kind == AST_INTERP);
+    if (root != NULL && root->kind == AST_INTERP) {
+        InterpNode *in = (InterpNode *)root;
+        CHECK(in->partsCount == 1);
+        CHECK(strcmp(((LiteralNode *)in->parts[0])->litValue.string_value, "cost $0") == 0);
+    }
+    astFree(root);
+
+    // s"$name${n + 1} costs $$0"
+    CHECK(parseExprString("s\"$name${n + 1} costs $$0\"", &root, NULL) == ERR_OK);
+    CHECK(root != NULL && root->kind == AST_INTERP);
+    if (root != NULL && root->kind == AST_INTERP) {
+        InterpNode *in = (InterpNode *)root;
+        CHECK(in->partsCount == 3);
+        CHECK(in->parts[0]->kind == AST_ID && strcmp(((IDNode *)in->parts[0])->name, "name") == 0);
+        CHECK(in->parts[1]->kind == AST_BINARY);
+        CHECK(((BinaryNode *)in->parts[1])->operator == TOK_PLUS);
+        CHECK(in->parts[2]->kind == AST_LIT);
+        CHECK(strcmp(((LiteralNode *)in->parts[2])->litValue.string_value, " costs $0") == 0);
+    }
+    astFree(root);
+
+    // s"""He said "hi", \n$name.""" -> raw viacriadkovy bez dekodovania \n
+    CHECK(parseExprString("s\"\"\"He said \"hi\", \\n$name.\"\"\"", &root, NULL) == ERR_OK);
+    CHECK(root != NULL && root->kind == AST_INTERP);
+    if (root != NULL && root->kind == AST_INTERP) {
+        InterpNode *in = (InterpNode *)root;
+        CHECK(in->partsCount == 3);
+        CHECK(strcmp(((LiteralNode *)in->parts[0])->litValue.string_value,
+                     "He said \"hi\", \\n") == 0);
+        CHECK(in->parts[1]->kind == AST_ID && strcmp(((IDNode *)in->parts[1])->name, "name") == 0);
+        CHECK(strcmp(((LiteralNode *)in->parts[2])->litValue.string_value, ".") == 0);
+    }
+    astFree(root);
+
+    // s"""raw ${a + 1}."""
+    CHECK(parseExprString("s\"\"\"raw ${a + 1}.\"\"\"", &root, NULL) == ERR_OK);
+    CHECK(root != NULL && root->kind == AST_INTERP);
+    if (root != NULL && root->kind == AST_INTERP) {
+        InterpNode *in = (InterpNode *)root;
+        CHECK(in->partsCount == 3);
+        CHECK(strcmp(((LiteralNode *)in->parts[0])->litValue.string_value, "raw ") == 0);
+        CHECK(in->parts[1]->kind == AST_BINARY);
+        CHECK(strcmp(((LiteralNode *)in->parts[2])->litValue.string_value, ".") == 0);
+    }
+    astFree(root);
+
+    // vnorena interpolacia s"a ${s"b $x"}"
+    CHECK(parseExprString("s\"a ${s\"b $x\"}\"", &root, NULL) == ERR_OK);
+    CHECK(root != NULL && root->kind == AST_INTERP);
+    if (root != NULL && root->kind == AST_INTERP) {
+        InterpNode *outer = (InterpNode *)root;
+        CHECK(outer->partsCount == 2);
+        CHECK(strcmp(((LiteralNode *)outer->parts[0])->litValue.string_value, "a ") == 0);
+        CHECK(outer->parts[1]->kind == AST_INTERP);
+        if (outer->parts[1]->kind == AST_INTERP) {
+            InterpNode *inner = (InterpNode *)outer->parts[1];
+            CHECK(inner->partsCount == 2);
+            CHECK(strcmp(((LiteralNode *)inner->parts[0])->litValue.string_value, "b ") == 0);
+            CHECK(inner->parts[1]->kind == AST_ID &&
+                  strcmp(((IDNode *)inner->parts[1])->name, "x") == 0);
+        }
+    }
+    astFree(root);
+
+    // pristup cez bodku na interpolovanom retazci: s"hi $x".length
+    CHECK(parseExprString("s\"hi $x\".length", &root, NULL) == ERR_OK);
+    CHECK(root != NULL && root->kind == AST_MEMBER);
+    if (root != NULL && root->kind == AST_MEMBER) {
+        MemberNode *mem = (MemberNode *)root;
+        CHECK(strcmp(mem->name, "length") == 0);
+        CHECK(mem->object != NULL && mem->object->kind == AST_INTERP);
+    }
+    astFree(root);
+}
+
 int main(void) {
     testPrecedenceAndAssoc();
     testUnaryOps();
     testNumbersAndStrings();
     testCallsMembersListsRanges();
+    testInterpolatedStrings();
 
     if (failureCount) {
         fprintf(stderr, "test_expr: %d chyb\n", failureCount);
