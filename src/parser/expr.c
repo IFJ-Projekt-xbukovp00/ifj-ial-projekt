@@ -251,7 +251,7 @@ static int classifyToken(PsaState *state, PtIndex *column) {
         *column = state->afterOperand ? PT_SUB : PT_UMINUS;
         break;
     case TOK_PLUS:
-        *column = PT_ADD;
+        *column = state->afterOperand ? PT_ADD : PT_UMINUS;
         break;
     case TOK_MULTIPLY:
         *column = PT_MUL;

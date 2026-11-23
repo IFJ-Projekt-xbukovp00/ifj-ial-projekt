@@ -37,7 +37,7 @@
 // index riadku a stlpca precedencnej tabulky (poradie musi sediet s precTable v expr.c)
 typedef enum {
     PT_DOT,    // . (VALMEM/LISTS/EXTKW)
-    PT_UMINUS, // unarne -
+    PT_UMINUS, // unarne - a +
     PT_NOT,    // !
     PT_MUL,    // *
     PT_DIV,    // /
