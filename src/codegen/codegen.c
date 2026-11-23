@@ -684,6 +684,14 @@ void genId(CodeGen *gen, IDNode *id) {
         return;
     }
 
+    if (id->idKind == ID_FUNC_REF) {
+        // funkcia ako hodnota je retazec s jej navestim, vola sa cez CALL LF@x
+        emit(gen, "PUSHS string@");
+        emitFunctionLabel(gen, (DefFuncNode *)id->symbol->definition);
+        emit(gen, "\n");
+        return;
+    }
+
     emit(gen, "PUSHS ");
     emitVar(gen, id->name, id->symbol);
     emit(gen, "\n");

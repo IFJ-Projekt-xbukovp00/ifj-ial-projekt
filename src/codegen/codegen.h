@@ -374,7 +374,8 @@ void genConcat(CodeGen *gen);
 void genInterp(CodeGen *gen, InterpNode *interp);
 
 /**
- * @brief funkcia na vygenerovanie identifikatora (premenna alebo volanie bez zatvoriek)
+ * @brief funkcia na vygenerovanie identifikatora (premenna, volanie bez zatvoriek, funkcia ako
+ * hodnota)
  * @param gen je kontext generatora
  * @param id je uzol identifikatora
  */
