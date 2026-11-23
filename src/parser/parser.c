@@ -36,7 +36,14 @@
 #include <stdbool.h>
 #include <string.h>
 
-/* TODO: AST */
+#define TRY(call)                 \
+    do {                          \
+        int try_err = (call);     \
+        if (try_err != ERR_OK) {  \
+            return try_err;       \
+        }                         \
+    } while (0)
+
 
 static Token currentToken;
 static TokenType previousType;
@@ -46,7 +53,9 @@ static int advance(void) {
     return scanner_get_token(&currentToken);
 }
 
-static bool check(TokenType type) { return currentToken.type == type; }
+static bool check(TokenType type) {
+    return currentToken.type == type;
+}
 
 static int expect(TokenType type) {
     if (!check(type)) {
@@ -55,29 +64,6 @@ static int expect(TokenType type) {
     return advance();
 }
 
-/* deklarovanie LL pravidiel (podľa LLgramatika.md) */
-
-static int parse_program(void);
-static int parse_prolog(void);
-static int parse_top_lvl_list(void);
-static int parse_top_lvl_def(void);
-static int parse_func_def(bool isMain);
-static int parse_param_lists(void);
-static int parse_param_list_opt(void);
-static int parse_param(void);
-static int parse_ret_type_opt(void);
-static int parse_type(void);
-static int parse_prim_type(void);
-static int parse_func_body(void);
-static int parse_block(void);
-
-static int parse_statem_list(void);
-static int parse_statem(void);
-static int parse_var_decl(void);
-static int parse_return_statem(void);
-static int parse_if_expr(void);
-static int parse_branch_body(void);
-static int parse_while_statem(void);
 
 /* docasne len tak zatial bez napojenia na expr.c*/
 static int parse_expr_stub(void) {
@@ -96,14 +82,13 @@ static int parse_expr_stub(void) {
             break;
         }
 
-        int err = advance();
-        if (err != ERR_OK) {
-            return err;
-        }
+        TRY(advance());
     }
     return ERR_OK;
 }
 
+static int parse_prolog(void);
+static int parse_top_lvl_list(void);
 /* 1. <program> -> <prolog> <top_lvl_list> TOK_EOF */
 static int parse_program(void) {
     int err = parse_prolog();
@@ -141,6 +126,7 @@ static int parse_prolog(void) {
     return ERR_OK;
 }
 
+static int parse_top_lvl_def(void);
 /* 3–4. <top_lvl_list> -> <top_lvl_def> <top_lvl_list> | eps */
 static int parse_top_lvl_list(void) {
     while (check(TOK_AT_MAIN) || check(TOK_KW_DEF) || check(TOK_KW_TYPE) || check(TOK_KW_CASE) ||
@@ -153,6 +139,7 @@ static int parse_top_lvl_list(void) {
     return ERR_OK;
 }
 
+static int parse_func_def(bool isMain);
 /* 5–9. <top_lvl_def> */
 static int parse_top_lvl_def(void) {
     if (check(TOK_AT_MAIN)) {
@@ -176,6 +163,9 @@ static int parse_top_lvl_def(void) {
     return ERR_SYNTAX;
 }
 
+static int parse_param_lists(void);
+static int parse_ret_type_opt(void);
+static int parse_func_body(void);
 /* 22. <func_def> -> TOK_KW_DEF TOK_IDENTIFIER <param_lists> <ret_type_opt> TOK_ASSIGN <func_body>
  */
 static int parse_func_def(bool isMain) {
@@ -196,6 +186,7 @@ static int parse_func_def(bool isMain) {
     return parse_func_body();
 }
 
+static int parse_param_list_opt(void);
 /* 23–24. <param_lists> */
 static int parse_param_lists(void) {
     while (check(TOK_LPAREN)) {
@@ -211,6 +202,7 @@ static int parse_param_lists(void) {
     return ERR_OK;
 }
 
+static int parse_param(void);
 /* 25–30. <param_list_opt> (vrátane koncovej čiarky) */
 static int parse_param_list_opt(void) {
     if (!check(TOK_IDENTIFIER)) {
@@ -236,6 +228,7 @@ static int parse_param_list_opt(void) {
     return ERR_OK;
 }
 
+static int parse_type(void);
 /* 31. <param> -> TOK_IDENTIFIER TOK_COLON <type> */
 static int parse_param(void) {
     int err = expect(TOK_IDENTIFIER);
@@ -259,6 +252,7 @@ static int parse_ret_type_opt(void) {
     return parse_type();
 }
 
+static int parse_prim_type(void);
 /* 36–50. <type> */
 static int parse_type(void) {
     if (check(TOK_LPAREN)) {
@@ -315,6 +309,7 @@ static int parse_prim_type(void) {
     return ERR_SYNTAX;
 }
 
+static int parse_block(void);
 /* 34–35. <func_body> -> TOK_EOL <block> | <expr> TOK_EOL */
 static int parse_func_body(void) {
     if (check(TOK_EOL)) {
@@ -331,6 +326,7 @@ static int parse_func_body(void) {
     return expect(TOK_EOL);
 }
 
+static int parse_statem_list(void);
 /* 51. <block> -> TOK_INDENT <statem_list> TOK_DEDENT */
 static int parse_block(void) {
     int err = expect(TOK_INDENT);
@@ -344,6 +340,7 @@ static int parse_block(void) {
     return expect(TOK_DEDENT);
 }
 
+static int parse_statem(void);
 /* 52–60. <statem_list> */
 static int parse_statem_list(void) {
     int err = parse_statem();
@@ -377,6 +374,10 @@ static int parse_statem_list(void) {
     return ERR_OK;
 }
 
+static int parse_var_decl(void);
+static int parse_return_statem(void);
+static int parse_if_expr(void);
+static int parse_while_statem(void);
 /* 61–68. <statem> */
 static int parse_statem(void) {
     if (check(TOK_KW_VAL) || check(TOK_KW_VAR)) {
@@ -449,6 +450,7 @@ static int parse_return_statem(void) {
     return parse_expr_stub();
 }
 
+static int parse_branch_body(void);
 /* 82–86. <if_expr> -> if <expr> then <branch_body> [else <branch_body>] */
 static int parse_if_expr(void) {
     int err = expect(TOK_KW_IF);
