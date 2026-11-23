@@ -286,6 +286,10 @@ void genValueToStr(CodeGen *gen, Type *type) {
         emit(gen, "LABEL L$%d\n", trueLabel);
         emit(gen, "PUSHS string@true\n");
         emit(gen, "LABEL L$%d\n", endLabel);
+    } else if (type->kind == TY_UNION) {
+        // typ hodnoty zjednotenia sa zisti az za behu
+        useHelper(gen, HELPER_TOSTR_ANY);
+        emit(gen, "CALL $toStr_any\n");
     }
     // retazec uz je retazec, nic sa nerobi
 }
