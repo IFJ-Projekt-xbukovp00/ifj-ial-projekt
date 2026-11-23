@@ -166,7 +166,7 @@ static int parse_top_lvl_def(void) {
 static int parse_param_lists(void);
 static int parse_ret_type_opt(void);
 static int parse_func_body(void);
-/* 22. <func_def> -> TOK_KW_DEF TOK_IDENTIFIER <param_lists> <ret_type_opt> TOK_ASSIGN <func_body>
+/* 20. <func_def> -> TOK_KW_DEF TOK_IDENTIFIER <param_lists> <ret_type_opt> TOK_ASSIGN <func_body>
  */
 static int parse_func_def(bool isMain) {
     (void)isMain;
@@ -187,7 +187,7 @@ static int parse_func_def(bool isMain) {
 }
 
 static int parse_param_list_opt(void);
-/* 23–24. <param_lists> */
+/* 21–22. <param_lists> */
 static int parse_param_lists(void) {
     while (check(TOK_LPAREN)) {
         int err = advance();
@@ -203,7 +203,7 @@ static int parse_param_lists(void) {
 }
 
 static int parse_param(void);
-/* 25–30. <param_list_opt> (vrátane koncovej čiarky) */
+/* 23–28. <param_list_opt> (vrátane koncovej čiarky na novom riadku podľa §1.2) */
 static int parse_param_list_opt(void) {
     if (!check(TOK_IDENTIFIER)) {
         return ERR_OK;
@@ -213,23 +213,21 @@ static int parse_param_list_opt(void) {
         return err;
     }
     while (check(TOK_COMMA)) {
-        err = advance();
-        if (err != ERR_OK) {
-            return err;
-        }
+        int commaLine = currentToken.line;
+        TRY(advance());
         if (!check(TOK_IDENTIFIER)) {
+            if (!check(TOK_RPAREN) || currentToken.line <= commaLine) {
+                return ERR_SYNTAX;
+            }
             break;
         }
-        err = parse_param();
-        if (err != ERR_OK) {
-            return err;
-        }
+        TRY(parse_param());
     }
     return ERR_OK;
 }
 
 static int parse_type(void);
-/* 31. <param> -> TOK_IDENTIFIER TOK_COLON <type> */
+/* 29. <param> -> TOK_IDENTIFIER TOK_COLON <type> */
 static int parse_param(void) {
     int err = expect(TOK_IDENTIFIER);
     if (err != ERR_OK) {
@@ -240,7 +238,7 @@ static int parse_param(void) {
     return parse_type();
 }
 
-/* 32–33. <ret_type_opt> -> TOK_COLON <type> | eps */
+/* 30–31. <ret_type_opt> -> TOK_COLON <type> | eps */
 static int parse_ret_type_opt(void) {
     if (!check(TOK_COLON)) {
         return ERR_OK;
@@ -253,7 +251,7 @@ static int parse_ret_type_opt(void) {
 }
 
 static int parse_prim_type(void);
-/* 36–50. <type> */
+/* 36–41, 49–52. <type> */
 static int parse_type(void) {
     if (check(TOK_LPAREN)) {
         int err = advance();
@@ -280,17 +278,15 @@ static int parse_type(void) {
     if (err != ERR_OK) {
         return err;
     }
-    /* 37–38. <union_tail> -> TOK_PIPE <prim_type> <union_tail> | eps */
-    while (check(TOK_PIPE)) {
-        if ((err = advance()) != ERR_OK)
-            return err;
-        if ((err = parse_prim_type()) != ERR_OK)
-            return err;
+    /* 38–41. <union_tail> -> TOK_PIPE <union_member> | eps */
+    if (check(TOK_PIPE)) {
+        TRY(advance());
+        return parse_type();
     }
     return ERR_OK;
 }
 
-/* 39–45. <prim_type> */
+/* 42–48. <prim_type> */
 static int parse_prim_type(void) {
     if (check(TOK_KW_INT) || check(TOK_KW_DOUBLE) || check(TOK_KW_STRING) || check(TOK_KW_UNIT) ||
         check(TOK_KW_BOOLEAN) || check(TOK_IDENTIFIER)) {
@@ -310,7 +306,7 @@ static int parse_prim_type(void) {
 }
 
 static int parse_block(void);
-/* 34–35. <func_body> -> TOK_EOL <block> | <expr> TOK_EOL */
+/* 32–35. <func_body> -> TOK_EOL <block> | <expr> <func_body_end> */
 static int parse_func_body(void) {
     if (check(TOK_EOL)) {
         int err = advance();
@@ -323,11 +319,15 @@ static int parse_func_body(void) {
     if (err != ERR_OK) {
         return err;
     }
-    return expect(TOK_EOL);
+    /* 34–35. <func_body_end> -> TOK_EOL | eps (len po TOK_DEDENT) */
+    if (check(TOK_EOL)) {
+        return advance();
+    }
+    return previousType == TOK_DEDENT ? ERR_OK : ERR_SYNTAX;
 }
 
 static int parse_statem_list(void);
-/* 51. <block> -> TOK_INDENT <statem_list> TOK_DEDENT */
+/* 53. <block> -> TOK_INDENT <statem_list> TOK_DEDENT */
 static int parse_block(void) {
     int err = expect(TOK_INDENT);
     if (err != ERR_OK) {
@@ -341,7 +341,7 @@ static int parse_block(void) {
 }
 
 static int parse_statem(void);
-/* 52–60. <statem_list> */
+/* 54–60. <statem_list> */
 static int parse_statem_list(void) {
     int err = parse_statem();
     if (err != ERR_OK) {
@@ -360,7 +360,7 @@ static int parse_statem_list(void) {
                     return err;
                 }
             }
-        } else if (previousType != TOK_DEDENT) {
+        } else if (previousType != TOK_DEDENT && previousType != TOK_EOL) {
             break;
         }
         if (check(TOK_DEDENT) || check(TOK_EOF)) {
@@ -374,11 +374,20 @@ static int parse_statem_list(void) {
     return ERR_OK;
 }
 
+/* 75–76. <init_rhs> -> TOK_EOL <block> | <stmt_expr> */
+static int parse_init_rhs(void) {
+    if (check(TOK_EOL)) {
+        TRY(advance());
+        return parse_block();
+    }
+    return parse_expr_stub();
+}
+
 static int parse_var_decl(void);
 static int parse_return_statem(void);
-static int parse_if_expr(void);
+static int parse_if_statem(void);
 static int parse_while_statem(void);
-/* 61–68. <statem> */
+/* 61–69. <statem> */
 static int parse_statem(void) {
     if (check(TOK_KW_VAL) || check(TOK_KW_VAR)) {
         return parse_var_decl();
@@ -390,25 +399,25 @@ static int parse_statem(void) {
         return parse_while_statem();
     }
     if (check(TOK_KW_IF)) {
-        return parse_if_expr();
+        return parse_if_statem();
     }
     if (check(TOK_IDENTIFIER)) {
         int err = advance();
         if (err != ERR_OK) {
             return err;
         }
-        /* 67. priradenie id = <expr> */
+        /* 68. priradenie id = <init_rhs> */
         if (check(TOK_ASSIGN)) {
             err = advance();
             if (err != ERR_OK) {
                 return err;
             }
-            return parse_expr_stub();
+            return parse_init_rhs();
         }
-        /* 68. pokračovanie výrazu za identif (volanie f(x) alebo a.b) */
+        /* 69. pokračovanie výrazu za identif (volanie f(x) alebo a.b) */
         return parse_expr_stub();
     }
-    /* 66. samostatný výraz ako príkaz */
+    /* 67. samostatný výraz ako príkaz */
     if (check(TOK_INT_LIT) || check(TOK_DOUBLE_LIT) || check(TOK_STRING_LIT) ||
         check(TOK_BOOL_LIT) || check(TOK_INTERP_STRING) || check(TOK_KW_LIST) ||
         check(TOK_LPAREN) || check(TOK_MINUS) || check(TOK_PLUS) || check(TOK_NOT)) {
@@ -417,7 +426,7 @@ static int parse_statem(void) {
     return ERR_SYNTAX;
 }
 
-/* 74–78. <var_decl> -> (val | var) id [: type] = <expr> */
+/* 70–76. <var_decl> -> (val | var) id [: type] = <init_rhs> */
 static int parse_var_decl(void) {
     int err = advance(); /* TOK_KW_VAL alebo TOK_KW_VAR */
     if (err != ERR_OK) {
@@ -433,10 +442,10 @@ static int parse_var_decl(void) {
     }
     if ((err = expect(TOK_ASSIGN)) != ERR_OK)
         return err;
-    return parse_expr_stub();
+    return parse_init_rhs();
 }
 
-/* 79–81. <return_statem> -> return [<expr>] */
+/* 77–79. <return_statem> -> return [<stmt_expr>] */
 static int parse_return_statem(void) {
     int err = advance(); /* TOK_KW_RETURN */
     if (err != ERR_OK) {
@@ -451,27 +460,38 @@ static int parse_return_statem(void) {
 }
 
 static int parse_branch_body(void);
-/* 82–86. <if_expr> -> if <expr> then <branch_body> [else <branch_body>] */
-static int parse_if_expr(void) {
-    int err = expect(TOK_KW_IF);
-    if (err != ERR_OK) {
-        return err;
+/* 99–108. <if_statem> -> if <expr> then <if_then_body> */
+static int parse_if_statem(void) {
+    TRY(expect(TOK_KW_IF));
+    TRY(parse_expr_stub());
+    TRY(expect(TOK_KW_THEN));
+    if (check(TOK_EOL)) {
+        /* 100, 102–103. blokový then + voliteľné else */
+        TRY(advance());
+        TRY(parse_block());
+        if (check(TOK_KW_ELSE)) {
+            TRY(advance());
+            return parse_branch_body();
+        }
+        return ERR_OK;
     }
-    if ((err = parse_expr_stub()) != ERR_OK)
-        return err;
-    if ((err = expect(TOK_KW_THEN)) != ERR_OK)
-        return err;
-    if ((err = parse_branch_body()) != ERR_OK)
-        return err;
+    /* 101, 104–108. jednoriadkový then + else na rovnakom alebo ďalšom riadku */
+    TRY(parse_statem());
     if (check(TOK_KW_ELSE)) {
-        if ((err = advance()) != ERR_OK)
-            return err;
+        TRY(advance());
         return parse_branch_body();
+    }
+    if (check(TOK_EOL)) {
+        TRY(advance());
+        if (check(TOK_KW_ELSE)) {
+            TRY(advance());
+            return parse_branch_body();
+        }
     }
     return ERR_OK;
 }
 
-/* 83–84. <branch_body> -> TOK_EOL <block> | <statem> */
+/* 109–110. <stmt_body> -> TOK_EOL <block> | <statem> */
 static int parse_branch_body(void) {
     if (check(TOK_EOL)) {
         int err = advance();
@@ -483,7 +503,7 @@ static int parse_branch_body(void) {
     return parse_statem();
 }
 
-/* 87. <while_statem> -> while <expr> do <branch_body> */
+/* 126. <while_statem> -> while <expr> do <stmt_body> */
 static int parse_while_statem(void) {
     int err = expect(TOK_KW_WHILE);
     if (err != ERR_OK) {
