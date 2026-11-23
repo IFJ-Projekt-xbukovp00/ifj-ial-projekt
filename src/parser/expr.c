@@ -164,12 +164,23 @@ static ASTNode *nodeFromToken(const Token *token) {
         if (len < 2 * quotes) {
             return NULL;
         }
-        char *decoded = decodeStringLiteral(lexeme + quotes, len - 2 * quotes);
-        if (decoded == NULL) {
+        size_t innerLen = len - 2 * quotes;
+        char *buf = NULL;
+        if (quotes == 3) {
+            // viacriadkovy """...""" je raw, escape sekvencie sa nedekoduju
+            buf = malloc(innerLen + 1);
+            if (buf != NULL) {
+                memcpy(buf, lexeme + 3, innerLen);
+                buf[innerLen] = '\0';
+            }
+        } else {
+            buf = decodeStringLiteral(lexeme + 1, innerLen);
+        }
+        if (buf == NULL) {
             return NULL;
         }
-        ASTNode *lit = astNewStringLit(decoded, token->line);
-        free(decoded);
+        ASTNode *lit = astNewStringLit(buf, token->line);
+        free(buf);
         return lit;
     }
     default:
@@ -476,6 +487,8 @@ static int reduceHandle(StackItem *handle, int count, ASTNode **result) {
             astFree(listNode);
             return err;
         }
+        astFree(handle[0].node);
+        handle[0].node = NULL;
         *result = listNode;
         return ERR_OK;
     }
