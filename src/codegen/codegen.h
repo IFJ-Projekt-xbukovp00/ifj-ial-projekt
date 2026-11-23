@@ -58,6 +58,9 @@ typedef struct {
     int labelCounter;              // pocitadlo navesti L$N
     int varCounter;                // pocitadlo premennych, cislo N v mene x$N
     int hiddenCounter;             // pocitadlo skrytych premennych %hN
+    LambdaNode **lambdas;          // lambdy, ktore sa vypisu za funkciami (lambda$N)
+    size_t lambdasCount;           // pocet lambd
+    size_t lambdasCapacity;        // velkost pola lambd
     DefFuncNode *function;         // prave generovana funkcia
     int error;                     // ERR_INTERNAL ak zlyhala alokacia
     bool helperUsed[HELPER_COUNT]; // ktore pomocne funkcie sa maju vypisat
@@ -618,6 +621,22 @@ void writeBuffers(CodeGen *gen);
  * @param function je uzol definicie funkcie
  */
 void genParams(CodeGen *gen, DefFuncNode *function);
+
+/**
+ * @brief funkcia na zapamatanie lambdy, ktora sa vygeneruje az za funkciami
+ * @param gen je kontext generatora
+ * @param lambda je uzol lambdy
+ * @return cislo N lambdy (navestie lambda$N)
+ */
+int addLambda(CodeGen *gen, LambdaNode *lambda);
+
+/**
+ * @brief funkcia na vygenerovanie lambdy ako samostatnej funkcie lambda$N
+ * @param gen je kontext generatora
+ * @param lambda je uzol lambdy
+ * @param lambdaId je cislo lambdy
+ */
+void genLambda(CodeGen *gen, LambdaNode *lambda, int lambdaId);
 
 /**
  * @brief funkcia na vygenerovanie definicie funkcie alebo rozsirujucej metody

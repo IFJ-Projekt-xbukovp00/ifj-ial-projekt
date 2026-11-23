@@ -33,6 +33,7 @@
 #include "semantic.h"
 
 #include <stdarg.h>
+#include <stdlib.h>
 #include <string.h>
 
 void appendFormat(CodeGen *gen, DynStr *target, const char *format, va_list args) {
@@ -136,6 +137,9 @@ void initCodeGen(CodeGen *gen, FILE *out) {
     gen->labelCounter = 0;
     gen->varCounter = 0;
     gen->hiddenCounter = 0;
+    gen->lambdas = NULL;
+    gen->lambdasCount = 0;
+    gen->lambdasCapacity = 0;
     gen->function = NULL;
     gen->error = ERR_OK;
 
@@ -153,6 +157,7 @@ void initCodeGen(CodeGen *gen, FILE *out) {
 }
 
 void freeCodeGen(CodeGen *gen) {
+    free(gen->lambdas);
     dynstr_free(&gen->code);
     dynstr_free(&gen->declarations);
 }
@@ -1324,6 +1329,60 @@ void genParams(CodeGen *gen, DefFuncNode *function) {
     if (receiver != NULL) {
         emit(gen, "POPS LF@%s$0\n", receiver->name);
     }
+}
+
+int addLambda(CodeGen *gen, LambdaNode *lambda) {
+    // pole lambd sa podla potreby zvacsi
+    if (gen->lambdasCount == gen->lambdasCapacity) {
+        size_t newCapacity = gen->lambdasCapacity == 0 ? 8 : gen->lambdasCapacity * 2;
+        LambdaNode **newLambdas = realloc(gen->lambdas, newCapacity * sizeof(LambdaNode *));
+
+        if (newLambdas == NULL) {
+            gen->error = ERR_INTERNAL;
+            return 0;
+        }
+
+        gen->lambdas = newLambdas;
+        gen->lambdasCapacity = newCapacity;
+    }
+
+    gen->lambdas[gen->lambdasCount] = lambda;
+    gen->lambdasCount++;
+    return (int)gen->lambdasCount - 1;
+}
+
+void genLambda(CodeGen *gen, LambdaNode *lambda, int lambdaId) {
+    // lambda je samostatna funkcia s navestim lambda$N, nevidi premenne okolia
+    fprintf(gen->out, "LABEL lambda$%d\n", lambdaId);
+    fprintf(gen->out, "CREATEFRAME\n");
+    fprintf(gen->out, "PUSHFRAME\n");
+
+    emitHelperVars(gen);
+
+    for (size_t paramIndex = 0; paramIndex < lambda->params.params_count; paramIndex++) {
+        Param *param = &lambda->params.params[paramIndex];
+        defineLocal(gen, param->name, param->symbol);
+    }
+
+    // argumenty su na zasobniku zlava doprava, vyberaju sa od posledneho
+    for (size_t paramIndex = lambda->params.params_count; paramIndex > 0; paramIndex--) {
+        Param *param = &lambda->params.params[paramIndex - 1];
+
+        emit(gen, "POPS ");
+        emitVar(gen, param->name, param->symbol);
+        emit(gen, "\n");
+    }
+
+    // hodnota tela je navratova hodnota lambdy
+    genExpr(gen, lambda->body);
+
+    if (gen->error != ERR_OK) {
+        return;
+    }
+
+    writeBuffers(gen);
+    fprintf(gen->out, "POPFRAME\n");
+    fprintf(gen->out, "RETURN\n");
 }
 
 void genFunction(CodeGen *gen, DefFuncNode *function) {
