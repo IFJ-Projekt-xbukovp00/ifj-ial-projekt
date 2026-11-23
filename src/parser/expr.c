@@ -1088,6 +1088,7 @@ int expr_parse(Token *token, ASTNode *first, ASTNode **output) {
             }
             StackItem term = {
                 .kind = SYM_TERM, .ptIndex = input, .tokenType = token->type, .line = token->line};
+            bool consumedNext = false;
             // uzol robime hned pri shifte, kym mame lexem
             if (input == PT_ID && token->type == TOK_INTERP_STRING) {
                 if ((err = parseInterpString(&state, &term.node)) != ERR_OK) {
@@ -1097,6 +1098,7 @@ int expr_parse(Token *token, ASTNode *first, ASTNode **output) {
                 if ((err = parseLambda(&state, &term.node)) != ERR_OK) {
                     goto fail;
                 }
+                consumedNext = true;
             } else if (input == PT_ID || input == PT_FUNC) {
                 term.node = nodeFromToken(token);
                 if (term.node == NULL) {
@@ -1114,7 +1116,7 @@ int expr_parse(Token *token, ASTNode *first, ASTNode **output) {
             }
             state.afterOperand = (input == PT_ID || input == PT_RPAR);
 
-            if ((err = nextToken(&state)) != ERR_OK) {
+            if (!consumedNext && (err = nextToken(&state)) != ERR_OK) {
                 goto fail;
             }
             if ((err = classifyToken(&state, &input)) != ERR_OK) {

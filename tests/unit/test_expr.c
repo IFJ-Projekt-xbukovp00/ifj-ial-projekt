@@ -34,6 +34,7 @@
 #include "error.h"
 #include "expr.h"
 #include "scanner.h"
+#include "types.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -531,12 +532,192 @@ static void testInterpolatedStrings(void) {
     astFree(root);
 }
 
+static void testLambdas(void) {
+    ASTNode *root = NULL;
+
+    // () => 42
+    CHECK(parseExprString("() => 42", &root, NULL) == ERR_OK);
+    CHECK(root != NULL && root->kind == AST_LAMBDA);
+    if (root != NULL && root->kind == AST_LAMBDA) {
+        LambdaNode *lam = (LambdaNode *)root;
+        CHECK(lam->params.params_count == 0);
+        CHECK(lam->body != NULL && lam->body->kind == AST_LIT);
+        if (lam->body != NULL && lam->body->kind == AST_LIT) {
+            LiteralNode *lit = (LiteralNode *)lam->body;
+            CHECK(lit->litType == LIT_INT && lit->litValue.int_value == 42);
+        }
+    }
+    astFree(root);
+
+    // (a: Int) => a * a
+    CHECK(parseExprString("(a: Int) => a * a", &root, NULL) == ERR_OK);
+    CHECK(root != NULL && root->kind == AST_LAMBDA);
+    if (root != NULL && root->kind == AST_LAMBDA) {
+        LambdaNode *lam = (LambdaNode *)root;
+        CHECK(lam->params.params_count == 1);
+        CHECK(strcmp(lam->params.params[0].name, "a") == 0);
+        CHECK(lam->params.params[0].type != NULL && lam->params.params[0].type->kind == TY_INT);
+        CHECK(lam->body != NULL && lam->body->kind == AST_BINARY);
+        if (lam->body != NULL && lam->body->kind == AST_BINARY) {
+            CHECK(((BinaryNode *)lam->body)->operator == TOK_MULTIPLY);
+        }
+    }
+    astFree(root);
+
+    // (left: Int, right: Int) => left + right
+    CHECK(parseExprString("(left: Int, right: Int) => left + right", &root, NULL) == ERR_OK);
+    CHECK(root != NULL && root->kind == AST_LAMBDA);
+    if (root != NULL && root->kind == AST_LAMBDA) {
+        LambdaNode *lam = (LambdaNode *)root;
+        CHECK(lam->params.params_count == 2);
+        CHECK(strcmp(lam->params.params[0].name, "left") == 0);
+        CHECK(lam->params.params[0].type->kind == TY_INT);
+        CHECK(strcmp(lam->params.params[1].name, "right") == 0);
+        CHECK(lam->params.params[1].type->kind == TY_INT);
+        CHECK(lam->body != NULL && lam->body->kind == AST_BINARY);
+        if (lam->body != NULL && lam->body->kind == AST_BINARY) {
+            CHECK(((BinaryNode *)lam->body)->operator == TOK_PLUS);
+        }
+    }
+    astFree(root);
+
+    // (f: (Int) => Int, xs: List[Int]) => f(xs(0))
+    CHECK(parseExprString("(f: (Int) => Int, xs: List[Int]) => f(xs(0))", &root, NULL) == ERR_OK);
+    CHECK(root != NULL && root->kind == AST_LAMBDA);
+    if (root != NULL && root->kind == AST_LAMBDA) {
+        LambdaNode *lam = (LambdaNode *)root;
+        CHECK(lam->params.params_count == 2);
+        Type *t0 = lam->params.params[0].type;
+        CHECK(t0 != NULL && t0->kind == TY_FUNC);
+        if (t0 != NULL && t0->kind == TY_FUNC) {
+            CHECK(t0->func.params.len == 1);
+            CHECK(t0->func.params.items[0]->kind == TY_INT);
+            CHECK(t0->func.ret != NULL && t0->func.ret->kind == TY_INT);
+        }
+        Type *t1 = lam->params.params[1].type;
+        CHECK(t1 != NULL && t1->kind == TY_LIST);
+        if (t1 != NULL && t1->kind == TY_LIST) {
+            CHECK(t1->elem != NULL && t1->elem->kind == TY_INT);
+        }
+        CHECK(lam->body != NULL && lam->body->kind == AST_CALL);
+    }
+    astFree(root);
+
+    // (v: Int | String | Point) => v
+    CHECK(parseExprString("(v: Int | String | Point) => v", &root, NULL) == ERR_OK);
+    CHECK(root != NULL && root->kind == AST_LAMBDA);
+    if (root != NULL && root->kind == AST_LAMBDA) {
+        LambdaNode *lam = (LambdaNode *)root;
+        CHECK(lam->params.params_count == 1);
+        Type *ut = lam->params.params[0].type;
+        CHECK(ut != NULL && ut->kind == TY_UNION);
+        if (ut != NULL && ut->kind == TY_UNION) {
+            CHECK(ut->members.len == 3);
+            CHECK(ut->members.items[0]->kind == TY_INT);
+            CHECK(ut->members.items[1]->kind == TY_STRING);
+            CHECK(ut->members.items[2]->kind == TY_NAMED);
+            if (ut->members.items[2]->kind == TY_NAMED) {
+                CHECK(strcmp(ut->members.items[2]->named.name, "Point") == 0);
+            }
+        }
+    }
+    astFree(root);
+
+    // (a: Int) => (b: Int) => a + b
+    CHECK(parseExprString("(a: Int) => (b: Int) => a + b", &root, NULL) == ERR_OK);
+    CHECK(root != NULL && root->kind == AST_LAMBDA);
+    if (root != NULL && root->kind == AST_LAMBDA) {
+        LambdaNode *outer = (LambdaNode *)root;
+        CHECK(outer->params.params_count == 1);
+        CHECK(outer->body != NULL && outer->body->kind == AST_LAMBDA);
+        if (outer->body != NULL && outer->body->kind == AST_LAMBDA) {
+            LambdaNode *inner = (LambdaNode *)outer->body;
+            CHECK(inner->params.params_count == 1);
+            CHECK(strcmp(inner->params.params[0].name, "b") == 0);
+            CHECK(inner->body != NULL && inner->body->kind == AST_BINARY);
+        }
+    }
+    astFree(root);
+
+    // applyTo((a: Int) => a - 1, 0)
+    CHECK(parseExprString("applyTo((a: Int) => a - 1, 0)", &root, NULL) == ERR_OK);
+    CHECK(root != NULL && root->kind == AST_CALL);
+    if (root != NULL && root->kind == AST_CALL) {
+        CallNode *call = (CallNode *)root;
+        CHECK(call->argsCount == 2);
+        CHECK(call->args[0]->kind == AST_LAMBDA);
+        CHECK(call->args[1]->kind == AST_LIT);
+        if (call->args[1]->kind == AST_LIT) {
+            CHECK(((LiteralNode *)call->args[1])->litValue.int_value == 0);
+        }
+    }
+    astFree(root);
+
+    // joined.filter((v: Int) => v >= 3 && v <= 6)
+    CHECK(parseExprString("joined.filter((v: Int) => v >= 3 && v <= 6)", &root, NULL) == ERR_OK);
+    CHECK(root != NULL && root->kind == AST_CALL);
+    if (root != NULL && root->kind == AST_CALL) {
+        CallNode *call = (CallNode *)root;
+        CHECK(call->caller != NULL && call->caller->kind == AST_MEMBER);
+        if (call->caller != NULL && call->caller->kind == AST_MEMBER) {
+            MemberNode *mem = (MemberNode *)call->caller;
+            CHECK(strcmp(mem->name, "filter") == 0);
+            CHECK(mem->object != NULL && mem->object->kind == AST_ID);
+        }
+        CHECK(call->argsCount == 1);
+        CHECK(call->args[0]->kind == AST_LAMBDA);
+    }
+    astFree(root);
+
+    // ((a: Int) => a + 1)(5)
+    CHECK(parseExprString("((a: Int) => a + 1)(5)", &root, NULL) == ERR_OK);
+    CHECK(root != NULL && root->kind == AST_CALL);
+    if (root != NULL && root->kind == AST_CALL) {
+        CallNode *call = (CallNode *)root;
+        CHECK(call->caller != NULL && call->caller->kind == AST_LAMBDA);
+        CHECK(call->argsCount == 1);
+        CHECK(call->args[0]->kind == AST_LIT);
+        if (call->args[0]->kind == AST_LIT) {
+            CHECK(((LiteralNode *)call->args[0])->litValue.int_value == 5);
+        }
+    }
+    astFree(root);
+
+    // f(() => 42)
+    CHECK(parseExprString("f(() => 42)", &root, NULL) == ERR_OK);
+    CHECK(root != NULL && root->kind == AST_CALL);
+    if (root != NULL && root->kind == AST_CALL) {
+        CallNode *call = (CallNode *)root;
+        CHECK(call->argsCount == 1);
+        CHECK(call->args[0]->kind == AST_LAMBDA);
+        if (call->args[0]->kind == AST_LAMBDA) {
+            CHECK(((LambdaNode *)call->args[0])->params.params_count == 0);
+        }
+    }
+    astFree(root);
+
+    // () je stale Unit literal a (a + 1) zatvorkovany vyraz
+    CHECK(parseExprString("()", &root, NULL) == ERR_OK);
+    CHECK(root != NULL && root->kind == AST_LIT && ((LiteralNode *)root)->litType == LIT_UNIT);
+    astFree(root);
+
+    CHECK(parseExprString("(a + 1)", &root, NULL) == ERR_OK);
+    CHECK(root != NULL && root->kind == AST_BINARY);
+    if (root != NULL && root->kind == AST_BINARY) {
+        CHECK(((BinaryNode *)root)->operator == TOK_PLUS);
+    }
+    astFree(root);
+
+    type_free_all();
+}
+
 int main(void) {
     testPrecedenceAndAssoc();
     testUnaryOps();
     testNumbersAndStrings();
     testCallsMembersListsRanges();
     testInterpolatedStrings();
+    testLambdas();
 
     if (failureCount) {
         fprintf(stderr, "test_expr: %d chyb\n", failureCount);
