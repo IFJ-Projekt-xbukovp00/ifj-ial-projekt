@@ -28,9 +28,10 @@
  */
 
 #pragma once
+#include "ast.h"
 
 /**
  * @brief Spustí syntaktickú analýzu celého programu.
  * @return ERR_OK alebo kód chyby (ErrorCode).
  */
-int parser_parse(void);
+int parser_parse(ASTNode **program);

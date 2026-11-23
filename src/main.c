@@ -40,8 +40,15 @@
  */
 int main(void) {
     scanner_init(stdin);
-    int result = parser_parse();
+
+    ASTNode *program = NULL;
+    int result = parser_parse(&program);
     scanner_free();
+        if (result != ERR_OK) {
+        astFree(program);
+        type_free_all();
+        return result;
+}
 
     // TODO: Parser not implemented yet
     /*
@@ -60,6 +67,7 @@ int main(void) {
     symtableFree(&table);
     type_free_all();
     */
-
+    astFree(program);
+    type_free_all();
     return result;
 }
