@@ -196,6 +196,15 @@ void genPrint(CodeGen *gen, CallNode *call) {
     if (kind == TY_UNIT) {
         // hodnota Unit je za behu nil, vypisuje sa ako "()"
         emit(gen, "WRITE string@()\n");
+    } else if (kind == TY_UNION) {
+        // pri zjednoteni sa az za behu zisti, ci to nie je () (nil)
+        int writeLabel = newLabel(gen);
+
+        emit(gen, "TYPE LF@%%t1 LF@%%t0\n");
+        emit(gen, "JUMPIFNEQ L$%d LF@%%t1 string@nil\n", writeLabel);
+        emit(gen, "MOVE LF@%%t0 string@()\n");
+        emit(gen, "LABEL L$%d\n", writeLabel);
+        emit(gen, "WRITE LF@%%t0\n");
     } else {
         // Int, Double, String aj Boolean vypise WRITE rovnako ako print
         // (bool ako true alebo false)
