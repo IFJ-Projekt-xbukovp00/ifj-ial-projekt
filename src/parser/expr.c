@@ -313,6 +313,155 @@ static int peekTokenAt(PsaState *state, int offset, Token **next) {
     return ERR_OK;
 }
 
+static int parseLambdaType(PsaState *state, Type **out);
+
+static int parseLambdaPrimType(PsaState *state, Type **out) {
+    Type *type = NULL;
+    switch (state->token->type) {
+    case TOK_KW_INT:
+        type = type_get_basic(TY_INT);
+        break;
+    case TOK_KW_DOUBLE:
+        type = type_get_basic(TY_DOUBLE);
+        break;
+    case TOK_KW_STRING:
+        type = type_get_basic(TY_STRING);
+        break;
+    case TOK_KW_UNIT:
+        type = type_get_basic(TY_UNIT);
+        break;
+    case TOK_KW_BOOLEAN:
+        type = type_get_basic(TY_BOOL);
+        break;
+    case TOK_IDENTIFIER: {
+        const char *name = state->token->lexeme.data != NULL ? state->token->lexeme.data : "";
+        type = type_create_named(name);
+        break;
+    }
+    case TOK_KW_LIST: {
+        int err = nextToken(state);
+        if (err != ERR_OK) {
+            return err;
+        }
+        if (state->token->type != TOK_LBRACKET) {
+            return ERR_SYNTAX;
+        }
+        err = nextToken(state);
+        if (err != ERR_OK) {
+            return err;
+        }
+        Type *elem = NULL;
+        err = parseLambdaType(state, &elem);
+        if (err != ERR_OK) {
+            return err;
+        }
+        if (state->token->type != TOK_RBRACKET) {
+            return ERR_SYNTAX;
+        }
+        err = nextToken(state);
+        if (err != ERR_OK) {
+            return err;
+        }
+        *out = type_create_list(elem);
+        return ERR_OK;
+    }
+    default:
+        return ERR_SYNTAX;
+    }
+
+    int err = nextToken(state);
+    if (err != ERR_OK) {
+        return err;
+    }
+    *out = type;
+    return ERR_OK;
+}
+
+static int parseLambdaType(PsaState *state, Type **out) {
+    if (state->token->type == TOK_LPAREN) {
+        TypeList params = {0};
+        int err = nextToken(state);
+        if (err != ERR_OK) {
+            return err;
+        }
+        if (state->token->type != TOK_RPAREN) {
+            for (;;) {
+                Type *paramType = NULL;
+                err = parseLambdaType(state, &paramType);
+                if (err != ERR_OK) {
+                    free(params.items);
+                    return err;
+                }
+                type_list_append(&params, paramType);
+                if (state->token->type == TOK_COMMA) {
+                    err = nextToken(state);
+                    if (err != ERR_OK) {
+                        free(params.items);
+                        return err;
+                    }
+                } else {
+                    break;
+                }
+            }
+        }
+        if (state->token->type != TOK_RPAREN) {
+            free(params.items);
+            return ERR_SYNTAX;
+        }
+        err = nextToken(state);
+        if (err != ERR_OK) {
+            free(params.items);
+            return err;
+        }
+        if (state->token->type != TOK_ARROW) {
+            free(params.items);
+            return ERR_SYNTAX;
+        }
+        err = nextToken(state);
+        if (err != ERR_OK) {
+            free(params.items);
+            return err;
+        }
+        Type *ret = NULL;
+        err = parseLambdaType(state, &ret);
+        if (err != ERR_OK) {
+            free(params.items);
+            return err;
+        }
+        *out = type_create_function(params, ret);
+        return ERR_OK;
+    }
+
+    Type *first = NULL;
+    int err = parseLambdaPrimType(state, &first);
+    if (err != ERR_OK) {
+        return err;
+    }
+    if (state->token->type != TOK_PIPE) {
+        *out = first;
+        return ERR_OK;
+    }
+
+    TypeList members = {0};
+    type_list_append(&members, first);
+    while (state->token->type == TOK_PIPE) {
+        err = nextToken(state);
+        if (err != ERR_OK) {
+            free(members.items);
+            return err;
+        }
+        Type *member = NULL;
+        err = parseLambdaPrimType(state, &member);
+        if (err != ERR_OK) {
+            free(members.items);
+            return err;
+        }
+        type_list_append(&members, member);
+    }
+    *out = type_create_union(members);
+    return ERR_OK;
+}
+
 static int parseInterpString(PsaState *state, ASTNode **out) {
     int line = state->token->line;
     const char *startLexeme = state->token->lexeme.data;
@@ -854,4 +1003,13 @@ fail:
     freeStack(stack, &state);
     free(stack);
     return err;
+}
+
+int expr_parse_type(Token *token, Type **output) {
+    if (token == NULL || output == NULL) {
+        return ERR_INTERNAL;
+    }
+    *output = NULL;
+    PsaState state = {.token = token};
+    return parseLambdaType(&state, output);
 }

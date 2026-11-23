@@ -41,3 +41,11 @@
  * @return ERR_OK, ERR_SYNTAX, ERR_LEX alebo ERR_INTERNAL
  */
 int expr_parse(Token *token, ASTNode *first, ASTNode **output);
+
+/**
+ * @brief naparsuje typovu anotaciu (zakladny typ, List[T], funkcia, zjednotenie)
+ * @param token prvy token typu, na vystupe prvy token za typom
+ * @param output ukazovatel na naparsovany typ (nastavi sa pri ERR_OK)
+ * @return ERR_OK, ERR_SYNTAX, ERR_LEX alebo ERR_INTERNAL
+ */
+int expr_parse_type(Token *token, Type **output);
