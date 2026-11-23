@@ -632,6 +632,28 @@ void genId(CodeGen *gen, IDNode *id) {
     emit(gen, "\n");
 }
 
+void genUnionEquals(CodeGen *gen) {
+    int sameTypeLabel = newLabel(gen);
+    int endLabel = newLabel(gen);
+
+    // EQ na roznych typoch skonci chybou 53, preto sa najprv porovnaju typy
+    emit(gen, "POPS LF@%%t1\n");
+    emit(gen, "POPS LF@%%t0\n");
+    emit(gen, "TYPE LF@%%t2 LF@%%t0\n");
+    emit(gen, "TYPE LF@%%t3 LF@%%t1\n");
+    emit(gen, "JUMPIFEQ L$%d LF@%%t2 LF@%%t3\n", sameTypeLabel);
+
+    // rozne typy sa nikdy nerovnaju
+    emit(gen, "PUSHS bool@false\n");
+    emit(gen, "JUMP L$%d\n", endLabel);
+
+    emit(gen, "LABEL L$%d\n", sameTypeLabel);
+    emit(gen, "PUSHS LF@%%t0\n");
+    emit(gen, "PUSHS LF@%%t1\n");
+    emit(gen, "EQS\n");
+    emit(gen, "LABEL L$%d\n", endLabel);
+}
+
 void genBinary(CodeGen *gen, BinaryNode *binary) {
     if (binary->operator == TOK_AND) {
         genAnd(gen, binary);
@@ -646,8 +668,15 @@ void genBinary(CodeGen *gen, BinaryNode *binary) {
     genExpr(gen, binary->left);
     genExpr(gen, binary->right);
 
+    bool isUnion = getKind(binary->left) == TY_UNION || getKind(binary->right) == TY_UNION;
+
     if (binary->operator == TOK_PLUS && getKind((ASTNode *)binary) == TY_STRING) {
         genConcat(gen);
+    } else if (isUnion && binary->operator == TOK_EQUAL) {
+        genUnionEquals(gen);
+    } else if (isUnion && binary->operator == TOK_NOT_EQUAL) {
+        genUnionEquals(gen);
+        emit(gen, "NOTS\n");
     } else if (binary->operator == TOK_PLUS) {
         emit(gen, "ADDS\n");
     } else if (binary->operator == TOK_MINUS) {

@@ -359,6 +359,12 @@ void genInterp(CodeGen *gen, InterpNode *interp);
 void genId(CodeGen *gen, IDNode *id);
 
 /**
+ * @brief funkcia na porovnanie == dvoch hodnot, z ktorych aspon jedna je zjednotenie
+ * @param gen je kontext generatora
+ */
+void genUnionEquals(CodeGen *gen);
+
+/**
  * @brief funkcia na vygenerovanie binarnej operacie
  * @param gen je kontext generatora
  * @param binary je uzol binarnej operacie
