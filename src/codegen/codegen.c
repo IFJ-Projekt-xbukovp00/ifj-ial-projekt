@@ -860,6 +860,10 @@ void genExpr(CodeGen *gen, ASTNode *node) {
         genMember(gen, (MemberNode *)node);
     } else if (node->kind == AST_INTERP) {
         genInterp(gen, (InterpNode *)node);
+    } else if (node->kind == AST_LAMBDA) {
+        // hodnotou lambdy je navestie jej funkcie, telo sa vygeneruje az na konci
+        int lambdaId = addLambda(gen, (LambdaNode *)node);
+        emit(gen, "PUSHS string@lambda$%d\n", lambdaId);
     } else if (node->kind == AST_IF) {
         // if ako vyraz, kazda vetva necha na zasobniku svoju hodnotu
         genIf(gen, (IfNode *)node, true);
@@ -1513,6 +1517,12 @@ int codegenGenerate(ProgramNode *prog, FILE *out) {
                 genFunction(&gen, (DefFuncNode *)extension->methods[methodIndex]);
             }
         }
+    }
+
+    // lambdy idu za funkciami, aj lambda v lambde sa prida na koniec zoznamu
+    for (size_t lambdaIndex = 0; lambdaIndex < gen.lambdasCount && gen.error == ERR_OK;
+         lambdaIndex++) {
+        genLambda(&gen, gen.lambdas[lambdaIndex], (int)lambdaIndex);
     }
 
     // pomocne funkcie za behu sa vypisu az za vsetkymi funkciami
