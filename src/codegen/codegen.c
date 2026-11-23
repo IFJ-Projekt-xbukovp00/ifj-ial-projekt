@@ -392,6 +392,44 @@ void genExtMethodCall(CodeGen *gen, CallNode *call) {
     emit(gen, "\n");
 }
 
+void genToStrAnyHelper(CodeGen *gen) {
+    int intLabel = newLabel(gen);
+    int floatLabel = newLabel(gen);
+    int boolLabel = newLabel(gen);
+    int trueLabel = newLabel(gen);
+    int endLabel = newLabel(gen);
+
+    // hodnota zjednotenia nema staticky typ, rozhoduje sa podla TYPE za behu
+    emit(gen, "POPS LF@%%t0\n");
+    emit(gen, "TYPE LF@%%t1 LF@%%t0\n");
+    emit(gen, "JUMPIFEQ L$%d LF@%%t1 string@int\n", intLabel);
+    emit(gen, "JUMPIFEQ L$%d LF@%%t1 string@float\n", floatLabel);
+    emit(gen, "JUMPIFEQ L$%d LF@%%t1 string@bool\n", boolLabel);
+
+    // retazec sa vrati tak, ako je
+    emit(gen, "PUSHS LF@%%t0\n");
+    emit(gen, "JUMP L$%d\n", endLabel);
+
+    emit(gen, "LABEL L$%d\n", intLabel);
+    emit(gen, "INT2STR LF@%%t0 LF@%%t0\n");
+    emit(gen, "PUSHS LF@%%t0\n");
+    emit(gen, "JUMP L$%d\n", endLabel);
+
+    emit(gen, "LABEL L$%d\n", floatLabel);
+    emit(gen, "FLOAT2STR LF@%%t0 LF@%%t0\n");
+    emit(gen, "PUSHS LF@%%t0\n");
+    emit(gen, "JUMP L$%d\n", endLabel);
+
+    emit(gen, "LABEL L$%d\n", boolLabel);
+    emit(gen, "JUMPIFEQ L$%d LF@%%t0 bool@true\n", trueLabel);
+    emit(gen, "PUSHS string@false\n");
+    emit(gen, "JUMP L$%d\n", endLabel);
+    emit(gen, "LABEL L$%d\n", trueLabel);
+    emit(gen, "PUSHS string@true\n");
+
+    emit(gen, "LABEL L$%d\n", endLabel);
+}
+
 void genCall(CodeGen *gen, CallNode *call) {
     if (call->callKind == CALL_FUNC) {
         genFunctionCall(gen, call);
@@ -1027,6 +1065,9 @@ void writeHelper(CodeGen *gen, HelperKind helper) {
     } else if (helper == HELPER_ORD) {
         name = "$ord";
         genOrdHelper(gen);
+    } else if (helper == HELPER_TOSTR_ANY) {
+        name = "$toStr_any";
+        genToStrAnyHelper(gen);
     }
 
     if (gen->error != ERR_OK) {
@@ -1042,9 +1083,24 @@ void writeHelper(CodeGen *gen, HelperKind helper) {
 }
 
 void writeHelpers(CodeGen *gen) {
+    bool isWritten[HELPER_COUNT];
+    bool hasWrittenAny = true;
+
     for (int helper = 0; helper < HELPER_COUNT; helper++) {
-        if (gen->helperUsed[helper]) {
-            writeHelper(gen, (HelperKind)helper);
+        isWritten[helper] = false;
+    }
+
+    // pomocna funkcia moze pouzit dalsiu pomocnu funkciu, preto sa opakuje,
+    // kym sa nevypisu vsetky pouzite
+    while (hasWrittenAny && gen->error == ERR_OK) {
+        hasWrittenAny = false;
+
+        for (int helper = 0; helper < HELPER_COUNT; helper++) {
+            if (gen->helperUsed[helper] && !isWritten[helper]) {
+                writeHelper(gen, (HelperKind)helper);
+                isWritten[helper] = true;
+                hasWrittenAny = true;
+            }
         }
     }
 }

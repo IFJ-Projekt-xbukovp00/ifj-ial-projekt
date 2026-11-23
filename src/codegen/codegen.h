@@ -42,9 +42,10 @@
  * Vypisu sa raz na konci programu, ale len tie, ktore sa niekde pouzili.
  */
 typedef enum {
-    HELPER_SUBSTR, // $subStr
-    HELPER_ORD,    // $ord
-    HELPER_COUNT   // pocet pomocnych funkcii, musi byt posledny
+    HELPER_SUBSTR,    // $subStr
+    HELPER_ORD,       // $ord
+    HELPER_TOSTR_ANY, // $toStr_any, toStr pre hodnotu, ktorej typ sa zisti az za behu
+    HELPER_COUNT      // pocet pomocnych funkcii, musi byt posledny
 } HelperKind;
 
 /**
@@ -287,6 +288,12 @@ void genFunctionCall(CodeGen *gen, CallNode *call);
  * @param call je uzol volania (posledny zoznam argumentov)
  */
 void genExtMethodCall(CodeGen *gen, CallNode *call);
+
+/**
+ * @brief funkcia na vygenerovanie tela pomocnej funkcie $toStr_any (rozhoduje podla TYPE)
+ * @param gen je kontext generatora
+ */
+void genToStrAnyHelper(CodeGen *gen);
 
 /**
  * @brief funkcia na vygenerovanie volania funkcie, vysledok ostane na zasobniku
