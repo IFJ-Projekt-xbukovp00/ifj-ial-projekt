@@ -546,6 +546,13 @@ void genListAlloc(CodeGen *gen) {
 }
 
 void genListLiteral(CodeGen *gen, ListLitNode *list) {
+    if (list->elemsCount == 0) {
+        // prazdny zoznam List() je len hlavicka ["List", 0]
+        emit(gen, "PUSHS int@0\n");
+        genListAlloc(gen);
+        return;
+    }
+
     // prvky sa vyhodnotia zlava doprava este pred vytvorenim pola
     for (size_t elemIndex = 0; elemIndex < list->elemsCount; elemIndex++) {
         genExpr(gen, list->elems[elemIndex]);
