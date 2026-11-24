@@ -231,8 +231,13 @@ void genArgs(CodeGen *gen, CallNode *call) {
 void genArgLists(CodeGen *gen, CallNode *call) {
     // f(a)(b) je vnorene volanie, vnutorne volanie ma prvy zoznam argumentov,
     // argumenty vsetkych zoznamov sa daju za sebou ako jeden zoznam
-    if (call->caller->kind == AST_CALL && ((CallNode *)call->caller)->symbol == call->symbol) {
-        genArgLists(gen, (CallNode *)call->caller);
+    // pri goo()(5) vracia goo funkciu, vonkajsie volanie je CALL_VALUE a sem nepatri
+    if (call->caller->kind == AST_CALL) {
+        const CallNode *innerCall = (const CallNode *)call->caller;
+
+        if (innerCall->symbol == call->symbol && innerCall->callKind == call->callKind) {
+            genArgLists(gen, (CallNode *)call->caller);
+        }
     }
 
     genArgs(gen, call);
@@ -482,7 +487,8 @@ void genValueCall(CodeGen *gen, CallNode *call) {
     int calleeVar = newHiddenVar(gen);
 
     // volana hodnota (retazec s navestim) sa vyhodnoti pred argumentmi
-    // a odlozi sa, aby ju argumenty neprepisali
+    // a odlozi sa, aby ju argumenty neprepisali, moze to byt aj vysledok
+    // ineho volania (funkcia vracajuca funkciu, makeMul(2)(5))
     genExpr(gen, call->caller);
     emit(gen, "POPS LF@%%h%d\n", calleeVar);
 
