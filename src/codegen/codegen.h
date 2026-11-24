@@ -42,10 +42,11 @@
  * Vypisu sa raz na konci programu, ale len tie, ktore sa niekde pouzili.
  */
 typedef enum {
-    HELPER_SUBSTR,    // $subStr
-    HELPER_ORD,       // $ord
-    HELPER_TOSTR_ANY, // $toStr_any, toStr pre hodnotu, ktorej typ sa zisti az za behu
-    HELPER_COUNT      // pocet pomocnych funkcii, musi byt posledny
+    HELPER_SUBSTR,     // $subStr
+    HELPER_ORD,        // $ord
+    HELPER_TOSTR_ANY,  // $toStr_any, toStr pre hodnotu, ktorej typ sa zisti az za behu
+    HELPER_LIST_ALLOC, // $list_alloc, novy zoznam danej dlzky
+    HELPER_COUNT       // pocet pomocnych funkcii, musi byt posledny
 } HelperKind;
 
 /** @brief pocet vstavanych funkcii, ktore mozu mat obal $wrap$meno */
@@ -336,6 +337,20 @@ void genValueCall(CodeGen *gen, CallNode *call);
  * @return meno funkcie (aj "List.range"), inak prazdny retazec
  */
 const char *getBuiltinName(CallNode *call);
+
+/**
+ * @brief funkcia na vygenerovanie tela pomocnej funkcie $list_alloc
+ *
+ * Zoznam je pole ["List", dlzka, prvok0, prvok1, ...].
+ * @param gen je kontext generatora
+ */
+void genListAllocHelper(CodeGen *gen);
+
+/**
+ * @brief funkcia na vytvorenie zoznamu, dlzka je na vrchu zasobnika
+ * @param gen je kontext generatora
+ */
+void genListAlloc(CodeGen *gen);
 
 /**
  * @brief funkcia na vygenerovanie volania funkcie, vysledok ostane na zasobniku

@@ -529,6 +529,22 @@ const char *getBuiltinName(CallNode *call) {
     return "";
 }
 
+void genListAllocHelper(CodeGen *gen) {
+    // zoznam je pole ["List", dlzka, prvok0, prvok1, ...], prvky sa doplnia neskor
+    emit(gen, "POPS LF@%%t0\n");
+    emit(gen, "ADD LF@%%t1 LF@%%t0 int@2\n");
+    emit(gen, "NEWARRAY LF@%%t2 LF@%%t1\n");
+    emit(gen, "ARRAYSET LF@%%t2 int@0 string@List\n");
+    emit(gen, "ARRAYSET LF@%%t2 int@1 LF@%%t0\n");
+    emit(gen, "PUSHS LF@%%t2\n");
+}
+
+void genListAlloc(CodeGen *gen) {
+    // dlzka je na vrchu zasobnika, po volani je tam novy zoznam
+    useHelper(gen, HELPER_LIST_ALLOC);
+    emit(gen, "CALL $list_alloc\n");
+}
+
 void genCall(CodeGen *gen, CallNode *call) {
     bool isGenerated = true;
 
@@ -1489,6 +1505,9 @@ void writeHelper(CodeGen *gen, HelperKind helper) {
     } else if (helper == HELPER_TOSTR_ANY) {
         name = "$toStr_any";
         genToStrAnyHelper(gen);
+    } else if (helper == HELPER_LIST_ALLOC) {
+        name = "$list_alloc";
+        genListAllocHelper(gen);
     }
 
     if (gen->error != ERR_OK) {
