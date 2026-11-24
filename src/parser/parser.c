@@ -715,3 +715,716 @@ int parser_parse(ASTNode **program) {
     dynstr_free(&currentToken.lexeme);
     return err;
 }
+
+//12. <type_alias> -> TOK_KW_TYPE TOK_IDENTIFIER TOK_ASSIGN <type> TOK_EOL
+static int parse_type_alias(ASTNode **out) {
+    int line = currentToken.line;
+
+    TRY(expect(TOK_KW_TYPE));
+
+    if (!check(TOK_IDENTIFIER)){
+        return ERR_SYNTAX;
+    }
+    char *name = astCopyString(currentToken.lexeme.data);
+    if (name == NULL) {
+        return ERR_INTERNAL;
+    }
+    int err = advance();
+
+    if (err == ERR_OK) {
+        err = expect(TOK_ASSIGN);
+    }
+
+    Type *type = NULL;
+
+    if (err == ERR_OK) {
+        err = parse_type(&type);
+    }
+
+    if (err == ERR_OK){
+        err = expect(TOK_EOL);
+    }
+
+    if (err != ERR_OK) {
+        free(name);
+        return err;
+    }
+
+    *out = astNewTypeAlias(name, type, line);
+    free(name);
+    if (*out == NULL){
+        return ERR_INTERNAL;
+    }
+    return ERR_OK;
+}
+
+//13. <case_class> -> TOK_KW_CASE TOK_KW_CLASS TOK_IDENTIFIER TOK_LPAREN <param_list_opt> TOK_RPAREN TOK_EOL
+static int parse_case_class(ASTNode **out) {
+    int line = currentToken.line;
+
+    TRY(expect(TOK_KW_CASE));
+    TRY(expect(TOK_KW_CLASS));
+
+    if (!check(TOK_IDENTIFIER)) {
+        return ERR_SYNTAX;
+    }
+
+    ASTNode *node = astNewClassDef(currentToken.lexeme.data, line);
+    if (node == NULL) {
+        return ERR_INTERNAL;
+    }
+
+    int err = advance();
+
+    if (err == ERR_OK) {
+        err = expect(TOK_LPAREN);
+    }
+
+    if (err == ERR_OK) {
+        err = parse_param_list_opt(&((ClassDefNode *)node)->fields);
+    }
+
+    if (err == ERR_OK) {
+        err = expect(TOK_RPAREN);
+    }
+
+    if (err == ERR_OK) {
+        err = expect(TOK_EOL);
+    }
+
+    if (err != ERR_OK) {
+        astFree(node);
+        return err;
+    }
+
+    *out = node;
+    return ERR_OK;
+}
+
+/*
+ * 14. <extens_def>      -> TOK_KW_EXTENSION TOK_LPAREN <param> TOK_RPAREN <ext_body>
+ * 15. <ext_body>        -> TOK_EOL TOK_INDENT <ext_method_list> TOK_DEDENT
+ * 16. <ext_body>        -> <func_def>
+ * 17. <ext_method_list> -> <func_def> <ext_method_tail>
+ * 18. <ext_method_tail> -> <func_def> <ext_method_tail>
+ * 19. <ext_method_tail> -> eps
+ */
+static int parse_extens_def(ASTNode **out) {
+    int line = currentToken.line;
+
+    TRY(expect(TOK_KW_EXTENSION));
+    TRY(expect(TOK_LPAREN));
+
+    if (!check(TOK_IDENTIFIER)) {
+        return ERR_SYNTAX;
+    }
+    int recvLine = currentToken.line;
+    char *recvName = astCopyString(currentToken.lexeme.data);
+    if (recvName == NULL) {
+        return ERR_INTERNAL;
+    }
+
+    int err = advance();
+    if (err == ERR_OK) {
+        err = expect(TOK_COLON);
+    }
+
+    Type *recvType = NULL;
+    if (err == ERR_OK) {
+        err = parse_type(&recvType);
+    }
+
+    if (err == ERR_OK) {
+        err = expect(TOK_RPAREN);
+    }
+
+    if (err != ERR_OK) {
+        free(recvName);
+        return err;
+    }
+
+    ASTNode *node = astNewExtension(recvName, recvType, line);
+    free(recvName);
+    if (node == NULL) {
+        return ERR_INTERNAL;
+    }
+    ExtensionNode *ext = (ExtensionNode *)node;
+    ext->receiver.line = recvLine;
+
+    if (check(TOK_EOL)) {
+        err = advance();
+        if (err == ERR_OK) {
+            err = expect(TOK_INDENT);
+        }
+        if (err == ERR_OK) {
+            do {
+                ASTNode *method = NULL;
+                err = parse_func_def(false, &method);
+
+                if (err != ERR_OK) {
+                    break;
+                }
+
+                if (!astAppend(&ext->methods, &ext->methodsCount, method)) {
+                    astFree(method);
+                    err = ERR_INTERNAL;
+                    break;
+                }
+            } while (check(TOK_KW_DEF));
+        }
+        if (err == ERR_OK) {
+            err = expect(TOK_DEDENT);
+        }
+    } else {
+        ASTNode *method = NULL;
+        err = parse_func_def(false, &method);
+        if (err == ERR_OK && !astAppend(&ext->methods, &ext->methodsCount, method)) {
+            astFree(method);
+            err = ERR_INTERNAL;
+        }
+    }
+
+    if (err != ERR_OK) {
+        astFree(node);
+        return err;
+    }
+
+    *out = node;
+    return ERR_OK;
+}
+
+/*
+ * 121. <if_expr>        -> TOK_KW_IF <expr> TOK_KW_THEN <expr_then_body> TOK_KW_ELSE <expr_else_body>
+ * 122. <expr_then_body> -> TOK_EOL <block>
+ * 123. <expr_then_body> -> <expr> <opt_eol>
+ * 124. <expr_else_body> -> TOK_EOL <block>
+ * 125. <expr_else_body> -> <expr>
+ */
+static int parse_if_expr(ASTNode **out) {
+    int line = currentToken.line;
+
+    TRY(expect(TOK_KW_IF));
+
+    ASTNode *cond = NULL;
+    ASTNode *thenB = NULL;
+    ASTNode *elseB = NULL;
+
+    TRY(parse_expr(NULL, &cond));
+
+    int err = expect(TOK_KW_THEN);
+    if (err == ERR_OK) {
+        if (check(TOK_EOL)) {
+            err = advance();
+
+            if (err == ERR_OK) {
+                err = parse_block(&thenB);
+            }
+
+        } else {
+            err = parse_expr(NULL, &thenB);
+            if (err == ERR_OK && check(TOK_EOL)) {
+                err = advance();
+            }
+        }
+    }
+
+    if (err == ERR_OK) {
+        err = expect(TOK_KW_ELSE);
+    }
+
+    if (err == ERR_OK) {
+        if (check(TOK_EOL)) {
+            err = advance();
+            if (err == ERR_OK) {
+                err = parse_block(&elseB);
+            }
+        } else {
+            err = parse_expr(NULL, &elseB);
+        }
+    }
+
+    if (err != ERR_OK) {
+        astFree(cond);
+        astFree(thenB);
+        astFree(elseB);
+        return err;
+    }
+
+    *out = astNewIf(cond, thenB, elseB, line);
+    if (*out == NULL) {
+        astFree(cond);
+        astFree(thenB);
+        astFree(elseB);
+        return ERR_INTERNAL;
+    }
+    return ERR_OK;
+}
+
+/*
+ * 127. <for_statem>       -> TOK_KW_FOR <for_header> TOK_KW_DO <stmt_body>
+ * 128. <for_header>       -> TOK_EOL TOK_INDENT <for_gen> <for_guards_ml> TOK_DEDENT
+ * 129. <for_header>       -> <for_gen> <for_guard_sl>
+ * 130. <for_gen>          -> TOK_IDENTIFIER TOK_LARROW <for_source>  (zdroj: parse_expr(NULL, &src))
+ * 136–137. <for_guard_sl> -> TOK_KW_IF <expr> <for_guard_sl> | eps
+ * 138–141. <for_guards_ml>-> TOK_EOL [TOK_KW_IF <expr> <for_guards_ml>] | eps
+ */
+static int parse_for_statem(ASTNode **out) {
+    int line = currentToken.line;
+
+    TRY(expect(TOK_KW_FOR));
+
+    bool isMultiline = check(TOK_EOL);
+    if (isMultiline) {
+        TRY(advance());
+        TRY(expect(TOK_INDENT));
+    }
+
+    if (!check(TOK_IDENTIFIER)) {
+        return ERR_SYNTAX;
+    }
+    char *varName = astCopyString(currentToken.lexeme.data);
+    if (varName == NULL) {
+        return ERR_INTERNAL;
+    }
+
+    int err = advance();
+    if (err == ERR_OK) {
+        err = expect(TOK_LARROW);
+    }
+
+    ASTNode *source = NULL;
+    if (err == ERR_OK) {
+        err = parse_expr(NULL, &source);
+    }
+
+    if (err != ERR_OK) {
+        free(varName);
+        astFree(source);
+        return err;
+    }
+
+    ASTNode *node = astNewFor(varName, source, NULL, line);
+    free(varName);
+    if (node == NULL) {
+        astFree(source);
+        return ERR_INTERNAL;
+    }
+    ForNode *forNode = (ForNode *)node;
+
+    if (isMultiline) {
+        while (err == ERR_OK && check(TOK_EOL)) {
+            err = advance();
+            if (err != ERR_OK || !check(TOK_KW_IF)) {
+                break;
+            }
+            err = advance();
+            if (err != ERR_OK) {
+                break;
+            }
+            ASTNode *guard = NULL;
+            err = parse_expr(NULL, &guard);
+            if (err != ERR_OK) {
+                break;
+            }
+            if (!astAppend(&forNode->guards, &forNode->guardsCount, guard)) {
+                astFree(guard);
+                err = ERR_INTERNAL;
+                break;
+            }
+        }
+        if (err == ERR_OK) {
+            err = expect(TOK_DEDENT);
+        }
+    } else {
+        while (err == ERR_OK && check(TOK_KW_IF)) {
+            err = advance();
+            if (err != ERR_OK) {
+                break;
+            }
+            ASTNode *guard = NULL;
+            err = parse_expr(NULL, &guard);
+            if (err != ERR_OK) {
+                break;
+            }
+            if (!astAppend(&forNode->guards, &forNode->guardsCount, guard)) {
+                astFree(guard);
+                err = ERR_INTERNAL;
+                break;
+            }
+        }
+    }
+
+    if (err == ERR_OK) {
+        err = expect(TOK_KW_DO);
+    }
+    if (err == ERR_OK) {
+        err = parse_branch_body(&forNode->body);
+    }
+
+    if (err != ERR_OK) {
+        astFree(node);
+        return err;
+    }
+
+    *out = node;
+    return ERR_OK;
+}
+
+static char *copy_num_lexeme(const char *src, size_t len, bool negative) {
+
+    char *buf = malloc(len + (negative ? 2 : 1));
+
+    if (buf == NULL) {
+        return NULL;
+    }
+
+    size_t j = 0;
+    if (negative) {
+        buf[j++] = '-';
+    }
+
+    for (size_t i = 0; i < len; i++) {
+        if (src[i] != '_') {
+            buf[j++] = src[i];
+        }
+    }
+
+    buf[j] = '\0';
+    return buf;
+}
+
+static char decode_escape_char(char c) {
+    switch (c) {
+    case 'n':
+        return '\n';
+    case 'r':
+        return '\r';
+    case 't':
+        return '\t';
+    case '\\':
+        return '\\';
+    case '"':
+        return '"';
+    default:
+        return c;
+    }
+}
+
+//154–156. literálový vzor
+static int parse_pattern_literal(ASTNode **out) {
+    int line = currentToken.line;
+
+    if (check(TOK_LPAREN)) {
+        TRY(advance());
+        TRY(expect(TOK_RPAREN));
+
+        *out = astNewUnitLit(line);
+        return *out != NULL ? ERR_OK : ERR_INTERNAL;
+    }
+
+    bool negative = false;
+    if (check(TOK_MINUS)) {
+        negative = true;
+        TRY(advance());
+
+        if (!check(TOK_INT_LIT) && !check(TOK_DOUBLE_LIT)) {
+            return ERR_SYNTAX;
+        }
+    }
+
+    ASTNode *lit;
+    if (check(TOK_INT_LIT)) {
+        char *clean = copy_num_lexeme(currentToken.lexeme.data, currentToken.lexeme.len, negative);
+        if (clean == NULL) {
+            return ERR_INTERNAL;
+        }
+        long long val = strtoll(clean, NULL, 10);
+        free(clean);
+        lit = astNewIntLit(val, line);
+
+    } else if (check(TOK_DOUBLE_LIT)) {
+        char *clean = copy_num_lexeme(currentToken.lexeme.data, currentToken.lexeme.len, negative);
+        if (clean == NULL) {
+            return ERR_INTERNAL;
+        }
+
+        double val = strtod(clean, NULL);
+        free(clean);
+        lit = astNewDoubleLit(val, line);
+
+    } else if (check(TOK_BOOL_LIT)) {
+        lit = astNewBoolLit(strcmp(currentToken.lexeme.data, "true") == 0, line);
+    } else if (check(TOK_STRING_LIT)) {
+        const char *lexeme = currentToken.lexeme.data;
+        size_t len = currentToken.lexeme.len;
+        size_t quotes = (len >= 6 && strncmp(lexeme, "\"\"\"", 3) == 0) ? 3 : 1;
+
+        if (len < 2 * quotes) {
+            return ERR_SYNTAX;
+        }
+
+        size_t innerLen = len - 2 * quotes;
+        char *buf = malloc(innerLen + 1);
+
+        if (buf == NULL) {
+            return ERR_INTERNAL;
+        }
+
+        if (quotes == 3) {
+            memcpy(buf, lexeme + 3, innerLen);
+            buf[innerLen] = '\0';
+        } else {
+            size_t j = 0;
+            for (size_t i = 0; i < innerLen; i++) {
+                if (lexeme[1 + i] == '\\' && i + 1 < innerLen) {
+                    i++;
+                    buf[j++] = decode_escape_char(lexeme[1 + i]);
+                } else {
+                    buf[j++] = lexeme[1 + i];
+                }
+            }
+            buf[j] = '\0';
+        }
+        lit = astNewStringLit(buf, line);
+        free(buf);
+    } else {
+        return ERR_SYNTAX;
+    }
+
+    if (lit == NULL) {
+        return ERR_INTERNAL;
+    }
+
+    int err = advance();
+    if (err != ERR_OK) {
+        astFree(lit);
+        return err;
+    }
+
+    *out = lit;
+    return ERR_OK;
+}
+
+/* 153–165. <pattern> */
+static int parse_pattern(int caseLine, ASTNode **out) {
+    if (check(TOK_UNDERSCORE)) {
+        TRY(advance());
+        *out = astNewCase(PAT_WILDCARD, caseLine);
+        return *out != NULL ? ERR_OK : ERR_INTERNAL;
+    }
+
+    if (check(TOK_IDENTIFIER)) {
+        int idLine = currentToken.line;
+        char *idName = astCopyString(currentToken.lexeme.data);
+        if (idName == NULL) {
+            return ERR_INTERNAL;
+        }
+
+        int err = advance();
+        if (err != ERR_OK) {
+            free(idName);
+            return err;
+        }
+
+        //158. typovaný vzor: id : <type>
+        if (check(TOK_COLON)) {
+            err = advance();
+            Type *type = NULL;
+            if (err == ERR_OK) {
+                err = parse_type(&type);
+            }
+
+            if (err != ERR_OK) {
+                free(idName);
+                return err;
+            }
+
+            ASTNode *node = astNewCase(PAT_TYPED, caseLine);
+            if (node == NULL) {
+                free(idName);
+                return ERR_INTERNAL;
+            }
+
+            CaseNode *c = (CaseNode *)node;
+            c->binder.name = idName;
+            c->binder.type = type;
+            c->binder.line = idLine;
+
+            *out = node;
+            return ERR_OK;
+        }
+
+        //159–165. konštruktorový vzor: ClassName(<ctor_binders_opt>)
+        if (check(TOK_LPAREN)) {
+            err = advance();
+            if (err != ERR_OK) {
+                free(idName);
+                return err;
+            }
+
+            ASTNode *node = astNewCase(PAT_CONSTRUCTOR, caseLine);
+            if (node == NULL) {
+                free(idName);
+                return ERR_INTERNAL;
+            }
+
+            CaseNode *c = (CaseNode *)node;
+            c->className = idName;
+
+            if (check(TOK_IDENTIFIER) || check(TOK_UNDERSCORE)) {
+                const char *bname = check(TOK_UNDERSCORE) ? "_" : currentToken.lexeme.data;
+                if (!astParamListAdd(&c->ctorBinders, bname, NULL, currentToken.line)) {
+                    astFree(node);
+                    return ERR_INTERNAL;
+                }
+
+                err = advance();
+                while (err == ERR_OK && check(TOK_COMMA)) {
+                    err = advance();
+                    if (err != ERR_OK) {
+                        break;
+                    }
+
+                    if (!check(TOK_IDENTIFIER) && !check(TOK_UNDERSCORE)) {
+                        err = ERR_SYNTAX;
+                        break;
+                    }
+
+                    bname = check(TOK_UNDERSCORE) ? "_" : currentToken.lexeme.data;
+                    if (!astParamListAdd(&c->ctorBinders, bname, NULL, currentToken.line)) {
+                        err = ERR_INTERNAL;
+                        break;
+                    }
+
+                    err = advance();
+                }
+            }
+
+            if (err == ERR_OK) {
+                err = expect(TOK_RPAREN);
+            }
+
+            if (err != ERR_OK) {
+                astFree(node);
+                return err;
+            }
+
+            *out = node;
+            return ERR_OK;
+        }
+
+        free(idName);
+        return ERR_SYNTAX;
+    }
+
+    //154–156. literálový vzor
+    ASTNode *lit = NULL;
+    TRY(parse_pattern_literal(&lit));
+
+    ASTNode *node = astNewCase(PAT_LITERAL, caseLine);
+    if (node == NULL) {
+        astFree(lit);
+        return ERR_INTERNAL;
+    }
+
+    ((CaseNode *)node)->literal = lit;
+    *out = node;
+    return ERR_OK;
+}
+
+//146–152. <case_branch> -> TOK_KW_CASE <pattern> <guard_opt> TOK_ARROW <case_body>
+static int parse_case_branch(ASTNode **out) {
+    int line = currentToken.line;
+
+    TRY(expect(TOK_KW_CASE));
+
+    ASTNode *node = NULL;
+    TRY(parse_pattern(line, &node));
+    CaseNode *c = (CaseNode *)node;
+
+    int err = ERR_OK;
+    if (check(TOK_KW_IF)) {
+        err = advance();
+        if (err == ERR_OK) {
+            err = parse_expr(NULL, &c->guard);
+        }
+    }
+
+    if (err == ERR_OK) {
+        err = expect(TOK_ARROW);
+    }
+
+    if (err == ERR_OK) {
+        if (check(TOK_EOL)) {
+            err = advance();
+
+            if (err == ERR_OK) {
+                err = parse_block(&c->body);
+            }
+
+        } else {
+            err = parse_expr(NULL, &c->body);
+
+            if (err == ERR_OK) {
+                if (check(TOK_EOL)) {
+                    err = advance();
+                } else if (previousType != TOK_DEDENT) {
+                    err = ERR_SYNTAX;
+                }
+            }
+        }
+    }
+
+    if (err != ERR_OK) {
+        astFree(node);
+        return err;
+    }
+
+    *out = node;
+    return ERR_OK;
+}
+
+/*
+ * 142. <match_block>       -> TOK_KW_MATCH TOK_EOL TOK_INDENT <case_list> TOK_DEDENT
+ * 143–145. <case_list>     -> <case_branch> (<case_branch>)*
+ */
+static int parse_match_block(ASTNode *subject, ASTNode **out) {
+    int line = currentToken.line;
+
+    TRY(expect(TOK_KW_MATCH));
+    TRY(expect(TOK_EOL));
+    TRY(expect(TOK_INDENT));
+
+    ASTNode *node = astNewMatch(NULL, line);
+    if (node == NULL) {
+        return ERR_INTERNAL;
+    }
+    MatchNode *match = (MatchNode *)node;
+
+    int err;
+    do {
+        ASTNode *branch = NULL;
+        err = parse_case_branch(&branch);
+        if (err != ERR_OK) {
+            break;
+        }
+        if (!astAppend(&match->cases, &match->casesCount, branch)) {
+            astFree(branch);
+            err = ERR_INTERNAL;
+            break;
+        }
+    } while (check(TOK_KW_CASE));
+
+    if (err == ERR_OK) {
+        err = expect(TOK_DEDENT);
+    }
+
+    if (err != ERR_OK) {
+        astFree(node);
+        return err;
+    }
+
+    match->subject = subject;
+    *out = node;
+    return ERR_OK;
+}
