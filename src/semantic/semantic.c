@@ -2,6 +2,10 @@
  * @file semantic.c
  * @brief Sémantická analýza (typové kontroly, rozsahy platnosti)
  *
+ * Použitie AI: návrh a logika (pseudokód) sú moje, prepis do C robila po častiach
+ * AI (Claude Opus 5.5). Prompt (približné znenie, presný text sa nezachoval):
+ *   "Pregeneruj môj pseudokód na C kód, premenné a funkcie sú štýlom variableName."
+ *
  * Implementace překladače imperativního jazyka IFJ26.
  * Projekt z predmetov IFJ a IAL, FIT VUT v Brne, 2026/2027.
  *
@@ -33,6 +37,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+/*
+ * Použitie AI: vstavané funkcie (addBuiltin, addBuiltins)
+ *   vygenerovala AI z môjho pseudokódu, kód som skontroloval (prompt viď hlavičku súboru).
+ */
 /**
  * @brief funkcia na vloženie jednej vstavanej funkcie
  * @param table je tabuľka symbolov
@@ -99,6 +107,10 @@ void addBuiltins(Symtable *table, ErrorCode *error) {
     addBuiltin(table, error, "List.range", type_create_list(intType), 3, intType, intType, intType);
 }
 
+/*
+ * Použitie AI: typy a parametre (createFunctionType, checkParamNames)
+ *   vygenerovala AI z môjho pseudokódu, kód som skontroloval (prompt viď hlavičku súboru).
+ */
 Type *createFunctionType(DefFuncNode *function) {
     // parametre zo všetkých zoznamov dáme za sebou
     TypeList paramTypes = {NULL, 0, 0};
@@ -144,6 +156,10 @@ bool checkParamNames(Symtable *table, DefFuncNode *function, Param *receiver, Er
     return hasParameter;
 }
 
+/*
+ * Použitie AI: globálne funkcie a @main (collectFunction)
+ *   vygenerovala AI z môjho pseudokódu, kód som skontroloval (prompt viď hlavičku súboru).
+ */
 void collectFunction(Symtable *table, DefFuncNode *function, int *mainCount, ErrorCode *error) {
     if (*error != ERR_OK) {
         return;
@@ -183,6 +199,10 @@ void collectFunction(Symtable *table, DefFuncNode *function, int *mainCount, Err
     }
 }
 
+/*
+ * Použitie AI: triedy a aliasy typov (collectClass, collectTypeAlias)
+ *   vygenerovala AI z môjho pseudokódu, kód som skontroloval (prompt viď hlavičku súboru).
+ */
 void collectClass(Symtable *table, ClassDefNode *classDef, ErrorCode *error) {
     if (*error != ERR_OK) {
         return;
@@ -236,6 +256,10 @@ void collectTypeAlias(Symtable *table, TypeAliasNode *alias, ErrorCode *error) {
     alias->symbol = aliasSymbol;
 }
 
+/*
+ * Použitie AI: globálne definície (collectGlobalDefinitions)
+ *   vygenerovala AI z môjho pseudokódu, kód som skontroloval (prompt viď hlavičku súboru).
+ */
 void collectGlobalDefinitions(Symtable *table, ProgramNode *program, ErrorCode *error) {
     int mainCount = 0;
 
@@ -269,6 +293,10 @@ void collectGlobalDefinitions(Symtable *table, ProgramNode *program, ErrorCode *
     }
 }
 
+/*
+ * Použitie AI: rozlíšenie typov a extension (getRealType … checkMainReturnType)
+ *   vygenerovala AI z môjho pseudokódu, kód som skontroloval (prompt viď hlavičku súboru).
+ */
 Type *getRealType(Type *type) {
     while (type != NULL && type->kind == TY_NAMED && type->named.resolved != NULL) {
         type = type->named.resolved;
@@ -458,6 +486,10 @@ void checkMainReturnType(ProgramNode *program, ErrorCode *error) {
     }
 }
 
+/*
+ * Použitie AI: hlavná funkcia analýzy (semanticAnalyze)
+ *   vygenerovala AI z môjho pseudokódu, kód som skontroloval (prompt viď hlavičku súboru).
+ */
 void semanticAnalyze(ASTNode *program, Symtable *table, ErrorCode *error) {
     if (program == NULL || program->kind != AST_PROGRAM) {
         *error = ERR_INTERNAL;
@@ -495,6 +527,10 @@ void semanticAnalyze(ASTNode *program, Symtable *table, ErrorCode *error) {
     }
 }
 
+/*
+ * Použitie AI: premenné a rozsahy (getLiteralType … checkFunctionBodies)
+ *   vygenerovala AI z môjho pseudokódu, kód som skontroloval (prompt viď hlavičku súboru).
+ */
 Type *getLiteralType(const LiteralNode *literal) {
     if (literal->litType == LIT_INT) {
         return type_get_basic(TY_INT);
@@ -880,6 +916,10 @@ void checkFunctionBodies(Symtable *table, ProgramNode *program, ErrorCode *error
     }
 }
 
+/*
+ * Použitie AI: výrazy a operátory (isNumericType … checkUnary)
+ *   vygenerovala AI z môjho pseudokódu, kód som skontroloval (prompt viď hlavičku súboru).
+ */
 bool isNumericType(const Type *type) {
     return type != NULL && (type->kind == TY_INT || type->kind == TY_DOUBLE);
 }
@@ -991,6 +1031,10 @@ Type *checkUnary(Symtable *table, BodyContext *context, UnaryNode *unary, ErrorC
     return NULL;
 }
 
+/*
+ * Použitie AI: podmienky a cykly (checkBranch … checkWhile)
+ *   vygenerovala AI z môjho pseudokódu, kód som skontroloval (prompt viď hlavičku súboru).
+ */
 Type *checkBranch(Symtable *table, BodyContext *context, ASTNode **branch, bool isValueUsed,
                   ErrorCode *error) {
     // aj vetva bez bloku je samostatny rozsah platnosti
@@ -1084,6 +1128,10 @@ Type *checkWhile(Symtable *table, BodyContext *context, WhileNode *whileNode, Er
     return type_get_basic(TY_UNIT);
 }
 
+/*
+ * Použitie AI: návratové typy (isUnitType … checkFunctionResult)
+ *   vygenerovala AI z môjho pseudokódu, kód som skontroloval (prompt viď hlavičku súboru).
+ */
 bool isUnitType(Type *type) {
     type = getRealType(type);
     return type != NULL && type->kind == TY_UNIT;
@@ -1194,6 +1242,10 @@ void checkFunctionResult(Symbol *functionSymbol, Type *bodyType, ErrorCode *erro
     }
 }
 
+/*
+ * Použitie AI: volania funkcií (getFunctionReturnType, checkArguments, checkCall)
+ *   vygenerovala AI z môjho pseudokódu, kód som skontroloval (prompt viď hlavičku súboru).
+ */
 Type *getFunctionReturnType(Symtable *table, BodyContext *context, Symbol *functionSymbol,
                             ErrorCode *error) {
     if (functionSymbol->kind == SYM_BUILTIN) {
@@ -1393,6 +1445,10 @@ Type *checkCall(Symtable *table, BodyContext *context, CallNode *call, ErrorCode
     return getFunctionReturnType(table, context, callee, error);
 }
 
+/*
+ * Použitie AI: cyklus for (isZeroLiteral … checkFor)
+ *   vygenerovala AI z môjho pseudokódu, kód som skontroloval (prompt viď hlavičku súboru).
+ */
 bool isZeroLiteral(ASTNode *step) {
     // -0 a +0 su unarne operacie nad literalom
     while (step->kind == AST_UNARY) {
@@ -1491,6 +1547,10 @@ Type *checkFor(Symtable *table, BodyContext *context, ForNode *forNode, ErrorCod
     return type_get_basic(TY_UNIT);
 }
 
+/*
+ * Použitie AI: členy hodnôt (getBuiltinMemberType, checkMember)
+ *   vygenerovala AI z môjho pseudokódu, kód som skontroloval (prompt viď hlavičku súboru).
+ */
 Type *getBuiltinMemberType(const Type *objectType, const char *name) {
     // toString má kazda hodnota
     if (strcmp(name, "toString") == 0) {
@@ -1576,6 +1636,10 @@ Type *checkMember(Symtable *table, BodyContext *context, MemberNode *member, Err
     return getFunctionReturnType(table, context, method, error);
 }
 
+/*
+ * Použitie AI: rozširujúce metódy (findExtensionMethod … checkMethodCallee)
+ *   vygenerovala AI z môjho pseudokódu, kód som skontroloval (prompt viď hlavičku súboru).
+ */
 Symbol *findExtensionMethod(Symtable *table, Type *receiverType, const char *name,
                             ErrorCode *error) {
     const char *typeName = getTypeKeyName(receiverType);
@@ -1637,6 +1701,10 @@ Symbol *checkMethodCallee(Symtable *table, MemberNode *member, Type *objectType,
     return method;
 }
 
+/*
+ * Použitie AI: case class a match (checkConstructorArguments … checkMatch)
+ *   vygenerovala AI z môjho pseudokódu, kód som skontroloval (prompt viď hlavičku súboru).
+ */
 void checkConstructorArguments(Symtable *table, BodyContext *context, CallNode *call,
                                ClassDefNode *classDef, ErrorCode *error) {
     size_t fieldCount = classDef->fields.params_count;
@@ -1860,6 +1928,10 @@ Type *checkMatch(Symtable *table, BodyContext *context, MatchNode *match, bool i
     return resultType;
 }
 
+/*
+ * Použitie AI: interpolované reťazce (checkInterpolation)
+ *   vygenerovala AI z môjho pseudokódu, kód som skontroloval (prompt viď hlavičku súboru).
+ */
 Type *checkInterpolation(Symtable *table, BodyContext *context, InterpNode *interp,
                          ErrorCode *error) {
     for (size_t partIndex = 0; partIndex < interp->partsCount; partIndex++) {
@@ -1879,6 +1951,10 @@ Type *checkInterpolation(Symtable *table, BodyContext *context, InterpNode *inte
     return type_get_basic(TY_STRING);
 }
 
+/*
+ * Použitie AI: lambdy (addContextLocal, checkLambda, checkValueCall)
+ *   vygenerovala AI z môjho pseudokódu, kód som skontroloval (prompt viď hlavičku súboru).
+ */
 void addContextLocal(BodyContext *context, Symbol *local, ErrorCode *error) {
     if (context->lambda == NULL) {
         addLocal(context->function, local, error);
@@ -1980,6 +2056,10 @@ Type *checkValueCall(Symtable *table, BodyContext *context, CallNode *call, Erro
     return calleeType->func.ret;
 }
 
+/*
+ * Použitie AI: zoznamy (checkMemberObject … checkListLiteral)
+ *   vygenerovala AI z môjho pseudokódu, kód som skontroloval (prompt viď hlavičku súboru).
+ */
 Type *checkMemberObject(Symtable *table, BodyContext *context, MemberNode *member,
                         ErrorCode *error) {
     Type *objectType = getRealType(checkNode(table, context, &member->object, true, error));
