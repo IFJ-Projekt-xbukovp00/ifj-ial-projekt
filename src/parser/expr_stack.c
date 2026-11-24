@@ -51,11 +51,11 @@ StackItem A_Top(TAStack *stack) {
     return stack->dataArray[stack->top - 1];
 }
 
-bool A_IsEmpty(TAStack *stack) { return stack->top == 0; }
+bool A_IsEmpty(const TAStack *stack) { return stack->top == 0; }
 
-bool A_IsFull(TAStack *stack) { return stack->top == SMAX; }
+bool A_IsFull(const TAStack *stack) { return stack->top == SMAX; }
 
-static int topTerminalIndex(TAStack *stack) {
+static int topTerminalIndex(const TAStack *stack) {
     for (int i = stack->top - 1; i >= 0; i--) {
         if (stack->dataArray[i].kind == SYM_TERM) {
             return i;

@@ -29,9 +29,9 @@
 
 #include "parser.h"
 #include "ast.h"
-#include "expr.h"
 #include "dynstr.h"
 #include "error.h"
+#include "expr.h"
 
 #include "scanner.h"
 #include "token.h"
@@ -40,12 +40,12 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define TRY(call)                 \
-    do {                          \
-        int try_err = (call);     \
-        if (try_err != ERR_OK) {  \
-            return try_err;       \
-        }                         \
+#define TRY(call)                                                                                  \
+    do {                                                                                           \
+        int try_err = (call);                                                                      \
+        if (try_err != ERR_OK) {                                                                   \
+            return try_err;                                                                        \
+        }                                                                                          \
     } while (0)
 
 static Token currentToken;
@@ -94,7 +94,7 @@ static int parse_expr(ASTNode *first, ASTNode **out) {
     return ERR_OK;
 }
 
-//3.1 Program, prológ, definície na najvyššej úrovni
+// 3.1 Program, prológ, definície na najvyššej úrovni
 
 static int parse_prolog(void);
 static int parse_top_lvl_list(ProgramNode *prog);
@@ -146,7 +146,7 @@ static int parse_top_lvl_def(ASTNode **out);
 /* 3–4. <top_lvl_list> -> <top_lvl_def> <top_lvl_list> | eps */
 static int parse_top_lvl_list(ProgramNode *prog) {
     while (check(TOK_AT_MAIN) || check(TOK_KW_DEF) || check(TOK_KW_TYPE) || check(TOK_KW_CASE) ||
-            check(TOK_KW_EXTENSION)) {
+           check(TOK_KW_EXTENSION)) {
         ASTNode *item = NULL;
         int err = parse_top_lvl_def(&item);
         if (err != ERR_OK) {
@@ -195,12 +195,12 @@ static int parse_top_lvl_def(ASTNode **out) {
     return ERR_SYNTAX;
 }
 
-
-//3.2 Definícia funkcie
+// 3.2 Definícia funkcie
 static int parse_param_lists(DefFuncNode *fn);
 static int parse_ret_type_opt(Type **out);
 static int parse_func_body(ASTNode **out);
-/* 20. <func_def> -> TOK_KW_DEF TOK_IDENTIFIER <param_lists> <ret_type_opt> TOK_ASSIGN <func_body> */
+/* 20. <func_def> -> TOK_KW_DEF TOK_IDENTIFIER <param_lists> <ret_type_opt> TOK_ASSIGN <func_body>
+ */
 static int parse_func_def(bool isMain, ASTNode **out) {
     int line = currentToken.line;
     int err = expect(TOK_KW_DEF);
@@ -359,7 +359,7 @@ static int parse_func_body(ASTNode **out) {
     return ERR_SYNTAX;
 }
 
-//3.4 Blok a zoznam príkazov
+// 3.4 Blok a zoznam príkazov
 
 static int parse_statem_list(BlockNode *block);
 /* 53. <block> -> TOK_INDENT <statem_list> TOK_DEDENT */
@@ -429,8 +429,7 @@ static int parse_statem_list(BlockNode *block) {
     return ERR_OK;
 }
 
-
-//3.5–3.6 Príkazy a základné riadiace štruktúry
+// 3.5–3.6 Príkazy a základné riadiace štruktúry
 
 /* 75–76. <init_rhs> -> TOK_EOL <block> | <stmt_expr> */
 static int parse_init_rhs(ASTNode **out) {
@@ -699,7 +698,7 @@ static int parse_while_statem(ASTNode **out) {
     return ERR_OK;
 }
 
-//vystup
+// vystup
 
 int parser_parse(ASTNode **program) {
     if (program == NULL) {
@@ -723,13 +722,13 @@ int parser_parse(ASTNode **program) {
     return err;
 }
 
-//12. <type_alias> -> TOK_KW_TYPE TOK_IDENTIFIER TOK_ASSIGN <type> TOK_EOL
+// 12. <type_alias> -> TOK_KW_TYPE TOK_IDENTIFIER TOK_ASSIGN <type> TOK_EOL
 static int parse_type_alias(ASTNode **out) {
     int line = currentToken.line;
 
     TRY(expect(TOK_KW_TYPE));
 
-    if (!check(TOK_IDENTIFIER)){
+    if (!check(TOK_IDENTIFIER)) {
         return ERR_SYNTAX;
     }
     char *name = astCopyString(currentToken.lexeme.data);
@@ -748,7 +747,7 @@ static int parse_type_alias(ASTNode **out) {
         err = parse_type(&type);
     }
 
-    if (err == ERR_OK){
+    if (err == ERR_OK) {
         err = expect(TOK_EOL);
     }
 
@@ -759,13 +758,14 @@ static int parse_type_alias(ASTNode **out) {
 
     *out = astNewTypeAlias(name, type, line);
     free(name);
-    if (*out == NULL){
+    if (*out == NULL) {
         return ERR_INTERNAL;
     }
     return ERR_OK;
 }
 
-//13. <case_class> -> TOK_KW_CASE TOK_KW_CLASS TOK_IDENTIFIER TOK_LPAREN <param_list_opt> TOK_RPAREN TOK_EOL
+// 13. <case_class> -> TOK_KW_CASE TOK_KW_CLASS TOK_IDENTIFIER TOK_LPAREN <param_list_opt>
+// TOK_RPAREN TOK_EOL
 static int parse_case_class(ASTNode **out) {
     int line = currentToken.line;
 
@@ -901,11 +901,9 @@ static int parse_extens_def(ASTNode **out) {
 }
 
 /*
- * 121. <if_expr>        -> TOK_KW_IF <expr> TOK_KW_THEN <expr_then_body> TOK_KW_ELSE <expr_else_body>
- * 122. <expr_then_body> -> TOK_EOL <block>
- * 123. <expr_then_body> -> <expr> <opt_eol>
- * 124. <expr_else_body> -> TOK_EOL <block>
- * 125. <expr_else_body> -> <expr>
+ * 121. <if_expr>        -> TOK_KW_IF <expr> TOK_KW_THEN <expr_then_body> TOK_KW_ELSE
+ * <expr_else_body> 122. <expr_then_body> -> TOK_EOL <block> 123. <expr_then_body> -> <expr>
+ * <opt_eol> 124. <expr_else_body> -> TOK_EOL <block> 125. <expr_else_body> -> <expr>
  */
 static int parse_if_expr(ASTNode **out) {
     int line = currentToken.line;
@@ -971,9 +969,9 @@ static int parse_if_expr(ASTNode **out) {
  * 127. <for_statem>       -> TOK_KW_FOR <for_header> TOK_KW_DO <stmt_body>
  * 128. <for_header>       -> TOK_EOL TOK_INDENT <for_gen> <for_guards_ml> TOK_DEDENT
  * 129. <for_header>       -> <for_gen> <for_guard_sl>
- * 130. <for_gen>          -> TOK_IDENTIFIER TOK_LARROW <for_source>  (zdroj: parse_expr(NULL, &src))
- * 136–137. <for_guard_sl> -> TOK_KW_IF <expr> <for_guard_sl> | eps
- * 138–141. <for_guards_ml>-> TOK_EOL [TOK_KW_IF <expr> <for_guards_ml>] | eps
+ * 130. <for_gen>          -> TOK_IDENTIFIER TOK_LARROW <for_source>  (zdroj: parse_expr(NULL,
+ * &src)) 136–137. <for_guard_sl> -> TOK_KW_IF <expr> <for_guard_sl> | eps 138–141.
+ * <for_guards_ml>-> TOK_EOL [TOK_KW_IF <expr> <for_guards_ml>] | eps
  */
 static int parse_for_statem(ASTNode **out) {
     int line = currentToken.line;
@@ -1117,7 +1115,7 @@ static char decode_escape_char(char c) {
     }
 }
 
-//154–156. literálový vzor
+// 154–156. literálový vzor
 static int parse_pattern_literal(ASTNode **out) {
     int line = currentToken.line;
 
@@ -1233,7 +1231,7 @@ static int parse_pattern(int caseLine, ASTNode **out) {
             return err;
         }
 
-        //158. typovaný vzor: id : <type>
+        // 158. typovaný vzor: id : <type>
         if (check(TOK_COLON)) {
             err = advance();
             Type *type = NULL;
@@ -1261,7 +1259,7 @@ static int parse_pattern(int caseLine, ASTNode **out) {
             return ERR_OK;
         }
 
-        //159–165. konštruktorový vzor: ClassName(<ctor_binders_opt>)
+        // 159–165. konštruktorový vzor: ClassName(<ctor_binders_opt>)
         if (check(TOK_LPAREN)) {
             err = advance();
             if (err != ERR_OK) {
@@ -1324,7 +1322,7 @@ static int parse_pattern(int caseLine, ASTNode **out) {
         return ERR_SYNTAX;
     }
 
-    //154–156. literálový vzor
+    // 154–156. literálový vzor
     ASTNode *lit = NULL;
     TRY(parse_pattern_literal(&lit));
 
@@ -1339,7 +1337,7 @@ static int parse_pattern(int caseLine, ASTNode **out) {
     return ERR_OK;
 }
 
-//146–152. <case_branch> -> TOK_KW_CASE <pattern> <guard_opt> TOK_ARROW <case_body>
+// 146–152. <case_branch> -> TOK_KW_CASE <pattern> <guard_opt> TOK_ARROW <case_body>
 static int parse_case_branch(ASTNode **out) {
     int line = currentToken.line;
 

@@ -910,8 +910,8 @@ static int reduceHandle(StackItem *handle, int count, ASTNode **result) {
         PtIndex op = handle[1].ptIndex;
 
         if (op == PT_TO || op == PT_UNTIL) {
-            ASTNode *range = astNewRange(handle[0].node, handle[2].node, NULL, op == PT_TO,
-                                         handle[1].line);
+            ASTNode *range =
+                astNewRange(handle[0].node, handle[2].node, NULL, op == PT_TO, handle[1].line);
             if (range == NULL) {
                 return ERR_INTERNAL;
             }
@@ -928,8 +928,8 @@ static int reduceHandle(StackItem *handle, int count, ASTNode **result) {
             range->step = handle[2].node;
             *result = handle[0].node;
         } else {
-            ASTNode *bin = astNewBinary(handle[1].tokenType, handle[0].node, handle[2].node,
-                                        handle[1].line);
+            ASTNode *bin =
+                astNewBinary(handle[1].tokenType, handle[0].node, handle[2].node, handle[1].line);
             if (bin == NULL) {
                 return ERR_INTERNAL;
             }

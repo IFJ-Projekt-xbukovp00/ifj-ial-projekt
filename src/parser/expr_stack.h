@@ -99,10 +99,10 @@ void A_Pop(TAStack *stack);
 StackItem A_Top(TAStack *stack);
 
 /** @brief vrati true ak je zasobnik prazdny */
-bool A_IsEmpty(TAStack *stack);
+bool A_IsEmpty(const TAStack *stack);
 
 /** @brief vrati true ak je zasobnik plny */
-bool A_IsFull(TAStack *stack);
+bool A_IsFull(const TAStack *stack);
 
 /**
  * @brief najde najvrchnejsi terminal na zasobniku (E a < preskakuje)
