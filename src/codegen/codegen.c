@@ -545,6 +545,39 @@ void genListAlloc(CodeGen *gen) {
     emit(gen, "CALL $list_alloc\n");
 }
 
+void genListGetHelper(CodeGen *gen) {
+    int errorLabel = newLabel(gen);
+
+    // zoznam v %t0, index v %t1
+    emit(gen, "POPS LF@%%t1\n");
+    emit(gen, "POPS LF@%%t0\n");
+
+    // index musi byt od 0 po dlzka - 1, inak je to chyba 40
+    emit(gen, "LT LF@%%t2 LF@%%t1 int@0\n");
+    emit(gen, "JUMPIFEQ L$%d LF@%%t2 bool@true\n", errorLabel);
+    emit(gen, "ARRAYGET LF@%%t3 LF@%%t0 int@1\n");
+    emit(gen, "LT LF@%%t2 LF@%%t1 LF@%%t3\n");
+    emit(gen, "JUMPIFEQ L$%d LF@%%t2 bool@false\n", errorLabel);
+
+    emit(gen, "ADD LF@%%t1 LF@%%t1 int@2\n");
+    emit(gen, "ARRAYGET LF@%%t0 LF@%%t0 LF@%%t1\n");
+    emit(gen, "PUSHS LF@%%t0\n");
+    emit(gen, "POPFRAME\n");
+    emit(gen, "RETURN\n");
+
+    emit(gen, "LABEL L$%d\n", errorLabel);
+    emit(gen, "EXIT int@40\n");
+}
+
+void genListIndex(CodeGen *gen, CallNode *call) {
+    // lst(i): zoznam a index na zasobnik, prvok vrati $list_get
+    genExpr(gen, call->caller);
+    genArgs(gen, call);
+
+    useHelper(gen, HELPER_LIST_GET);
+    emit(gen, "CALL $list_get\n");
+}
+
 void genListLiteral(CodeGen *gen, ListLitNode *list) {
     if (list->elemsCount == 0) {
         // prazdny zoznam List() je len hlavicka ["List", 0]
@@ -587,6 +620,9 @@ void genCall(CodeGen *gen, CallNode *call) {
         break;
     case CALL_VALUE:
         genValueCall(gen, call);
+        break;
+    case CALL_LIST_INDEX:
+        genListIndex(gen, call);
         break;
     case CALL_BUILTIN:
         isGenerated = genBuiltinCall(gen, call, getBuiltinName(call));
@@ -1536,6 +1572,9 @@ void writeHelper(CodeGen *gen, HelperKind helper) {
     } else if (helper == HELPER_LIST_ALLOC) {
         name = "$list_alloc";
         genListAllocHelper(gen);
+    } else if (helper == HELPER_LIST_GET) {
+        name = "$list_get";
+        genListGetHelper(gen);
     }
 
     if (gen->error != ERR_OK) {
