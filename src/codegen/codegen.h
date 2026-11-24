@@ -51,6 +51,7 @@ typedef enum {
     HELPER_LIST_TAIL,   // $list_tail, zoznam bez prveho prvku
     HELPER_LIST_SUB,    // $list_sub, vyrez zoznamu (drop, take, slice)
     HELPER_LIST_CONCAT, // $list_concat, operator ++
+    HELPER_LIST_RANGE,  // $list_range, List.range
     HELPER_COUNT        // pocet pomocnych funkcii, musi byt posledny
 } HelperKind;
 
@@ -407,6 +408,26 @@ void genListCopyLoop(CodeGen *gen, const char *source, const char *count, const 
  * @param gen je kontext generatora
  */
 void genListConcatHelper(CodeGen *gen);
+
+/**
+ * @brief funkcia na kontrolu, ci hodnota %t4 este patri do rozsahu (koniec %t1, krok %t2)
+ * @param gen je kontext generatora
+ * @param doneLabel je cislo navestia, kam sa skace za koncom rozsahu
+ */
+void genRangeCheck(CodeGen *gen, int doneLabel);
+
+/**
+ * @brief funkcia na vygenerovanie tela pomocnej funkcie $list_range (nulovy krok -> chyba 40)
+ * @param gen je kontext generatora
+ */
+void genListRangeHelper(CodeGen *gen);
+
+/**
+ * @brief funkcia na vygenerovanie volania List.range s 2 alebo 3 argumentmi
+ * @param gen je kontext generatora
+ * @param call je uzol volania
+ */
+void genListRange(CodeGen *gen, CallNode *call);
 
 /**
  * @brief funkcia na vygenerovanie volania metody zoznamu s argumentmi (drop, take, ...)

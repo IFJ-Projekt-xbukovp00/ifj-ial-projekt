@@ -712,6 +712,86 @@ void genListConcatHelper(CodeGen *gen) {
     emit(gen, "PUSHS LF@%%t5\n");
 }
 
+void genRangeCheck(CodeGen *gen, int doneLabel) {
+    int upLabel = newLabel(gen);
+    int okLabel = newLabel(gen);
+
+    // hodnota %t4, koniec %t1, krok %t2; pri kladnom kroku plati i < end,
+    // pri zapornom i > end, inak sa skace na doneLabel
+    emit(gen, "GT LF@%%t7 LF@%%t2 int@0\n");
+    emit(gen, "JUMPIFEQ L$%d LF@%%t7 bool@true\n", upLabel);
+    emit(gen, "GT LF@%%t7 LF@%%t4 LF@%%t1\n");
+    emit(gen, "JUMPIFEQ L$%d LF@%%t7 bool@false\n", doneLabel);
+    emit(gen, "JUMP L$%d\n", okLabel);
+    emit(gen, "LABEL L$%d\n", upLabel);
+    emit(gen, "LT LF@%%t7 LF@%%t4 LF@%%t1\n");
+    emit(gen, "JUMPIFEQ L$%d LF@%%t7 bool@false\n", doneLabel);
+    emit(gen, "LABEL L$%d\n", okLabel);
+}
+
+void genListRangeHelper(CodeGen *gen) {
+    int errorLabel = newLabel(gen);
+    int countLabel = newLabel(gen);
+    int countDoneLabel = newLabel(gen);
+    int fillLabel = newLabel(gen);
+    int fillDoneLabel = newLabel(gen);
+
+    emitDeclaration(gen, "DEFVAR LF@%%t5\n");
+    emitDeclaration(gen, "DEFVAR LF@%%t6\n");
+    emitDeclaration(gen, "DEFVAR LF@%%t7\n");
+
+    // zaciatok %t0, koniec %t1 (bez neho), krok %t2
+    emit(gen, "POPS LF@%%t2\n");
+    emit(gen, "POPS LF@%%t1\n");
+    emit(gen, "POPS LF@%%t0\n");
+    emit(gen, "JUMPIFEQ L$%d LF@%%t2 int@0\n", errorLabel);
+
+    // najprv sa spocita pocet prvkov %t3
+    emit(gen, "MOVE LF@%%t3 int@0\n");
+    emit(gen, "MOVE LF@%%t4 LF@%%t0\n");
+    emit(gen, "LABEL L$%d\n", countLabel);
+    genRangeCheck(gen, countDoneLabel);
+    emit(gen, "ADD LF@%%t3 LF@%%t3 int@1\n");
+    emit(gen, "ADD LF@%%t4 LF@%%t4 LF@%%t2\n");
+    emit(gen, "JUMP L$%d\n", countLabel);
+    emit(gen, "LABEL L$%d\n", countDoneLabel);
+
+    emit(gen, "PUSHS LF@%%t3\n");
+    genListAlloc(gen);
+    emit(gen, "POPS LF@%%t5\n");
+
+    // potom sa prvky postupne zapisu od indexu 2
+    emit(gen, "ADD LF@%%t3 LF@%%t3 int@2\n");
+    emit(gen, "MOVE LF@%%t4 LF@%%t0\n");
+    emit(gen, "MOVE LF@%%t6 int@2\n");
+    emit(gen, "LABEL L$%d\n", fillLabel);
+    emit(gen, "JUMPIFEQ L$%d LF@%%t6 LF@%%t3\n", fillDoneLabel);
+    emit(gen, "ARRAYSET LF@%%t5 LF@%%t6 LF@%%t4\n");
+    emit(gen, "ADD LF@%%t4 LF@%%t4 LF@%%t2\n");
+    emit(gen, "ADD LF@%%t6 LF@%%t6 int@1\n");
+    emit(gen, "JUMP L$%d\n", fillLabel);
+
+    emit(gen, "LABEL L$%d\n", fillDoneLabel);
+    emit(gen, "PUSHS LF@%%t5\n");
+    emit(gen, "POPFRAME\n");
+    emit(gen, "RETURN\n");
+
+    // nulovy krok
+    emit(gen, "LABEL L$%d\n", errorLabel);
+    emit(gen, "EXIT int@40\n");
+}
+
+void genListRange(CodeGen *gen, CallNode *call) {
+    // List.range(od, po) ma krok 1
+    genArgs(gen, call);
+    if (call->argsCount == 2) {
+        emit(gen, "PUSHS int@1\n");
+    }
+
+    useHelper(gen, HELPER_LIST_RANGE);
+    emit(gen, "CALL $list_range\n");
+}
+
 void genListMethodCall(CodeGen *gen, CallNode *call) {
     const MemberNode *member = (const MemberNode *)call->caller;
 
@@ -824,6 +904,8 @@ bool genBuiltinCall(CodeGen *gen, CallNode *call, const char *name) {
         bool isInt = strcmp(name, "readIntMaybe") == 0;
         emit(gen, "READ LF@%%t0 %s\n", isInt ? "int" : "float");
         emit(gen, "PUSHS LF@%%t0\n");
+    } else if (strcmp(name, "List.range") == 0) {
+        genListRange(gen, call);
     } else if (strcmp(name, "readBoolean") == 0) {
         // READ bool vrati true len pre "true", inak nil, to sa berie ako false
         genReadNumber(gen, "bool", "bool@false");
@@ -1769,6 +1851,9 @@ void writeHelper(CodeGen *gen, HelperKind helper) {
     } else if (helper == HELPER_LIST_CONCAT) {
         name = "$list_concat";
         genListConcatHelper(gen);
+    } else if (helper == HELPER_LIST_RANGE) {
+        name = "$list_range";
+        genListRangeHelper(gen);
     }
 
     if (gen->error != ERR_OK) {
