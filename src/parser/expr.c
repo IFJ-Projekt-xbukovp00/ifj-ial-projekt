@@ -260,11 +260,14 @@ static ASTNode *nodeFromToken(const Token *token) {
     }
 }
 
+int (*expr_body_hook)(ASTNode **out, bool *endedByBlock) = NULL;
+
 typedef struct {
     Token *token;
     Token lookahead[2]; // 2-tokenovy lookahead pre f( a lambdu () => / (a: T)
     int lookaheadCount;
     int parenDepth;    // pocet otvorenych ( v ramci vyrazu
+    bool endedByBlock; // vyraz skoncil blokom, dalsi token uz patri parseru
     bool afterOperand; // posledny bol i alebo ), takze -/+ je binarne
 } PsaState;
 
@@ -576,7 +579,8 @@ static int parseLambda(PsaState *state, ASTNode **out) {
     }
 
     ASTNode *body = NULL;
-    err = expr_parse(state->token, NULL, &body);
+    err = expr_body_hook != NULL ? expr_body_hook(&body, &state->endedByBlock)
+                                 : expr_parse(state->token, NULL, &body);
     if (err != ERR_OK) {
         astFree(node);
         return err;
@@ -659,7 +663,14 @@ static int parseInterpString(PsaState *state, ASTNode **out) {
 // zaradi token do stlpca tabulky, vsetko mimo vyrazu je $
 static int classifyToken(PsaState *state, PtIndex *column) {
     const Token *token = state->token;
+    if (state->endedByBlock) {
+        *column = PT_DOLLAR;
+        return ERR_OK;
+    }
     switch (token->type) {
+    case TOK_KW_IF: // za operandom je to uz straz alebo chyba
+        *column = (expr_body_hook != NULL && !state->afterOperand) ? PT_ID : PT_DOLLAR;
+        break;
     case TOK_KW_LIST: // List(...) a List.range(...) ako identifikator
     case TOK_IDENTIFIER: {
         // to/until/by chodia z lexera ako bezny identifikator
@@ -809,6 +820,10 @@ static int takeArguments(StackItem *items, int count, ASTNode ***args, size_t *a
     }
 
     int inner = count - 2;
+    if (inner >= 2 && isTerminal(&items[inner], PT_COMMA) &&
+        items[count - 1].line > items[inner].line) {
+        inner--; // koncova ciarka, ) je az na dalsom riadku
+    }
     if (inner % 2 == 0) {
         return ERR_SYNTAX;
     }
@@ -1093,6 +1108,11 @@ int expr_parse(Token *token, ASTNode *first, ASTNode **output) {
                 }
             } else if (input == PT_ID && token->type == TOK_LPAREN) {
                 if ((err = parseLambda(&state, &term.node)) != ERR_OK) {
+                    goto fail;
+                }
+                consumedNext = true;
+            } else if (input == PT_ID && token->type == TOK_KW_IF) {
+                if ((err = expr_body_hook(&term.node, &state.endedByBlock)) != ERR_OK) {
                     goto fail;
                 }
                 consumedNext = true;

@@ -33,6 +33,11 @@
 #include "expr_stack.h"
 #include "token.h"
 
+#include <stdbool.h>
+
+/** @brief Callback parsera na telo: blok, if alebo výraz; nastaví sa v parser_parse. */
+extern int (*expr_body_hook)(ASTNode **out, bool *endedByBlock);
+
 /**
  * @brief precedencna analyza jedneho vyrazu
  * @param token prvy token vyrazu, na vystupe prvy token za vyrazom

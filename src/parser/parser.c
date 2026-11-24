@@ -78,8 +78,8 @@ static int parse_expr(ASTNode *first, ASTNode **out) {
     if (first == NULL && check(TOK_KW_IF)) {
         TRY(parse_if_expr(out));
     } else {
-        TRY(expr_parse(&currentToken, first, out));
         previousType = TOK_COUNT;
+        TRY(expr_parse(&currentToken, first, out));
     }
     if (check(TOK_KW_MATCH)) {
         ASTNode *matchNode = NULL;
@@ -441,6 +441,12 @@ static int parse_init_rhs(ASTNode **out) {
     return parse_expr(NULL, out);
 }
 
+static int parse_expr_body(ASTNode **out, bool *endedByBlock) {
+    int err = parse_init_rhs(out);
+    *endedByBlock = (previousType == TOK_DEDENT);
+    return err;
+}
+
 static int parse_var_decl(ASTNode **out);
 static int parse_return_statem(ASTNode **out);
 static int parse_if_statem(ASTNode **out);
@@ -704,6 +710,7 @@ int parser_parse(ASTNode **program) {
         return ERR_INTERNAL;
     }
     previousType = TOK_COUNT;
+    expr_body_hook = parse_expr_body;
     int err = advance();
     if (err == ERR_OK) {
         err = parse_program(program);
