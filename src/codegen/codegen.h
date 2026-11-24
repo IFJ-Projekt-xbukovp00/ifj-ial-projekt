@@ -42,15 +42,16 @@
  * Vypisu sa raz na konci programu, ale len tie, ktore sa niekde pouzili.
  */
 typedef enum {
-    HELPER_SUBSTR,     // $subStr
-    HELPER_ORD,        // $ord
-    HELPER_TOSTR_ANY,  // $toStr_any, toStr pre hodnotu, ktorej typ sa zisti az za behu
-    HELPER_LIST_ALLOC, // $list_alloc, novy zoznam danej dlzky
-    HELPER_LIST_GET,   // $list_get, prvok na indexe s kontrolou
-    HELPER_LIST_HEAD,  // $list_head, prvy prvok
-    HELPER_LIST_TAIL,  // $list_tail, zoznam bez prveho prvku
-    HELPER_LIST_SUB,   // $list_sub, vyrez zoznamu (drop, take, slice)
-    HELPER_COUNT       // pocet pomocnych funkcii, musi byt posledny
+    HELPER_SUBSTR,      // $subStr
+    HELPER_ORD,         // $ord
+    HELPER_TOSTR_ANY,   // $toStr_any, toStr pre hodnotu, ktorej typ sa zisti az za behu
+    HELPER_LIST_ALLOC,  // $list_alloc, novy zoznam danej dlzky
+    HELPER_LIST_GET,    // $list_get, prvok na indexe s kontrolou
+    HELPER_LIST_HEAD,   // $list_head, prvy prvok
+    HELPER_LIST_TAIL,   // $list_tail, zoznam bez prveho prvku
+    HELPER_LIST_SUB,    // $list_sub, vyrez zoznamu (drop, take, slice)
+    HELPER_LIST_CONCAT, // $list_concat, operator ++
+    HELPER_COUNT        // pocet pomocnych funkcii, musi byt posledny
 } HelperKind;
 
 /** @brief pocet vstavanych funkcii, ktore mozu mat obal $wrap$meno */
@@ -391,6 +392,21 @@ void genMoveIf(CodeGen *gen, const char *operator, const char * left, const char
  * @param gen je kontext generatora
  */
 void genListSubHelper(CodeGen *gen);
+
+/**
+ * @brief funkcia na kopirovanie prvkov zoznamu do noveho zoznamu v %t5 (pouziva %t4, %t6, %t7)
+ * @param gen je kontext generatora
+ * @param source je zdrojovy zoznam
+ * @param count je pocet kopirovanych prvkov
+ * @param offset je index v novom zozname, kam ide prvy prvok
+ */
+void genListCopyLoop(CodeGen *gen, const char *source, const char *count, const char *offset);
+
+/**
+ * @brief funkcia na vygenerovanie tela pomocnej funkcie $list_concat (operator ++)
+ * @param gen je kontext generatora
+ */
+void genListConcatHelper(CodeGen *gen);
 
 /**
  * @brief funkcia na vygenerovanie volania metody zoznamu s argumentmi (drop, take, ...)

@@ -674,6 +674,44 @@ void genListSubHelper(CodeGen *gen) {
     emit(gen, "PUSHS LF@%%t5\n");
 }
 
+void genListCopyLoop(CodeGen *gen, const char *source, const char *count, const char *offset) {
+    int loopLabel = newLabel(gen);
+    int doneLabel = newLabel(gen);
+
+    // prvky 0 az count - 1 zo source sa skopiruju do %t5 od indexu offset
+    emit(gen, "MOVE LF@%%t6 int@0\n");
+    emit(gen, "LABEL L$%d\n", loopLabel);
+    emit(gen, "JUMPIFEQ L$%d LF@%%t6 %s\n", doneLabel, count);
+    emit(gen, "ADD LF@%%t4 LF@%%t6 int@2\n");
+    emit(gen, "ARRAYGET LF@%%t7 %s LF@%%t4\n", source);
+    emit(gen, "ADD LF@%%t4 LF@%%t4 %s\n", offset);
+    emit(gen, "ARRAYSET LF@%%t5 LF@%%t4 LF@%%t7\n");
+    emit(gen, "ADD LF@%%t6 LF@%%t6 int@1\n");
+    emit(gen, "JUMP L$%d\n", loopLabel);
+    emit(gen, "LABEL L$%d\n", doneLabel);
+}
+
+void genListConcatHelper(CodeGen *gen) {
+    emitDeclaration(gen, "DEFVAR LF@%%t5\n");
+    emitDeclaration(gen, "DEFVAR LF@%%t6\n");
+    emitDeclaration(gen, "DEFVAR LF@%%t7\n");
+
+    // lavy zoznam %t0 s dlzkou %t2, pravy %t1 s dlzkou %t3
+    emit(gen, "POPS LF@%%t1\n");
+    emit(gen, "POPS LF@%%t0\n");
+    emit(gen, "ARRAYGET LF@%%t2 LF@%%t0 int@1\n");
+    emit(gen, "ARRAYGET LF@%%t3 LF@%%t1 int@1\n");
+    emit(gen, "ADD LF@%%t4 LF@%%t2 LF@%%t3\n");
+    emit(gen, "PUSHS LF@%%t4\n");
+    genListAlloc(gen);
+    emit(gen, "POPS LF@%%t5\n");
+
+    // najprv prvky laveho, za nimi prvky praveho zoznamu
+    genListCopyLoop(gen, "LF@%t0", "LF@%t2", "int@0");
+    genListCopyLoop(gen, "LF@%t1", "LF@%t3", "LF@%t2");
+    emit(gen, "PUSHS LF@%%t5\n");
+}
+
 void genListMethodCall(CodeGen *gen, CallNode *call) {
     const MemberNode *member = (const MemberNode *)call->caller;
 
@@ -1037,6 +1075,10 @@ void genBinary(CodeGen *gen, BinaryNode *binary) {
 
     if (binary->operator == TOK_PLUS && getKind((ASTNode *)binary) == TY_STRING) {
         genConcat(gen);
+    } else if (binary->operator == TOK_CONCAT) {
+        // spojenie dvoch zoznamov vytvori novy zoznam
+        useHelper(gen, HELPER_LIST_CONCAT);
+        emit(gen, "CALL $list_concat\n");
     } else if (isUnion && binary->operator == TOK_EQUAL) {
         genUnionEquals(gen);
     } else if (isUnion && binary->operator == TOK_NOT_EQUAL) {
@@ -1724,6 +1766,9 @@ void writeHelper(CodeGen *gen, HelperKind helper) {
     } else if (helper == HELPER_LIST_SUB) {
         name = "$list_sub";
         genListSubHelper(gen);
+    } else if (helper == HELPER_LIST_CONCAT) {
+        name = "$list_concat";
+        genListConcatHelper(gen);
     }
 
     if (gen->error != ERR_OK) {
