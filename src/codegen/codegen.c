@@ -147,6 +147,10 @@ void initCodeGen(CodeGen *gen, FILE *out) {
         gen->helperUsed[helper] = false;
     }
 
+    for (int builtinIndex = 0; builtinIndex < BUILTIN_COUNT; builtinIndex++) {
+        gen->wrapperSymbols[builtinIndex] = NULL;
+    }
+
     // oba buffre sa inicializuju vzdy, aby sa dali uvolnit aj pri chybe
     bool isCodeReady = dynstr_init(&gen->code);
     bool isDeclarationsReady = dynstr_init(&gen->declarations);
@@ -165,6 +169,21 @@ void freeCodeGen(CodeGen *gen) {
 int newLabel(CodeGen *gen) {
     gen->labelCounter++;
     return gen->labelCounter;
+}
+
+// vstavane funkcie, ktore sa daju pouzit ako hodnota (cez obal $wrap$meno)
+const char *builtinNames[BUILTIN_COUNT] = {
+    "print",  "readLine", "readInt", "readDouble",  "toStr",        "toInt",          "strLength",
+    "subStr", "ord",      "chr",     "readBoolean", "readIntMaybe", "readDoubleMaybe"};
+
+int findBuiltin(const char *name) {
+    for (int builtinIndex = 0; builtinIndex < BUILTIN_COUNT; builtinIndex++) {
+        if (strcmp(builtinNames[builtinIndex], name) == 0) {
+            return builtinIndex;
+        }
+    }
+
+    return -1;
 }
 
 TypeKind getKind(ASTNode *node) {
@@ -201,7 +220,7 @@ void genPrint(CodeGen *gen, CallNode *call) {
     if (kind == TY_UNIT) {
         // hodnota Unit je za behu nil, vypisuje sa ako "()"
         emit(gen, "WRITE string@()\n");
-    } else if (kind == TY_UNION) {
+    } else if (kind == TY_UNION || kind == TY_ANY) {
         // pri zjednoteni sa az za behu zisti, ci to nie je () (nil)
         int writeLabel = newLabel(gen);
 
@@ -296,8 +315,8 @@ void genValueToStr(CodeGen *gen, Type *type) {
         emit(gen, "LABEL L$%d\n", trueLabel);
         emit(gen, "PUSHS string@true\n");
         emit(gen, "LABEL L$%d\n", endLabel);
-    } else if (type->kind == TY_UNION) {
-        // typ hodnoty zjednotenia sa zisti az za behu
+    } else if (type->kind == TY_UNION || type->kind == TY_ANY) {
+        // typ hodnoty zjednotenia (aj Any v obale) sa zisti az za behu
         useHelper(gen, HELPER_TOSTR_ANY);
         emit(gen, "CALL $toStr_any\n");
     }
@@ -733,6 +752,17 @@ void genId(CodeGen *gen, IDNode *id) {
         // telo sa vyhodnoti pri kazdom pouziti znova
         const DefFuncNode *function = (const DefFuncNode *)id->symbol->definition;
         emit(gen, "CALL f$%s\n", function->name);
+        return;
+    }
+
+    if (id->idKind == ID_FUNC_REF && id->symbol->kind == SYM_BUILTIN) {
+        // vstavana funkcia nema vlastne navestie, pouzije sa jej obal
+        int builtinIndex = findBuiltin(id->name);
+
+        if (builtinIndex >= 0) {
+            gen->wrapperSymbols[builtinIndex] = id->symbol;
+        }
+        emit(gen, "PUSHS string@$wrap$%s\n", id->name);
         return;
     }
 
@@ -1496,6 +1526,56 @@ void writeHelpers(CodeGen *gen) {
     }
 }
 
+void genWrapper(CodeGen *gen, int builtinIndex) {
+    const Symbol *builtin = gen->wrapperSymbols[builtinIndex];
+    const char *name = builtinNames[builtinIndex];
+    size_t paramCount = builtin->type->func.params.len;
+
+    // argumenty obalu su ako parametre, vstavana funkcia ich cita ako premenne
+    Symbol paramSymbols[3];
+    IDNode paramIds[3];
+    ASTNode *args[3];
+    IDNode callerId = {{AST_ID, 0, NULL}, (char *)name, ID_UNRESOLVED, NULL};
+    CallNode call = {{AST_CALL, 0, builtin->type->func.ret},
+                     (ASTNode *)&callerId,
+                     args,
+                     paramCount,
+                     CALL_BUILTIN,
+                     NULL};
+
+    emitHelperVars(gen);
+
+    for (size_t paramIndex = 0; paramIndex < paramCount && paramIndex < 3; paramIndex++) {
+        memset(&paramSymbols[paramIndex], 0, sizeof(Symbol));
+        paramSymbols[paramIndex].kind = SYM_PARAMETER;
+        paramSymbols[paramIndex].type = builtin->type->func.params.items[paramIndex];
+
+        paramIds[paramIndex] = (IDNode){
+            {AST_ID, 0, paramSymbols[paramIndex].type}, "arg", ID_VAR, &paramSymbols[paramIndex]};
+        args[paramIndex] = (ASTNode *)&paramIds[paramIndex];
+        defineLocal(gen, "arg", &paramSymbols[paramIndex]);
+    }
+
+    for (size_t paramIndex = paramCount; paramIndex > 0; paramIndex--) {
+        emit(gen, "POPS ");
+        emitVar(gen, "arg", &paramSymbols[paramIndex - 1]);
+        emit(gen, "\n");
+    }
+
+    genBuiltinCall(gen, &call, name);
+
+    if (gen->error != ERR_OK) {
+        return;
+    }
+
+    fprintf(gen->out, "LABEL $wrap$%s\n", name);
+    fprintf(gen->out, "CREATEFRAME\n");
+    fprintf(gen->out, "PUSHFRAME\n");
+    writeBuffers(gen);
+    fprintf(gen->out, "POPFRAME\n");
+    fprintf(gen->out, "RETURN\n");
+}
+
 int codegenGenerate(ProgramNode *prog, FILE *out) {
     CodeGen gen;
     initCodeGen(&gen, out);
@@ -1533,6 +1613,14 @@ int codegenGenerate(ProgramNode *prog, FILE *out) {
     for (size_t lambdaIndex = 0; lambdaIndex < gen.lambdasCount && gen.error == ERR_OK;
          lambdaIndex++) {
         genLambda(&gen, gen.lambdas[lambdaIndex], (int)lambdaIndex);
+    }
+
+    // obaly vstavanych funkcii pouzitych ako hodnota
+    for (int builtinIndex = 0; builtinIndex < BUILTIN_COUNT && gen.error == ERR_OK;
+         builtinIndex++) {
+        if (gen.wrapperSymbols[builtinIndex] != NULL) {
+            genWrapper(&gen, builtinIndex);
+        }
     }
 
     // pomocne funkcie za behu sa vypisu az za vsetkymi funkciami

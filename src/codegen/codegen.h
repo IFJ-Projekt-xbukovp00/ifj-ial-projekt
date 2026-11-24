@@ -48,22 +48,26 @@ typedef enum {
     HELPER_COUNT      // pocet pomocnych funkcii, musi byt posledny
 } HelperKind;
 
+/** @brief pocet vstavanych funkcii, ktore mozu mat obal $wrap$meno */
+#define BUILTIN_COUNT 13
+
 /**
  * @brief kontext generatora, prenasa sa medzi vsetkymi funkciami generatora
  */
 typedef struct {
-    FILE *out;                     // vystupny subor
-    DynStr declarations;           // DEFVAR vsetkych premennych, vypisu sa pred kodom
-    DynStr code;                   // vygenerovany kod, vypise sa az na konci
-    int labelCounter;              // pocitadlo navesti L$N
-    int varCounter;                // pocitadlo premennych, cislo N v mene x$N
-    int hiddenCounter;             // pocitadlo skrytych premennych %hN
-    LambdaNode **lambdas;          // lambdy, ktore sa vypisu za funkciami (lambda$N)
-    size_t lambdasCount;           // pocet lambd
-    size_t lambdasCapacity;        // velkost pola lambd
-    DefFuncNode *function;         // prave generovana funkcia
-    int error;                     // ERR_INTERNAL ak zlyhala alokacia
-    bool helperUsed[HELPER_COUNT]; // ktore pomocne funkcie sa maju vypisat
+    FILE *out;                             // vystupny subor
+    DynStr declarations;                   // DEFVAR vsetkych premennych, vypisu sa pred kodom
+    DynStr code;                           // vygenerovany kod, vypise sa az na konci
+    int labelCounter;                      // pocitadlo navesti L$N
+    int varCounter;                        // pocitadlo premennych, cislo N v mene x$N
+    int hiddenCounter;                     // pocitadlo skrytych premennych %hN
+    LambdaNode **lambdas;                  // lambdy, ktore sa vypisu za funkciami (lambda$N)
+    size_t lambdasCount;                   // pocet lambd
+    size_t lambdasCapacity;                // velkost pola lambd
+    DefFuncNode *function;                 // prave generovana funkcia
+    int error;                             // ERR_INTERNAL ak zlyhala alokacia
+    bool helperUsed[HELPER_COUNT];         // ktore pomocne funkcie sa maju vypisat
+    Symbol *wrapperSymbols[BUILTIN_COUNT]; // vstavane funkcie pouzite ako hodnota, inak NULL
 } CodeGen;
 
 /**
@@ -85,6 +89,20 @@ void writeHelper(CodeGen *gen, HelperKind helper);
  * @param gen je kontext generatora
  */
 void writeHelpers(CodeGen *gen);
+
+/**
+ * @brief funkcia na najdenie poradia vstavanej funkcie v tabulke obalov
+ * @param name je meno vstavanej funkcie
+ * @return index v tabulke, alebo -1 ak tam nie je
+ */
+int findBuiltin(const char *name);
+
+/**
+ * @brief funkcia na vygenerovanie obalu $wrap$meno pre vstavanu funkciu pouzitu ako hodnota
+ * @param gen je kontext generatora
+ * @param builtinIndex je index vstavanej funkcie v tabulke obalov
+ */
+void genWrapper(CodeGen *gen, int builtinIndex);
 
 /**
  * @brief funkcia na vygenerovanie programu v jazyku IFJcode26
