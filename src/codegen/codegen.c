@@ -1377,8 +1377,12 @@ void genLambda(CodeGen *gen, LambdaNode *lambda, int lambdaId) {
         emit(gen, "\n");
     }
 
-    // hodnota tela je navratova hodnota lambdy
-    genExpr(gen, lambda->body);
+    // lambda nie je ziadna funkcia z programu, return v nej byt nemoze
+    gen->function = NULL;
+
+    // telo je vyraz alebo blok, jeho hodnota je navratova hodnota lambdy,
+    // lokalne premenne tela sa definuju v ramci lambdy (DEFVAR ide pred kod)
+    genValue(gen, lambda->body);
 
     if (gen->error != ERR_OK) {
         return;
