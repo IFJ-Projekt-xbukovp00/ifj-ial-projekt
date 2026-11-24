@@ -692,6 +692,11 @@ void genListMethodCall(CodeGen *gen, CallNode *call) {
         genArgs(gen, call);
         useHelper(gen, HELPER_LIST_SUB);
         emit(gen, "CALL $list_sub\n");
+    } else if (strcmp(member->name, "slice") == 0) {
+        // slice(od, po) ma presne argumenty $list_sub, hranice sa orezu v nej
+        genArgs(gen, call);
+        useHelper(gen, HELPER_LIST_SUB);
+        emit(gen, "CALL $list_sub\n");
     }
 }
 
