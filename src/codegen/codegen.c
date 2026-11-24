@@ -621,6 +621,80 @@ void genListTailHelper(CodeGen *gen) {
     emit(gen, "EXIT int@40\n");
 }
 
+void genMoveIf(CodeGen *gen, const char *operator, const char *left, const char *right,
+               const char *target, const char *value) {
+    int skipLabel = newLabel(gen);
+
+    // if (left operator right) target = value
+    emit(gen, "%s LF@%%t4 %s %s\n", operator, left, right);
+    emit(gen, "JUMPIFEQ L$%d LF@%%t4 bool@false\n", skipLabel);
+    emit(gen, "MOVE %s %s\n", target, value);
+    emit(gen, "LABEL L$%d\n", skipLabel);
+}
+
+void genListSubHelper(CodeGen *gen) {
+    int loopLabel = newLabel(gen);
+    int doneLabel = newLabel(gen);
+
+    emitDeclaration(gen, "DEFVAR LF@%%t5\n");
+    emitDeclaration(gen, "DEFVAR LF@%%t6\n");
+
+    // zoznam %t0, od %t1, po %t2 (bez neho), dlzka %t3
+    emit(gen, "POPS LF@%%t2\n");
+    emit(gen, "POPS LF@%%t1\n");
+    emit(gen, "POPS LF@%%t0\n");
+    emit(gen, "ARRAYGET LF@%%t3 LF@%%t0 int@1\n");
+
+    // hranice sa orezu do zoznamu, ako v Scale (drop(-1), take(100), ...)
+    genMoveIf(gen, "LT", "LF@%t1", "int@0", "LF@%t1", "int@0");
+    genMoveIf(gen, "GT", "LF@%t1", "LF@%t3", "LF@%t1", "LF@%t3");
+    genMoveIf(gen, "GT", "LF@%t2", "LF@%t3", "LF@%t2", "LF@%t3");
+    genMoveIf(gen, "LT", "LF@%t2", "LF@%t1", "LF@%t2", "LF@%t1");
+
+    // novy zoznam ma dlzku po - od
+    emit(gen, "SUB LF@%%t3 LF@%%t2 LF@%%t1\n");
+    emit(gen, "PUSHS LF@%%t3\n");
+    genListAlloc(gen);
+    emit(gen, "POPS LF@%%t4\n");
+    emit(gen, "MOVE LF@%%t5 LF@%%t4\n");
+
+    // prvok i noveho zoznamu je prvok od + i stareho
+    emit(gen, "MOVE LF@%%t6 int@0\n");
+    emit(gen, "LABEL L$%d\n", loopLabel);
+    emit(gen, "JUMPIFEQ L$%d LF@%%t6 LF@%%t3\n", doneLabel);
+    emit(gen, "ADD LF@%%t2 LF@%%t1 LF@%%t6\n");
+    emit(gen, "ADD LF@%%t2 LF@%%t2 int@2\n");
+    emit(gen, "ARRAYGET LF@%%t2 LF@%%t0 LF@%%t2\n");
+    emit(gen, "ADD LF@%%t4 LF@%%t6 int@2\n");
+    emit(gen, "ARRAYSET LF@%%t5 LF@%%t4 LF@%%t2\n");
+    emit(gen, "ADD LF@%%t6 LF@%%t6 int@1\n");
+    emit(gen, "JUMP L$%d\n", loopLabel);
+
+    emit(gen, "LABEL L$%d\n", doneLabel);
+    emit(gen, "PUSHS LF@%%t5\n");
+}
+
+void genListMethodCall(CodeGen *gen, CallNode *call) {
+    const MemberNode *member = (const MemberNode *)call->caller;
+
+    // zoznam je na zasobniku pred argumentmi
+    genExpr(gen, member->object);
+
+    if (strcmp(member->name, "drop") == 0) {
+        // drop(n) je vyrez od n po koniec
+        genArgs(gen, call);
+        emit(gen, "PUSHS int@%lld\n", 9223372036854775807LL);
+        useHelper(gen, HELPER_LIST_SUB);
+        emit(gen, "CALL $list_sub\n");
+    } else if (strcmp(member->name, "take") == 0) {
+        // take(n) je vyrez od 0 po n
+        emit(gen, "PUSHS int@0\n");
+        genArgs(gen, call);
+        useHelper(gen, HELPER_LIST_SUB);
+        emit(gen, "CALL $list_sub\n");
+    }
+}
+
 void genListIndex(CodeGen *gen, CallNode *call) {
     // lst(i): zoznam a index na zasobnik, prvok vrati $list_get
     genExpr(gen, call->caller);
@@ -675,6 +749,9 @@ void genCall(CodeGen *gen, CallNode *call) {
         break;
     case CALL_LIST_INDEX:
         genListIndex(gen, call);
+        break;
+    case CALL_LIST_METHOD:
+        genListMethodCall(gen, call);
         break;
     case CALL_BUILTIN:
         isGenerated = genBuiltinCall(gen, call, getBuiltinName(call));
@@ -1639,6 +1716,9 @@ void writeHelper(CodeGen *gen, HelperKind helper) {
     } else if (helper == HELPER_LIST_TAIL) {
         name = "$list_tail";
         genListTailHelper(gen);
+    } else if (helper == HELPER_LIST_SUB) {
+        name = "$list_sub";
+        genListSubHelper(gen);
     }
 
     if (gen->error != ERR_OK) {

@@ -49,6 +49,7 @@ typedef enum {
     HELPER_LIST_GET,   // $list_get, prvok na indexe s kontrolou
     HELPER_LIST_HEAD,  // $list_head, prvy prvok
     HELPER_LIST_TAIL,  // $list_tail, zoznam bez prveho prvku
+    HELPER_LIST_SUB,   // $list_sub, vyrez zoznamu (drop, take, slice)
     HELPER_COUNT       // pocet pomocnych funkcii, musi byt posledny
 } HelperKind;
 
@@ -372,6 +373,31 @@ void genListHeadHelper(CodeGen *gen);
  * @param gen je kontext generatora
  */
 void genListTailHelper(CodeGen *gen);
+
+/**
+ * @brief funkcia na podmienene priradenie v pomocnej funkcii (pouziva %t4)
+ * @param gen je kontext generatora
+ * @param operator je instrukcia porovnania (LT, GT, EQ)
+ * @param left je lavy operand porovnania
+ * @param right je pravy operand porovnania
+ * @param target je premenna, do ktorej sa priraduje
+ * @param value je priradovana hodnota
+ */
+void genMoveIf(CodeGen *gen, const char *operator, const char * left, const char *right,
+               const char *target, const char *value);
+
+/**
+ * @brief funkcia na vygenerovanie tela pomocnej funkcie $list_sub (zoznam, od, po)
+ * @param gen je kontext generatora
+ */
+void genListSubHelper(CodeGen *gen);
+
+/**
+ * @brief funkcia na vygenerovanie volania metody zoznamu s argumentmi (drop, take, ...)
+ * @param gen je kontext generatora
+ * @param call je uzol volania metody
+ */
+void genListMethodCall(CodeGen *gen, CallNode *call);
 
 /**
  * @brief funkcia na vygenerovanie indexovania zoznamu lst(i)
