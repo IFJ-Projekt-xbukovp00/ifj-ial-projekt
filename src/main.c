@@ -27,10 +27,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "ast.h"
 #include "error.h"
 #include "parser.h"
 #include "scanner.h"
 #include "semantic.h"
+#include "symtable.h"
+#include "types.h"
 
 #include <stdio.h>
 
@@ -44,29 +47,17 @@ int main(void) {
     ASTNode *program = NULL;
     int result = parser_parse(&program);
     scanner_free();
-        if (result != ERR_OK) {
-        astFree(program);
-        type_free_all();
-        return result;
-}
 
-    // TODO: Parser not implemented yet
-    /*
-    ASTNode *program = NULL;
-    int result = parser_parse(&program);
-    if (result != ERR_OK){
-        return result;
+    if (result == ERR_OK) {
+        Symtable table;
+        ErrorCode semanticError = ERR_OK;
+        symtableInit(&table);
+        semanticAnalyze(program, &table, &semanticError);
+        result = semanticError;
+
+        symtableFree(&table);
     }
 
-    Symtable table;
-    ErrorCode semanticError = ERR_OK;
-    symtableInit(&table);
-    semanticAnalyze(program, &table, &semanticError);
-    result = semanticError;
-
-    symtableFree(&table);
-    type_free_all();
-    */
     astFree(program);
     type_free_all();
     return result;
