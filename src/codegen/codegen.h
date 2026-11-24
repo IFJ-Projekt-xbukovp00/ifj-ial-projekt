@@ -444,6 +444,24 @@ void genRangeToList(CodeGen *gen, RangeNode *range);
 void genListToStrHelper(CodeGen *gen);
 
 /**
+ * @brief funkcia na zavolanie funkcnej hodnoty s jednym argumentom z pomocnej funkcie
+ * @param gen je kontext generatora
+ * @param function je premenna s navestim funkcie
+ * @param arg je argument (premenna alebo konstanta)
+ * @param result je premenna, kam sa ulozi vysledok
+ */
+void genCallFunctionValue(CodeGen *gen, const char *function, const char *arg, const char *result);
+
+/**
+ * @brief funkcia na volanie metody zoznamu s funkciou ako argumentom (filter, ...)
+ * @param gen je kontext generatora
+ * @param call je uzol volania metody, zoznam uz je na zasobniku
+ * @param helper je pomocna funkcia, ktora metodu vykona
+ * @param name je navestie pomocnej funkcie
+ */
+void genListPredicateCall(CodeGen *gen, CallNode *call, HelperKind helper, const char *name);
+
+/**
  * @brief funkcia na vygenerovanie volania metody zoznamu s argumentmi (drop, take, ...)
  * @param gen je kontext generatora
  * @param call je uzol volania metody

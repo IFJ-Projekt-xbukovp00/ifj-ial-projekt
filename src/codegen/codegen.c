@@ -893,6 +893,22 @@ void genListToStrHelper(CodeGen *gen) {
     emit(gen, "PUSHS LF@%%t2\n");
 }
 
+void genCallFunctionValue(CodeGen *gen, const char *function, const char *arg, const char *result) {
+    // funkcna hodnota je retazec s navestim, argument ide na zasobnik
+    // a vysledok si funkcia necha na zasobniku, rovnako ako pri beznom volani
+    // volana funkcia si vytvori vlastny ramec, nas LF sa po jej POPFRAME vrati
+    emit(gen, "PUSHS %s\n", arg);
+    emit(gen, "CALL %s\n", function);
+    emit(gen, "POPS %s\n", result);
+}
+
+void genListPredicateCall(CodeGen *gen, CallNode *call, HelperKind helper, const char *name) {
+    // zoznam je uz na zasobniku, za nim ide funkcia (lambda alebo referencia)
+    genArgs(gen, call);
+    useHelper(gen, helper);
+    emit(gen, "CALL %s\n", name);
+}
+
 void genListMethodCall(CodeGen *gen, CallNode *call) {
     const MemberNode *member = (const MemberNode *)call->caller;
 
