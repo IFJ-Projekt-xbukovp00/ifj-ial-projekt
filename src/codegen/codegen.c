@@ -220,13 +220,26 @@ void genPrint(CodeGen *gen, CallNode *call) {
     if (kind == TY_UNIT) {
         // hodnota Unit je za behu nil, vypisuje sa ako "()"
         emit(gen, "WRITE string@()\n");
+    } else if (kind == TY_LIST) {
+        // zoznam sa vypise rovnako ako jeho toString
+        emit(gen, "PUSHS LF@%%t0\n");
+        genValueToStr(gen, arg->type);
+        emit(gen, "POPS LF@%%t0\n");
+        emit(gen, "WRITE LF@%%t0\n");
     } else if (kind == TY_UNION || kind == TY_ANY) {
-        // pri zjednoteni sa az za behu zisti, ci to nie je () (nil)
+        // pri zjednoteni sa az za behu zisti, ci to nie je () (nil) alebo zoznam
         int writeLabel = newLabel(gen);
+        int notNilLabel = newLabel(gen);
 
         emit(gen, "TYPE LF@%%t1 LF@%%t0\n");
-        emit(gen, "JUMPIFNEQ L$%d LF@%%t1 string@nil\n", writeLabel);
+        emit(gen, "JUMPIFNEQ L$%d LF@%%t1 string@nil\n", notNilLabel);
         emit(gen, "MOVE LF@%%t0 string@()\n");
+        emit(gen, "LABEL L$%d\n", notNilLabel);
+        emit(gen, "JUMPIFNEQ L$%d LF@%%t1 string@array\n", writeLabel);
+        emit(gen, "PUSHS LF@%%t0\n");
+        useHelper(gen, HELPER_TOSTR_ANY);
+        emit(gen, "CALL $toStr_any\n");
+        emit(gen, "POPS LF@%%t0\n");
         emit(gen, "LABEL L$%d\n", writeLabel);
         emit(gen, "WRITE LF@%%t0\n");
     } else {
@@ -444,6 +457,8 @@ void genToStrAnyHelper(CodeGen *gen) {
     int boolLabel = newLabel(gen);
     int trueLabel = newLabel(gen);
     int nilLabel = newLabel(gen);
+    int arrayLabel = newLabel(gen);
+    int classLabel = newLabel(gen);
     int endLabel = newLabel(gen);
 
     // hodnota zjednotenia nema staticky typ, rozhoduje sa podla TYPE za behu
@@ -453,6 +468,7 @@ void genToStrAnyHelper(CodeGen *gen) {
     emit(gen, "JUMPIFEQ L$%d LF@%%t1 string@float\n", floatLabel);
     emit(gen, "JUMPIFEQ L$%d LF@%%t1 string@bool\n", boolLabel);
     emit(gen, "JUMPIFEQ L$%d LF@%%t1 string@nil\n", nilLabel);
+    emit(gen, "JUMPIFEQ L$%d LF@%%t1 string@array\n", arrayLabel);
 
     // retazec sa vrati tak, ako je
     emit(gen, "PUSHS LF@%%t0\n");
@@ -479,6 +495,20 @@ void genToStrAnyHelper(CodeGen *gen) {
     // hodnota () typu Unit je za behu nil
     emit(gen, "LABEL L$%d\n", nilLabel);
     emit(gen, "PUSHS string@()\n");
+    emit(gen, "JUMP L$%d\n", endLabel);
+
+    // pole je zoznam (aj vnoreny, $list_toStr vola spat $toStr_any) alebo trieda
+    emit(gen, "LABEL L$%d\n", arrayLabel);
+    emit(gen, "ARRAYGET LF@%%t1 LF@%%t0 int@0\n");
+    emit(gen, "JUMPIFNEQ L$%d LF@%%t1 string@List\n", classLabel);
+    emit(gen, "PUSHS LF@%%t0\n");
+    useHelper(gen, HELPER_LIST_TOSTR);
+    emit(gen, "CALL $list_toStr\n");
+    emit(gen, "JUMP L$%d\n", endLabel);
+
+    // vypis triedy nie je definovany, vypise sa aspon jej meno
+    emit(gen, "LABEL L$%d\n", classLabel);
+    emit(gen, "PUSHS LF@%%t1\n");
 
     emit(gen, "LABEL L$%d\n", endLabel);
 }
