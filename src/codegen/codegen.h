@@ -353,6 +353,13 @@ void genListAllocHelper(CodeGen *gen);
 void genListAlloc(CodeGen *gen);
 
 /**
+ * @brief funkcia na vygenerovanie zoznamu List(a, b, ...)
+ * @param gen je kontext generatora
+ * @param list je uzol zoznamu
+ */
+void genListLiteral(CodeGen *gen, ListLitNode *list);
+
+/**
  * @brief funkcia na vygenerovanie volania funkcie, vysledok ostane na zasobniku
  * @param gen je kontext generatora
  * @param call je uzol volania

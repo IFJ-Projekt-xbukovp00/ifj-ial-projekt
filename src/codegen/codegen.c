@@ -545,6 +545,25 @@ void genListAlloc(CodeGen *gen) {
     emit(gen, "CALL $list_alloc\n");
 }
 
+void genListLiteral(CodeGen *gen, ListLitNode *list) {
+    // prvky sa vyhodnotia zlava doprava este pred vytvorenim pola
+    for (size_t elemIndex = 0; elemIndex < list->elemsCount; elemIndex++) {
+        genExpr(gen, list->elems[elemIndex]);
+    }
+
+    emit(gen, "PUSHS int@%zu\n", list->elemsCount);
+    genListAlloc(gen);
+    emit(gen, "POPS LF@%%t0\n");
+
+    // posledny prvok je na vrchu zasobnika, prvky su v poli od indexu 2
+    for (size_t elemIndex = list->elemsCount; elemIndex > 0; elemIndex--) {
+        emit(gen, "POPS LF@%%t1\n");
+        emit(gen, "ARRAYSET LF@%%t0 int@%zu LF@%%t1\n", elemIndex + 1);
+    }
+
+    emit(gen, "PUSHS LF@%%t0\n");
+}
+
 void genCall(CodeGen *gen, CallNode *call) {
     bool isGenerated = true;
 
@@ -912,6 +931,8 @@ void genExpr(CodeGen *gen, ASTNode *node) {
         genMember(gen, (MemberNode *)node);
     } else if (node->kind == AST_INTERP) {
         genInterp(gen, (InterpNode *)node);
+    } else if (node->kind == AST_LIST_LIT) {
+        genListLiteral(gen, (ListLitNode *)node);
     } else if (node->kind == AST_LAMBDA) {
         // hodnotou lambdy je navestie jej funkcie, telo sa vygeneruje az na konci
         int lambdaId = addLambda(gen, (LambdaNode *)node);
