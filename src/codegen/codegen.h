@@ -52,6 +52,7 @@ typedef enum {
     HELPER_LIST_SUB,    // $list_sub, vyrez zoznamu (drop, take, slice)
     HELPER_LIST_CONCAT, // $list_concat, operator ++
     HELPER_LIST_RANGE,  // $list_range, List.range
+    HELPER_LIST_TOSTR,  // $list_toStr, zoznam ako retazec List(a, b)
     HELPER_COUNT        // pocet pomocnych funkcii, musi byt posledny
 } HelperKind;
 
@@ -435,6 +436,12 @@ void genListRange(CodeGen *gen, CallNode *call);
  * @param range je uzol rozsahu
  */
 void genRangeToList(CodeGen *gen, RangeNode *range);
+
+/**
+ * @brief funkcia na vygenerovanie tela pomocnej funkcie $list_toStr ("List(a, b)")
+ * @param gen je kontext generatora
+ */
+void genListToStrHelper(CodeGen *gen);
 
 /**
  * @brief funkcia na vygenerovanie volania metody zoznamu s argumentmi (drop, take, ...)

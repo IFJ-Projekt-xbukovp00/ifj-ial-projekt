@@ -315,6 +315,10 @@ void genValueToStr(CodeGen *gen, Type *type) {
         emit(gen, "LABEL L$%d\n", trueLabel);
         emit(gen, "PUSHS string@true\n");
         emit(gen, "LABEL L$%d\n", endLabel);
+    } else if (type->kind == TY_LIST) {
+        // zoznam sa vypise ako List(a, b, c)
+        useHelper(gen, HELPER_LIST_TOSTR);
+        emit(gen, "CALL $list_toStr\n");
     } else if (type->kind == TY_UNION || type->kind == TY_ANY) {
         // typ hodnoty zjednotenia (aj Any v obale) sa zisti az za behu
         useHelper(gen, HELPER_TOSTR_ANY);
@@ -822,6 +826,41 @@ void genRangeToList(CodeGen *gen, RangeNode *range) {
     emit(gen, "PUSHS bool@%s\n", range->inclusive ? "true" : "false");
     useHelper(gen, HELPER_LIST_RANGE);
     emit(gen, "CALL $list_range\n");
+}
+
+void genListToStrHelper(CodeGen *gen) {
+    int loopLabel = newLabel(gen);
+    int firstLabel = newLabel(gen);
+    int doneLabel = newLabel(gen);
+
+    // zoznam %t0, dlzka %t1, vysledok %t2, index %t3
+    emit(gen, "POPS LF@%%t0\n");
+    emit(gen, "ARRAYGET LF@%%t1 LF@%%t0 int@1\n");
+    emit(gen, "MOVE LF@%%t2 string@List(\n");
+    emit(gen, "MOVE LF@%%t3 int@0\n");
+
+    emit(gen, "LABEL L$%d\n", loopLabel);
+    emit(gen, "JUMPIFEQ L$%d LF@%%t3 LF@%%t1\n", doneLabel);
+
+    // prvky su oddelene ciarkou a medzerou
+    emit(gen, "JUMPIFEQ L$%d LF@%%t3 int@0\n", firstLabel);
+    emit(gen, "CONCAT LF@%%t2 LF@%%t2 string@,\\032\n");
+    emit(gen, "LABEL L$%d\n", firstLabel);
+
+    // typ prvku sa zisti az za behu, prevedie sa ako cez toStr
+    emit(gen, "ADD LF@%%t4 LF@%%t3 int@2\n");
+    emit(gen, "ARRAYGET LF@%%t4 LF@%%t0 LF@%%t4\n");
+    emit(gen, "PUSHS LF@%%t4\n");
+    useHelper(gen, HELPER_TOSTR_ANY);
+    emit(gen, "CALL $toStr_any\n");
+    emit(gen, "POPS LF@%%t4\n");
+    emit(gen, "CONCAT LF@%%t2 LF@%%t2 LF@%%t4\n");
+    emit(gen, "ADD LF@%%t3 LF@%%t3 int@1\n");
+    emit(gen, "JUMP L$%d\n", loopLabel);
+
+    emit(gen, "LABEL L$%d\n", doneLabel);
+    emit(gen, "CONCAT LF@%%t2 LF@%%t2 string@)\n");
+    emit(gen, "PUSHS LF@%%t2\n");
 }
 
 void genListMethodCall(CodeGen *gen, CallNode *call) {
@@ -1893,6 +1932,9 @@ void writeHelper(CodeGen *gen, HelperKind helper) {
     } else if (helper == HELPER_LIST_RANGE) {
         name = "$list_range";
         genListRangeHelper(gen);
+    } else if (helper == HELPER_LIST_TOSTR) {
+        name = "$list_toStr";
+        genListToStrHelper(gen);
     }
 
     if (gen->error != ERR_OK) {
