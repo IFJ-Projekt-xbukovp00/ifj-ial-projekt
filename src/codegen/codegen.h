@@ -417,7 +417,7 @@ void genListConcatHelper(CodeGen *gen);
 void genRangeCheck(CodeGen *gen, int doneLabel);
 
 /**
- * @brief funkcia na vygenerovanie tela pomocnej funkcie $list_range (nulovy krok -> chyba 40)
+ * @brief funkcia na vygenerovanie tela pomocnej funkcie $list_range (od, po, krok, s koncom)
  * @param gen je kontext generatora
  */
 void genListRangeHelper(CodeGen *gen);
@@ -428,6 +428,13 @@ void genListRangeHelper(CodeGen *gen);
  * @param call je uzol volania
  */
 void genListRange(CodeGen *gen, CallNode *call);
+
+/**
+ * @brief funkcia na vytvorenie zoznamu z rozsahu, (1 to 5).toList
+ * @param gen je kontext generatora
+ * @param range je uzol rozsahu
+ */
+void genRangeToList(CodeGen *gen, RangeNode *range);
 
 /**
  * @brief funkcia na vygenerovanie volania metody zoznamu s argumentmi (drop, take, ...)

@@ -740,11 +740,25 @@ void genListRangeHelper(CodeGen *gen) {
     emitDeclaration(gen, "DEFVAR LF@%%t6\n");
     emitDeclaration(gen, "DEFVAR LF@%%t7\n");
 
-    // zaciatok %t0, koniec %t1 (bez neho), krok %t2
+    int exclusiveLabel = newLabel(gen);
+    int upLabel = newLabel(gen);
+
+    // zaciatok %t0, koniec %t1, krok %t2, %t3 je true, ked je koniec zahrnuty (to)
+    emit(gen, "POPS LF@%%t3\n");
     emit(gen, "POPS LF@%%t2\n");
     emit(gen, "POPS LF@%%t1\n");
     emit(gen, "POPS LF@%%t0\n");
     emit(gen, "JUMPIFEQ L$%d LF@%%t2 int@0\n", errorLabel);
+
+    // pri zahrnutom konci sa koniec posunie o 1 v smere kroku, dalej je to ako until
+    emit(gen, "JUMPIFEQ L$%d LF@%%t3 bool@false\n", exclusiveLabel);
+    emit(gen, "GT LF@%%t7 LF@%%t2 int@0\n");
+    emit(gen, "JUMPIFEQ L$%d LF@%%t7 bool@true\n", upLabel);
+    emit(gen, "SUB LF@%%t1 LF@%%t1 int@1\n");
+    emit(gen, "JUMP L$%d\n", exclusiveLabel);
+    emit(gen, "LABEL L$%d\n", upLabel);
+    emit(gen, "ADD LF@%%t1 LF@%%t1 int@1\n");
+    emit(gen, "LABEL L$%d\n", exclusiveLabel);
 
     // najprv sa spocita pocet prvkov %t3
     emit(gen, "MOVE LF@%%t3 int@0\n");
@@ -788,6 +802,24 @@ void genListRange(CodeGen *gen, CallNode *call) {
         emit(gen, "PUSHS int@1\n");
     }
 
+    // koniec do zoznamu nepatri
+    emit(gen, "PUSHS bool@false\n");
+    useHelper(gen, HELPER_LIST_RANGE);
+    emit(gen, "CALL $list_range\n");
+}
+
+void genRangeToList(CodeGen *gen, RangeNode *range) {
+    // (a to b by c).toList, meze sa vyhodnotia zlava doprava
+    genExpr(gen, range->from);
+    genExpr(gen, range->to);
+
+    if (range->step != NULL) {
+        genExpr(gen, range->step);
+    } else {
+        emit(gen, "PUSHS int@1\n");
+    }
+
+    emit(gen, "PUSHS bool@%s\n", range->inclusive ? "true" : "false");
     useHelper(gen, HELPER_LIST_RANGE);
     emit(gen, "CALL $list_range\n");
 }
@@ -1016,6 +1048,13 @@ void genMember(CodeGen *gen, MemberNode *member) {
     // clen sa pocita z hodnoty pred bodkou, pri retazeni (x.floor.toInt)
     // je objektom dalsi clen, ten uz necha na zasobniku svoju hodnotu
     ASTNode *object = member->object;
+
+    // rozsah nie je hodnota, da sa z neho len vytvorit zoznam
+    if (object->kind == AST_RANGE) {
+        genRangeToList(gen, (RangeNode *)object);
+        return;
+    }
+
     genExpr(gen, object);
 
     if (member->memberKind == MEM_EXT_METHOD) {
