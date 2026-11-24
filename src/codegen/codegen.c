@@ -569,6 +569,58 @@ void genListGetHelper(CodeGen *gen) {
     emit(gen, "EXIT int@40\n");
 }
 
+void genListHeadHelper(CodeGen *gen) {
+    int errorLabel = newLabel(gen);
+
+    // prazdny zoznam nema prvy prvok, chyba 40
+    emit(gen, "POPS LF@%%t0\n");
+    emit(gen, "ARRAYGET LF@%%t1 LF@%%t0 int@1\n");
+    emit(gen, "JUMPIFEQ L$%d LF@%%t1 int@0\n", errorLabel);
+    emit(gen, "ARRAYGET LF@%%t0 LF@%%t0 int@2\n");
+    emit(gen, "PUSHS LF@%%t0\n");
+    emit(gen, "POPFRAME\n");
+    emit(gen, "RETURN\n");
+
+    emit(gen, "LABEL L$%d\n", errorLabel);
+    emit(gen, "EXIT int@40\n");
+}
+
+void genListTailHelper(CodeGen *gen) {
+    int errorLabel = newLabel(gen);
+    int loopLabel = newLabel(gen);
+    int doneLabel = newLabel(gen);
+
+    emitDeclaration(gen, "DEFVAR LF@%%t5\n");
+
+    // zoznam %t0, nova dlzka %t1, novy zoznam %t2, index %t3
+    emit(gen, "POPS LF@%%t0\n");
+    emit(gen, "ARRAYGET LF@%%t1 LF@%%t0 int@1\n");
+    emit(gen, "JUMPIFEQ L$%d LF@%%t1 int@0\n", errorLabel);
+    emit(gen, "SUB LF@%%t1 LF@%%t1 int@1\n");
+    emit(gen, "PUSHS LF@%%t1\n");
+    genListAlloc(gen);
+    emit(gen, "POPS LF@%%t2\n");
+
+    // prvok i noveho zoznamu je prvok i + 1 stareho
+    emit(gen, "MOVE LF@%%t3 int@0\n");
+    emit(gen, "LABEL L$%d\n", loopLabel);
+    emit(gen, "JUMPIFEQ L$%d LF@%%t3 LF@%%t1\n", doneLabel);
+    emit(gen, "ADD LF@%%t4 LF@%%t3 int@3\n");
+    emit(gen, "ARRAYGET LF@%%t4 LF@%%t0 LF@%%t4\n");
+    emit(gen, "ADD LF@%%t5 LF@%%t3 int@2\n");
+    emit(gen, "ARRAYSET LF@%%t2 LF@%%t5 LF@%%t4\n");
+    emit(gen, "ADD LF@%%t3 LF@%%t3 int@1\n");
+    emit(gen, "JUMP L$%d\n", loopLabel);
+
+    emit(gen, "LABEL L$%d\n", doneLabel);
+    emit(gen, "PUSHS LF@%%t2\n");
+    emit(gen, "POPFRAME\n");
+    emit(gen, "RETURN\n");
+
+    emit(gen, "LABEL L$%d\n", errorLabel);
+    emit(gen, "EXIT int@40\n");
+}
+
 void genListIndex(CodeGen *gen, CallNode *call) {
     // lst(i): zoznam a index na zasobnik, prvok vrati $list_get
     genExpr(gen, call->caller);
@@ -787,6 +839,12 @@ void genMember(CodeGen *gen, MemberNode *member) {
     } else if (strcmp(member->name, "toInt") == 0) {
         // d.toInt je to iste ako toInt(d)
         emit(gen, "FLOAT2INTS\n");
+    } else if (strcmp(member->name, "head") == 0) {
+        useHelper(gen, HELPER_LIST_HEAD);
+        emit(gen, "CALL $list_head\n");
+    } else if (strcmp(member->name, "tail") == 0) {
+        useHelper(gen, HELPER_LIST_TAIL);
+        emit(gen, "CALL $list_tail\n");
     } else if (strcmp(member->name, "floor") == 0) {
         genFloor(gen);
     } else if (strcmp(member->name, "length") == 0) {
@@ -1575,6 +1633,12 @@ void writeHelper(CodeGen *gen, HelperKind helper) {
     } else if (helper == HELPER_LIST_GET) {
         name = "$list_get";
         genListGetHelper(gen);
+    } else if (helper == HELPER_LIST_HEAD) {
+        name = "$list_head";
+        genListHeadHelper(gen);
+    } else if (helper == HELPER_LIST_TAIL) {
+        name = "$list_tail";
+        genListTailHelper(gen);
     }
 
     if (gen->error != ERR_OK) {

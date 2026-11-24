@@ -47,6 +47,8 @@ typedef enum {
     HELPER_TOSTR_ANY,  // $toStr_any, toStr pre hodnotu, ktorej typ sa zisti az za behu
     HELPER_LIST_ALLOC, // $list_alloc, novy zoznam danej dlzky
     HELPER_LIST_GET,   // $list_get, prvok na indexe s kontrolou
+    HELPER_LIST_HEAD,  // $list_head, prvy prvok
+    HELPER_LIST_TAIL,  // $list_tail, zoznam bez prveho prvku
     HELPER_COUNT       // pocet pomocnych funkcii, musi byt posledny
 } HelperKind;
 
@@ -358,6 +360,18 @@ void genListAlloc(CodeGen *gen);
  * @param gen je kontext generatora
  */
 void genListGetHelper(CodeGen *gen);
+
+/**
+ * @brief funkcia na vygenerovanie tela pomocnej funkcie $list_head (prazdny -> chyba 40)
+ * @param gen je kontext generatora
+ */
+void genListHeadHelper(CodeGen *gen);
+
+/**
+ * @brief funkcia na vygenerovanie tela pomocnej funkcie $list_tail (prazdny -> chyba 40)
+ * @param gen je kontext generatora
+ */
+void genListTailHelper(CodeGen *gen);
 
 /**
  * @brief funkcia na vygenerovanie indexovania zoznamu lst(i)
