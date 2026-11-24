@@ -31,6 +31,7 @@ ifj26
 *.out
 !tests/**/*.out
 /docs/*.pdf
+!/docs/dokumentace.pdf
 .vscode/*
 !.vscode/c_cpp_properties.json
 /docs/doxygen/
