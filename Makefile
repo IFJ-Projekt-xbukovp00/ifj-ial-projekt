@@ -54,6 +54,12 @@ UNIT_TYPES     := tests/unit/test_types
 UNIT_TYPES_OBJ := src/common/types.o src/common/error.o
 UNIT_SEMANTIC_BODY     := tests/unit/test_semantic_body
 UNIT_SEMANTIC_BODY_OBJ := $(UNIT_BUILTINS_OBJ)
+UNIT_AST     := tests/unit/test_ast
+UNIT_AST_OBJ := src/parser/ast.o src/common/types.o src/common/error.o
+UNIT_EXPR     := tests/unit/test_expr
+UNIT_EXPR_OBJ := src/parser/expr.o src/parser/expr_stack.o src/parser/ast.o \
+                 src/lexer/scanner.o src/lexer/dfa.o src/lexer/keywords.o \
+                 src/common/dynstr.o src/common/types.o src/common/error.o
 UNIT_CODEGEN     := tests/unit/test_codegen
 UNIT_CODEGEN_OBJ := src/codegen/codegen.o src/common/dynstr.o $(UNIT_BUILTINS_OBJ)
 
@@ -113,14 +119,22 @@ $(UNIT_SEMANTIC_BODY): tests/unit/test_semantic_body.c $(UNIT_SEMANTIC_BODY_OBJ)
 $(UNIT_CODEGEN): tests/unit/test_codegen.c $(UNIT_CODEGEN_OBJ)
 	$(CC) $(CFLAGS) -o $@ $^
 
+$(UNIT_AST): tests/unit/test_ast.c $(UNIT_AST_OBJ)
+	$(CC) $(CFLAGS) -o $@ $^
+
+$(UNIT_EXPR): tests/unit/test_expr.c $(UNIT_EXPR_OBJ)
+	$(CC) $(CFLAGS) -o $@ $^
+
 test-unit: $(UNIT_BST) $(UNIT_SYMTABLE) $(UNIT_BUILTINS) $(UNIT_SEMANTIC_GLOBAL) $(UNIT_TYPES) \
-           $(UNIT_SEMANTIC_BODY) $(UNIT_CODEGEN)
+           $(UNIT_SEMANTIC_BODY) $(UNIT_AST) $(UNIT_EXPR) $(UNIT_CODEGEN)
 	./$(UNIT_BST)
 	./$(UNIT_SYMTABLE)
 	./$(UNIT_BUILTINS)
 	./$(UNIT_SEMANTIC_GLOBAL)
 	./$(UNIT_TYPES)
 	./$(UNIT_SEMANTIC_BODY)
+	./$(UNIT_AST)
+	./$(UNIT_EXPR)
 	IC26INT=$(IC26INT) ./$(UNIT_CODEGEN)
 
 pack:
@@ -138,5 +152,6 @@ pack:
 
 clean:
 	rm -f $(TARGET) $(OBJ) $(LEXDUMP) $(UNIT_BST) $(UNIT_SYMTABLE) $(UNIT_BUILTINS) \
-	      $(UNIT_SEMANTIC_GLOBAL) $(UNIT_TYPES) $(UNIT_SEMANTIC_BODY) $(UNIT_CODEGEN)
+	      $(UNIT_SEMANTIC_GLOBAL) $(UNIT_TYPES) $(UNIT_SEMANTIC_BODY) $(UNIT_AST) $(UNIT_EXPR) \
+	      $(UNIT_CODEGEN)
 	rm -rf docs/doxygen $(PACK_DIR) $(PACK_ZIP) tests/tmp

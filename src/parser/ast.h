@@ -30,6 +30,7 @@
 #pragma once
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdio.h>
 
 #include "token.h"
 #include "types.h"
@@ -425,3 +426,276 @@ typedef struct {
     ASTNode node;
     ASTNode *operand; // vyraz Int
 } ConvertNode;
+
+/**
+ * @brief alokuje a vynuluje AST uzol daneho druhu
+ * @param size velkost struktury uzla v bajtoch
+ * @param kind druh uzla AST
+ * @param line riadok vo zdrojovom kode
+ * @return ukazovatel na novy uzol, alebo NULL pri chybe alokacie
+ */
+ASTNode *astAlloc(size_t size, ASTNodeKind kind, int line);
+
+/**
+ * @brief vytvori dynamicky alokovanu kopiu retazca
+ * @param text zdrojovy retazec
+ * @return kopia retazca, alebo NULL ak text je NULL alebo pri chybe alokacie
+ */
+char *astCopyString(const char *text);
+
+/**
+ * @brief vytvori uzol celociselneho literalu
+ * @param value hodnota literalu
+ * @param line riadok vo zdrojovom kode
+ * @return novy uzol, alebo NULL pri chybe alokacie
+ */
+ASTNode *astNewIntLit(long long value, int line);
+
+/**
+ * @brief vytvori uzol desatinneho literalu
+ * @param value hodnota literalu
+ * @param line riadok vo zdrojovom kode
+ * @return novy uzol, alebo NULL pri chybe alokacie
+ */
+ASTNode *astNewDoubleLit(double value, int line);
+
+/**
+ * @brief vytvori uzol retazcoveho literalu s kopiou textu
+ * @param value text literalu
+ * @param line riadok vo zdrojovom kode
+ * @return novy uzol, alebo NULL pri chybe alokacie
+ */
+ASTNode *astNewStringLit(const char *value, int line);
+
+/**
+ * @brief vytvori uzol logickeho literalu
+ * @param value pravdivostna hodnota
+ * @param line riadok vo zdrojovom kode
+ * @return novy uzol, alebo NULL pri chybe alokacie
+ */
+ASTNode *astNewBoolLit(bool value, int line);
+
+/**
+ * @brief vytvori uzol unit literalu ()
+ * @param line riadok vo zdrojovom kode
+ * @return novy uzol, alebo NULL pri chybe alokacie
+ */
+ASTNode *astNewUnitLit(int line);
+
+/**
+ * @brief vytvori uzol identifikatora s kopiou mena
+ * @param name meno identifikatora
+ * @param line riadok vo zdrojovom kode
+ * @return novy uzol, alebo NULL pri chybe alokacie
+ */
+ASTNode *astNewId(const char *name, int line);
+
+/**
+ * @brief vytvori uzol binarnej operacie
+ * @param op operator (TOK_PLUS, TOK_LESS, ...)
+ * @param left lavy operand (pri chybe alokacie sa neuvolni)
+ * @param right pravy operand (pri chybe alokacie sa neuvolni)
+ * @param line riadok vo zdrojovom kode
+ * @return novy uzol, alebo NULL pri chybe alokacie
+ */
+ASTNode *astNewBinary(TokenType op, ASTNode *left, ASTNode *right, int line);
+
+/**
+ * @brief vytvori uzol unarnej operacie
+ * @param op operator (TOK_MINUS, TOK_NOT, ...)
+ * @param operand operand (pri chybe alokacie sa neuvolni)
+ * @param line riadok vo zdrojovom kode
+ * @return novy uzol, alebo NULL pri chybe alokacie
+ */
+ASTNode *astNewUnary(TokenType op, ASTNode *operand, int line);
+
+/**
+ * @brief rekurzivne uvolni AST uzol a jeho poduzly (Type * a Symbol * neuvolnuje)
+ * @param node uzol na uvolnenie (NULL je povoleny)
+ */
+void astFree(ASTNode *node);
+
+/**
+ * @brief ladiaci odsadeny vypis AST stromu do suboru alebo streamu
+ * @param node korenovy uzol na vypis (NULL vypise "(null)")
+ * @param depth aktualna hlbka odsadenia
+ * @param out vystupny stream
+ */
+void astPrint(const ASTNode *node, int depth, FILE *out);
+
+/**
+ * @brief prida uzol na koniec dynamickeho pola ukazovatelov
+ * @param items adresa pola ukazovatelov na AST uzly
+ * @param count adresa pocitadla prvkov v poli
+ * @param node vkladany uzol
+ * @return true pri uspechu, false pri neplatnych parametroch alebo chybe alokacie
+ */
+bool astAppend(ASTNode ***items, size_t *count, ASTNode *node);
+
+/**
+ * @brief vytvori uzol bloku (prikazy sa pridavaju cez astAppend)
+ * @param line riadok vo zdrojovom kode
+ * @return novy uzol, alebo NULL pri chybe alokacie
+ */
+ASTNode *astNewBlock(int line);
+
+/**
+ * @brief vytvori uzol definicie premennej var alebo val
+ * @param name meno premennej
+ * @param isMutable true pre var, false pre val
+ * @param declaredType deklarovany typ alebo NULL pri odvodeni
+ * @param init inicializacny vyraz
+ * @param line riadok vo zdrojovom kode
+ * @return novy uzol, alebo NULL pri chybe alokacie
+ */
+ASTNode *astNewVarDef(const char *name, bool isMutable, Type *declaredType, ASTNode *init,
+                      int line);
+
+/**
+ * @brief vytvori uzol priradenia do premennej
+ * @param name meno premennej
+ * @param value priradovany vyraz
+ * @param line riadok vo zdrojovom kode
+ * @return novy uzol, alebo NULL pri chybe alokacie
+ */
+ASTNode *astNewAssign(const char *name, ASTNode *value, int line);
+
+/**
+ * @brief vytvori uzol prikazu return
+ * @param value navratovy vyraz alebo NULL pre return bez hodnoty
+ * @param line riadok vo zdrojovom kode
+ * @return novy uzol, alebo NULL pri chybe alokacie
+ */
+ASTNode *astNewReturn(ASTNode *value, int line);
+
+/**
+ * @brief vytvori uzol samostatneho vyrazoveho prikazu
+ * @param expr vyraz
+ * @param line riadok vo zdrojovom kode
+ * @return novy uzol, alebo NULL pri chybe alokacie
+ */
+ASTNode *astNewExprStatement(ASTNode *expr, int line);
+
+/**
+ * @brief vytvori uzol podmienky if
+ * @param cond podmienka
+ * @param thenB vetva then
+ * @param elseB vetva else alebo NULL
+ * @param line riadok vo zdrojovom kode
+ * @return novy uzol, alebo NULL pri chybe alokacie
+ */
+ASTNode *astNewIf(ASTNode *cond, ASTNode *thenB, ASTNode *elseB, int line);
+
+/**
+ * @brief vytvori uzol cyklu while
+ * @param cond podmienka
+ * @param body telo cyklu
+ * @param line riadok vo zdrojovom kode
+ * @return novy uzol, alebo NULL pri chybe alokacie
+ */
+ASTNode *astNewWhile(ASTNode *cond, ASTNode *body, int line);
+
+/**
+ * @brief vytvori uzol volania funkcie (argumenty cez astAppend, vnorene volania cez caller)
+ * @param caller volany vyraz alebo predchadzajuce volanie pri f(1)(2)
+ * @param line riadok vo zdrojovom kode
+ * @return novy uzol, alebo NULL pri chybe alokacie
+ */
+ASTNode *astNewCall(ASTNode *caller, int line);
+
+/**
+ * @brief prida parameter do zoznamu parametrov (spravi kopiu mena)
+ * @param list zoznam parametrov
+ * @param name meno parametra
+ * @param type typ parametra (neuvolnuje sa v AST)
+ * @param line riadok vo zdrojovom kode
+ * @return true pri uspechu, false pri chybe alokacie alebo neplatnych parametroch
+ */
+bool astParamListAdd(ParamList *list, const char *name, Type *type, int line);
+
+/** @brief uvolni mena a pole parametrov v zozname (Type * a Symbol * neuvolnuje) */
+void astParamListFree(ParamList *list);
+
+/**
+ * @brief vytvori uzol definicie funkcie (parametre cez astFuncAddParamList)
+ * @param name meno funkcie
+ * @param isMain true pre @main funkciu
+ * @param line riadok vo zdrojovom kode
+ * @return novy uzol, alebo NULL pri chybe alokacie
+ */
+ASTNode *astNewFuncDef(const char *name, bool isMain, int line);
+
+/**
+ * @brief prida prazdny zoznam parametrov k funkcii (0 pre def f, 1 pre def f())
+ * @param func uzol funkcie
+ * @return ukazovatel na novy ParamList, alebo NULL pri chybe alokacie
+ */
+ParamList *astFuncAddParamList(DefFuncNode *func);
+
+/** @brief vytvori korenovy uzol programu (definicie sa pridavaju cez astAppend) */
+ASTNode *astNewProgram(int line);
+
+/**
+ * @brief vytvori uzol rozsahu (to alebo until, step moze byt NULL)
+ * @param from dolna hranica rozsahu
+ * @param to horna hranica rozsahu
+ * @param step krok rozsahu alebo NULL (predvolene 1)
+ * @param inclusive true pre to, false pre until
+ * @param line riadok vo zdrojovom kode
+ * @return novy uzol, alebo NULL pri chybe alokacie
+ */
+ASTNode *astNewRange(ASTNode *from, ASTNode *to, ASTNode *step, bool inclusive, int line);
+
+/**
+ * @brief vytvori uzol cyklu for (straze sa pridavaju cez astAppend)
+ * @param varName meno riadiacej premennej (skopiruje sa)
+ * @param source zdroj iteracie (rozsah alebo zoznam)
+ * @param body telo cyklu
+ * @param line riadok vo zdrojovom kode
+ * @return novy uzol, alebo NULL pri chybe alokacie
+ */
+ASTNode *astNewFor(const char *varName, ASTNode *source, ASTNode *body, int line);
+
+/** @brief vytvori uzol zoznamu (prvky sa pridavaju do elems cez astAppend) */
+ASTNode *astNewListLit(int line);
+
+/** @brief vytvori uzol interpolovaneho retazca (casti do parts cez astAppend) */
+ASTNode *astNewInterp(int line);
+
+/**
+ * @brief vytvori uzol pristupu k clenovi cez bodku
+ * @param object vyraz pred bodkou
+ * @param name meno clena (skopiruje sa)
+ * @param line riadok vo zdrojovom kode
+ * @return novy uzol, alebo NULL pri chybe alokacie
+ */
+ASTNode *astNewMember(ASTNode *object, const char *name, int line);
+
+/**
+ * @brief vytvori uzol anonymnej funkcie (parametre do params cez astParamListAdd)
+ * @param body telo lambdy
+ * @param line riadok vo zdrojovom kode
+ * @return novy uzol, alebo NULL pri chybe alokacie
+ */
+ASTNode *astNewLambda(ASTNode *body, int line);
+
+/** @brief vytvori uzol definicie case class (atributy do fields cez astParamListAdd) */
+ASTNode *astNewClassDef(const char *name, int line);
+
+/** @brief vytvori uzol aliasu typu */
+ASTNode *astNewTypeAlias(const char *name, Type *aliased, int line);
+
+/**
+ * @brief vytvori uzol extension (metody sa pridavaju cez astAppend)
+ * @param recvName meno prijemcu (skopiruje sa)
+ * @param recvType typ prijemcu (neuvolnuje sa v AST)
+ * @param line riadok vo zdrojovom kode
+ * @return novy uzol, alebo NULL pri chybe alokacie
+ */
+ASTNode *astNewExtension(const char *recvName, Type *recvType, int line);
+
+/** @brief vytvori uzol match (vetvy case sa pridavaju do cases cez astAppend) */
+ASTNode *astNewMatch(ASTNode *subject, int line);
+
+/** @brief vytvori uzol vetvy case pre zadany druh vzoru */
+ASTNode *astNewCase(PatternKind kind, int line);

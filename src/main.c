@@ -27,11 +27,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "ast.h"
 #include "codegen.h"
 #include "error.h"
 #include "parser.h"
 #include "scanner.h"
 #include "semantic.h"
+#include "symtable.h"
+#include "types.h"
 
 #include <stdio.h>
 
@@ -41,28 +44,26 @@
  */
 int main(void) {
     scanner_init(stdin);
-    int result = parser_parse();
+
+    ASTNode *program = NULL;
+    int result = parser_parse(&program);
     scanner_free();
 
-    // parser AST nevracia, semantika a generovanie bezia len ked koren programu existuje
-    ASTNode *program = NULL;
-    if (result != ERR_OK || program == NULL) {
-        return result;
-    }
-
-    Symtable table;
-    ErrorCode semanticError = ERR_OK;
-    symtableInit(&table);
-    semanticAnalyze(program, &table, &semanticError);
-    result = semanticError;
-
-    // generuje sa pred symtableFree, AST ukazuje na symboly z tabulky
     if (result == ERR_OK) {
-        result = codegenGenerate((ProgramNode *)program, stdout);
+        Symtable table;
+        ErrorCode semanticError = ERR_OK;
+        symtableInit(&table);
+        semanticAnalyze(program, &table, &semanticError);
+        result = semanticError;
+
+        if (result == ERR_OK) {
+            result = codegenGenerate((ProgramNode *)program, stdout);
+        }
+
+        symtableFree(&table);
     }
 
-    symtableFree(&table);
+    astFree(program);
     type_free_all();
-
     return result;
 }

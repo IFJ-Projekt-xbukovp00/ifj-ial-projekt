@@ -2,6 +2,10 @@
  * @file semantic.h
  * @brief Sémantická analýza (typové kontroly, rozsahy platnosti)
  *
+ * Použitie AI: návrh a logika (pseudokód) sú moje, prepis do C robila po častiach
+ * AI (Claude Opus 5.5). Prompt (približné znenie, presný text sa nezachoval):
+ *   "Pregeneruj môj pseudokód na C kód, premenné a funkcie sú štýlom variableName."
+ *
  * Implementace překladače imperativního jazyka IFJ26.
  * Projekt z predmetov IFJ a IAL, FIT VUT v Brne, 2026/2027.
  *

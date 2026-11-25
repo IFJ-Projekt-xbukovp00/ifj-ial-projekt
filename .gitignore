@@ -31,6 +31,7 @@ ifj26
 *.out
 !tests/**/*.out
 /docs/*.pdf
+!/docs/dokumentace.pdf
 .vscode/*
 !.vscode/c_cpp_properties.json
 /docs/doxygen/
@@ -44,3 +45,5 @@ ifj26
 /tests/unit/test_types
 /tests/unit/test_semantic_body
 /tests/unit/test_codegen
+/tests/unit/test_ast
+/tests/unit/test_expr

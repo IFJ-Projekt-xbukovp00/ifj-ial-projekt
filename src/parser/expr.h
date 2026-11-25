@@ -29,4 +29,28 @@
 
 #pragma once
 
-/* TODO: rozhranie precedenčnej analýzy */
+#include "ast.h"
+#include "expr_stack.h"
+#include "token.h"
+
+#include <stdbool.h>
+
+/** @brief Callback parsera na telo: blok, if alebo výraz; nastaví sa v parser_parse. */
+extern int (*expr_body_hook)(ASTNode **out, bool *endedByBlock);
+
+/**
+ * @brief precedencna analyza jedneho vyrazu
+ * @param token prvy token vyrazu, na vystupe prvy token za vyrazom
+ * @param first operand uz nacitany LL parserom, inak NULL
+ * @param output koren AST vyrazu (nastavi sa pri ERR_OK)
+ * @return ERR_OK, ERR_SYNTAX, ERR_LEX alebo ERR_INTERNAL
+ */
+int expr_parse(Token *token, ASTNode *first, ASTNode **output);
+
+/**
+ * @brief naparsuje typovu anotaciu (zakladny typ, List[T], funkcia, zjednotenie)
+ * @param token prvy token typu, na vystupe prvy token za typom
+ * @param output ukazovatel na naparsovany typ (nastavi sa pri ERR_OK)
+ * @return ERR_OK, ERR_SYNTAX, ERR_LEX alebo ERR_INTERNAL
+ */
+int expr_parse_type(Token *token, Type **output);
