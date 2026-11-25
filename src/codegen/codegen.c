@@ -902,6 +902,47 @@ void genCallFunctionValue(CodeGen *gen, const char *function, const char *arg, c
     emit(gen, "POPS %s\n", result);
 }
 
+void genListFilterHelper(CodeGen *gen) {
+    int loopLabel = newLabel(gen);
+    int skipLabel = newLabel(gen);
+    int doneLabel = newLabel(gen);
+
+    emitDeclaration(gen, "DEFVAR LF@%%t5\n");
+    emitDeclaration(gen, "DEFVAR LF@%%t6\n");
+    emitDeclaration(gen, "DEFVAR LF@%%t7\n");
+
+    // zoznam %t0, funkcia %t1, dlzka %t2, index %t3
+    emit(gen, "POPS LF@%%t1\n");
+    emit(gen, "POPS LF@%%t0\n");
+    emit(gen, "ARRAYGET LF@%%t2 LF@%%t0 int@1\n");
+
+    // vysledok %t5 moze byt najviac taky dlhy ako zoznam, skutocna dlzka sa
+    // zapise na koniec, kazda funkcia so zoznamom cita dlzku z indexu 1
+    emit(gen, "PUSHS LF@%%t2\n");
+    genListAlloc(gen);
+    emit(gen, "POPS LF@%%t5\n");
+    emit(gen, "MOVE LF@%%t3 int@0\n");
+    emit(gen, "MOVE LF@%%t6 int@2\n");
+
+    // funkcia sa na kazdy prvok zavola prave raz
+    emit(gen, "LABEL L$%d\n", loopLabel);
+    emit(gen, "JUMPIFEQ L$%d LF@%%t3 LF@%%t2\n", doneLabel);
+    emit(gen, "ADD LF@%%t4 LF@%%t3 int@2\n");
+    emit(gen, "ARRAYGET LF@%%t4 LF@%%t0 LF@%%t4\n");
+    genCallFunctionValue(gen, "LF@%t1", "LF@%t4", "LF@%t7");
+    emit(gen, "JUMPIFEQ L$%d LF@%%t7 bool@false\n", skipLabel);
+    emit(gen, "ARRAYSET LF@%%t5 LF@%%t6 LF@%%t4\n");
+    emit(gen, "ADD LF@%%t6 LF@%%t6 int@1\n");
+    emit(gen, "LABEL L$%d\n", skipLabel);
+    emit(gen, "ADD LF@%%t3 LF@%%t3 int@1\n");
+    emit(gen, "JUMP L$%d\n", loopLabel);
+
+    emit(gen, "LABEL L$%d\n", doneLabel);
+    emit(gen, "SUB LF@%%t6 LF@%%t6 int@2\n");
+    emit(gen, "ARRAYSET LF@%%t5 int@1 LF@%%t6\n");
+    emit(gen, "PUSHS LF@%%t5\n");
+}
+
 void genListPredicateCall(CodeGen *gen, CallNode *call, HelperKind helper, const char *name) {
     // zoznam je uz na zasobniku, za nim ide funkcia (lambda alebo referencia)
     genArgs(gen, call);
@@ -927,6 +968,8 @@ void genListMethodCall(CodeGen *gen, CallNode *call) {
         genArgs(gen, call);
         useHelper(gen, HELPER_LIST_SUB);
         emit(gen, "CALL $list_sub\n");
+    } else if (strcmp(member->name, "filter") == 0) {
+        genListPredicateCall(gen, call, HELPER_LIST_FILTER, "$list_filter");
     } else if (strcmp(member->name, "slice") == 0) {
         // slice(od, po) ma presne argumenty $list_sub, hranice sa orezu v nej
         genArgs(gen, call);
@@ -1981,6 +2024,9 @@ void writeHelper(CodeGen *gen, HelperKind helper) {
     } else if (helper == HELPER_LIST_TOSTR) {
         name = "$list_toStr";
         genListToStrHelper(gen);
+    } else if (helper == HELPER_LIST_FILTER) {
+        name = "$list_filter";
+        genListFilterHelper(gen);
     }
 
     if (gen->error != ERR_OK) {

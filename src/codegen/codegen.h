@@ -53,6 +53,7 @@ typedef enum {
     HELPER_LIST_CONCAT, // $list_concat, operator ++
     HELPER_LIST_RANGE,  // $list_range, List.range
     HELPER_LIST_TOSTR,  // $list_toStr, zoznam ako retazec List(a, b)
+    HELPER_LIST_FILTER, // $list_filter
     HELPER_COUNT        // pocet pomocnych funkcii, musi byt posledny
 } HelperKind;
 
@@ -451,6 +452,12 @@ void genListToStrHelper(CodeGen *gen);
  * @param result je premenna, kam sa ulozi vysledok
  */
 void genCallFunctionValue(CodeGen *gen, const char *function, const char *arg, const char *result);
+
+/**
+ * @brief funkcia na vygenerovanie tela pomocnej funkcie $list_filter
+ * @param gen je kontext generatora
+ */
+void genListFilterHelper(CodeGen *gen);
 
 /**
  * @brief funkcia na volanie metody zoznamu s funkciou ako argumentom (filter, ...)
