@@ -188,7 +188,7 @@ int findBuiltin(const char *name) {
 
 TypeKind getKind(ASTNode *node) {
     // typ moze byt aj alias, rozhoduje az skutocny typ
-    Type *type = getRealType(node->type);
+    const Type *type = getRealType(node->type);
 
     if (type == NULL) {
         return TY_UNIT;
@@ -1558,7 +1558,7 @@ void genWhile(CodeGen *gen, WhileNode *whileNode) {
 }
 
 void genForCheck(CodeGen *gen, ForNode *forNode, int endVar, bool upward, int endLabel) {
-    RangeNode *range = (RangeNode *)forNode->source;
+    const RangeNode *range = (const RangeNode *)forNode->source;
 
     emit(gen, "PUSHS ");
     emitVar(gen, forNode->varName, forNode->symbol);
@@ -1577,7 +1577,50 @@ void genForCheck(CodeGen *gen, ForNode *forNode, int endVar, bool upward, int en
     emit(gen, "JUMPIFEQS L$%d\n", endLabel);
 }
 
+void genForList(CodeGen *gen, ForNode *forNode) {
+    int listVar = newHiddenVar(gen);
+    int lengthVar = newHiddenVar(gen);
+    int indexVar = newHiddenVar(gen);
+    int startLabel = newLabel(gen);
+    int nextLabel = newLabel(gen);
+    int endLabel = newLabel(gen);
+
+    defineLocal(gen, forNode->varName, forNode->symbol);
+
+    // zoznam sa vyhodnoti raz, prechadza sa podla indexu
+    genExpr(gen, forNode->source);
+    emit(gen, "POPS LF@%%h%d\n", listVar);
+    emit(gen, "ARRAYGET LF@%%h%d LF@%%h%d int@1\n", lengthVar, listVar);
+    emit(gen, "MOVE LF@%%h%d int@0\n", indexVar);
+
+    emit(gen, "LABEL L$%d\n", startLabel);
+    emit(gen, "JUMPIFEQ L$%d LF@%%h%d LF@%%h%d\n", endLabel, indexVar, lengthVar);
+
+    // riadiaca premenna je aktualny prvok (prvky su od indexu 2)
+    emit(gen, "ADD LF@%%t0 LF@%%h%d int@2\n", indexVar);
+    emit(gen, "ARRAYGET ");
+    emitVar(gen, forNode->varName, forNode->symbol);
+    emit(gen, " LF@%%h%d LF@%%t0\n", listVar);
+
+    for (size_t guardIndex = 0; guardIndex < forNode->guardsCount; guardIndex++) {
+        genJumpIfFalse(gen, forNode->guards[guardIndex], nextLabel);
+    }
+
+    genStatement(gen, forNode->body);
+
+    emit(gen, "LABEL L$%d\n", nextLabel);
+    emit(gen, "ADD LF@%%h%d LF@%%h%d int@1\n", indexVar, indexVar);
+    emit(gen, "JUMP L$%d\n", startLabel);
+    emit(gen, "LABEL L$%d\n", endLabel);
+}
+
 void genFor(CodeGen *gen, ForNode *forNode) {
+    // zdrojom moze byt aj zoznam, nie len rozsah
+    if (forNode->source->kind != AST_RANGE) {
+        genForList(gen, forNode);
+        return;
+    }
+
     RangeNode *range = (RangeNode *)forNode->source;
     int endVar = newHiddenVar(gen);
     int stepVar = newHiddenVar(gen);

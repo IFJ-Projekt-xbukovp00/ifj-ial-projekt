@@ -684,7 +684,14 @@ void genWhile(CodeGen *gen, WhileNode *whileNode);
 void genForCheck(CodeGen *gen, ForNode *forNode, int endVar, bool upward, int endLabel);
 
 /**
- * @brief funkcia na vygenerovanie cyklu for cez rozsah
+ * @brief funkcia na vygenerovanie cyklu for cez zoznam
+ * @param gen je kontext generatora
+ * @param forNode je uzol cyklu
+ */
+void genForList(CodeGen *gen, ForNode *forNode);
+
+/**
+ * @brief funkcia na vygenerovanie cyklu for cez rozsah alebo zoznam
  * @param gen je kontext generatora
  * @param forNode je uzol cyklu
  */
