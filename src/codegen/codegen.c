@@ -943,6 +943,42 @@ void genListFilterHelper(CodeGen *gen) {
     emit(gen, "PUSHS LF@%%t5\n");
 }
 
+void genListWhileHelper(CodeGen *gen, bool isDrop) {
+    int loopLabel = newLabel(gen);
+    int doneLabel = newLabel(gen);
+
+    emitDeclaration(gen, "DEFVAR LF@%%t7\n");
+
+    // zoznam %t0, funkcia %t1, dlzka %t2, pocet prvkov na zaciatku, pre ktore plati %t3
+    emit(gen, "POPS LF@%%t1\n");
+    emit(gen, "POPS LF@%%t0\n");
+    emit(gen, "ARRAYGET LF@%%t2 LF@%%t0 int@1\n");
+    emit(gen, "MOVE LF@%%t3 int@0\n");
+
+    // zastavi sa na prvom prvku, pre ktory funkcia vrati false
+    emit(gen, "LABEL L$%d\n", loopLabel);
+    emit(gen, "JUMPIFEQ L$%d LF@%%t3 LF@%%t2\n", doneLabel);
+    emit(gen, "ADD LF@%%t4 LF@%%t3 int@2\n");
+    emit(gen, "ARRAYGET LF@%%t4 LF@%%t0 LF@%%t4\n");
+    genCallFunctionValue(gen, "LF@%t1", "LF@%t4", "LF@%t7");
+    emit(gen, "JUMPIFEQ L$%d LF@%%t7 bool@false\n", doneLabel);
+    emit(gen, "ADD LF@%%t3 LF@%%t3 int@1\n");
+    emit(gen, "JUMP L$%d\n", loopLabel);
+
+    // takeWhile vrati prvky pred nim, dropWhile od neho po koniec
+    emit(gen, "LABEL L$%d\n", doneLabel);
+    emit(gen, "PUSHS LF@%%t0\n");
+    if (isDrop) {
+        emit(gen, "PUSHS LF@%%t3\n");
+        emit(gen, "PUSHS LF@%%t2\n");
+    } else {
+        emit(gen, "PUSHS int@0\n");
+        emit(gen, "PUSHS LF@%%t3\n");
+    }
+    useHelper(gen, HELPER_LIST_SUB);
+    emit(gen, "CALL $list_sub\n");
+}
+
 void genListPredicateCall(CodeGen *gen, CallNode *call, HelperKind helper, const char *name) {
     // zoznam je uz na zasobniku, za nim ide funkcia (lambda alebo referencia)
     genArgs(gen, call);
@@ -970,6 +1006,10 @@ void genListMethodCall(CodeGen *gen, CallNode *call) {
         emit(gen, "CALL $list_sub\n");
     } else if (strcmp(member->name, "filter") == 0) {
         genListPredicateCall(gen, call, HELPER_LIST_FILTER, "$list_filter");
+    } else if (strcmp(member->name, "takeWhile") == 0) {
+        genListPredicateCall(gen, call, HELPER_LIST_TAKE_WHILE, "$list_takeWhile");
+    } else if (strcmp(member->name, "dropWhile") == 0) {
+        genListPredicateCall(gen, call, HELPER_LIST_DROP_WHILE, "$list_dropWhile");
     } else if (strcmp(member->name, "slice") == 0) {
         // slice(od, po) ma presne argumenty $list_sub, hranice sa orezu v nej
         genArgs(gen, call);
@@ -2027,6 +2067,12 @@ void writeHelper(CodeGen *gen, HelperKind helper) {
     } else if (helper == HELPER_LIST_FILTER) {
         name = "$list_filter";
         genListFilterHelper(gen);
+    } else if (helper == HELPER_LIST_TAKE_WHILE) {
+        name = "$list_takeWhile";
+        genListWhileHelper(gen, false);
+    } else if (helper == HELPER_LIST_DROP_WHILE) {
+        name = "$list_dropWhile";
+        genListWhileHelper(gen, true);
     }
 
     if (gen->error != ERR_OK) {

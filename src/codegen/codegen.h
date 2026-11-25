@@ -42,19 +42,21 @@
  * Vypisu sa raz na konci programu, ale len tie, ktore sa niekde pouzili.
  */
 typedef enum {
-    HELPER_SUBSTR,      // $subStr
-    HELPER_ORD,         // $ord
-    HELPER_TOSTR_ANY,   // $toStr_any, toStr pre hodnotu, ktorej typ sa zisti az za behu
-    HELPER_LIST_ALLOC,  // $list_alloc, novy zoznam danej dlzky
-    HELPER_LIST_GET,    // $list_get, prvok na indexe s kontrolou
-    HELPER_LIST_HEAD,   // $list_head, prvy prvok
-    HELPER_LIST_TAIL,   // $list_tail, zoznam bez prveho prvku
-    HELPER_LIST_SUB,    // $list_sub, vyrez zoznamu (drop, take, slice)
-    HELPER_LIST_CONCAT, // $list_concat, operator ++
-    HELPER_LIST_RANGE,  // $list_range, List.range
-    HELPER_LIST_TOSTR,  // $list_toStr, zoznam ako retazec List(a, b)
-    HELPER_LIST_FILTER, // $list_filter
-    HELPER_COUNT        // pocet pomocnych funkcii, musi byt posledny
+    HELPER_SUBSTR,          // $subStr
+    HELPER_ORD,             // $ord
+    HELPER_TOSTR_ANY,       // $toStr_any, toStr pre hodnotu, ktorej typ sa zisti az za behu
+    HELPER_LIST_ALLOC,      // $list_alloc, novy zoznam danej dlzky
+    HELPER_LIST_GET,        // $list_get, prvok na indexe s kontrolou
+    HELPER_LIST_HEAD,       // $list_head, prvy prvok
+    HELPER_LIST_TAIL,       // $list_tail, zoznam bez prveho prvku
+    HELPER_LIST_SUB,        // $list_sub, vyrez zoznamu (drop, take, slice)
+    HELPER_LIST_CONCAT,     // $list_concat, operator ++
+    HELPER_LIST_RANGE,      // $list_range, List.range
+    HELPER_LIST_TOSTR,      // $list_toStr, zoznam ako retazec List(a, b)
+    HELPER_LIST_FILTER,     // $list_filter
+    HELPER_LIST_TAKE_WHILE, // $list_takeWhile
+    HELPER_LIST_DROP_WHILE, // $list_dropWhile
+    HELPER_COUNT            // pocet pomocnych funkcii, musi byt posledny
 } HelperKind;
 
 /** @brief pocet vstavanych funkcii, ktore mozu mat obal $wrap$meno */
@@ -458,6 +460,13 @@ void genCallFunctionValue(CodeGen *gen, const char *function, const char *arg, c
  * @param gen je kontext generatora
  */
 void genListFilterHelper(CodeGen *gen);
+
+/**
+ * @brief funkcia na vygenerovanie tela pomocnej funkcie $list_takeWhile alebo $list_dropWhile
+ * @param gen je kontext generatora
+ * @param isDrop je true pre dropWhile
+ */
+void genListWhileHelper(CodeGen *gen, bool isDrop);
 
 /**
  * @brief funkcia na volanie metody zoznamu s funkciou ako argumentom (filter, ...)
