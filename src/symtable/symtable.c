@@ -108,6 +108,7 @@ Symbol *defineSymbolInTree(Symtable *table, Node **tree, const char *name, Symbo
     symbol->definition = NULL;
     symbol->checkState = FUNC_NOT_STARTED;
     symbol->receiver = NULL;
+    symbol->cgId = 0;
 
     ErrorCode insertError = ERR_OK;
 

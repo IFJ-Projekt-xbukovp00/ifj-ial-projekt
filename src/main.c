@@ -28,6 +28,7 @@
  */
 
 #include "ast.h"
+#include "codegen.h"
 #include "error.h"
 #include "parser.h"
 #include "scanner.h"
@@ -54,6 +55,10 @@ int main(void) {
         symtableInit(&table);
         semanticAnalyze(program, &table, &semanticError);
         result = semanticError;
+
+        if (result == ERR_OK) {
+            result = codegenGenerate((ProgramNode *)program, stdout);
+        }
 
         symtableFree(&table);
     }
