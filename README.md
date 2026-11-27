@@ -12,6 +12,8 @@ make            # build
 make build-check  # clang-format + cppcheck + build
 make format
 make pack          # odovzdávaný zip (ploché src/)
+máme test.         # testy pre každý modul
+máme test-unit.    # jedine unit testy pre každý modul
 ```
 
 Použitie: `./ifj26 < prog.scala > prog.code`
@@ -30,6 +32,16 @@ src/
 ```
 
 Includy sa píšu bez cesty (`#include "token.h"`), cesty dodáva Makefile cez `-I`.
+
+## Hodnocení:
+- Základ:
+- Rozšírenia:
+- Bonusové body:
+
+## Rady pre budúce tímy:
+- Silne neodporúčame mať metodiku, že ideme robiť všetky rozšírenia a budeme odoberať postupe, ako nám čas dovolí. Prečo? Skončí to tak, že budete robiť aj tak všetky a budete mať chuť si vytrhať vlasy.
+- Tím si nájdite už ideálne počas IUSu a buďte BFFs.
+
 
 ## Licencia
 
